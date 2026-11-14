@@ -15,9 +15,12 @@ A Docker-first prototype aligned with the supplied Chapters 1–3. It provides u
 ## Run locally
 1. Install Docker Desktop.
 2. Copy `.env.example` to `.env`.
-3. Change `JWT_SECRET` and bootstrap admin credentials.
+3. Change `JWT_SECRET`, `ADMIN_REGISTRATION_CODE` (at least 32 random characters), and bootstrap admin credentials. Keep all secrets out of Git.
 4. Run `docker compose up --build`.
 5. Visit http://localhost:8080 and sign in with the bootstrap admin credentials from `.env`.
+
+## Designated administrator registration
+Set `ADMIN_EMAIL=yakubusuleiman3535@gmail.com` and a private `ADMIN_REGISTRATION_CODE` of at least 32 random characters in `.env` and Render. During registration, the exact designated email must provide this code; the server assigns `ADMIN` automatically. Other registrations cannot request administrator privileges. Do not share or commit the code. This code protects the registration route but does not replace email ownership verification; use a private code only with the intended account holder.
 
 ## Blockchain
 The Solidity contract is in `contracts/CertificateRegistry.sol`. Compile with `npm run chain:compile`. Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY`, and optionally `CONTRACT_ADDRESS` to enable on-chain operations. A funded deployment wallet and a supported EVM network are required for public-chain use.
