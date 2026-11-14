@@ -44,8 +44,18 @@ const roles=(...allowed)=>(req,res,next)=>allowed.includes(req.user.role)?next()
 const audit=(actorId,action,entity,entityId,metadata={})=>prisma.auditEvent.create({data:{actorId,action,entity,entityId,metadata}});
 app.get("/api/health",run(async(_q,s)=>{await prisma.$queryRaw`SELECT 1`;s.json({status:"ok",database:"connected",blockchain:chainStatus()});}));
 app.post("/api/auth/register",run(async(q,s)=>{
- const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional()}).parse(q.body);
- const u=await prisma.user.create({data:{fullName:b.fullName,email:b.email.toLowerCase(),passwordHash:await bcrypt.hash(b.password,12),role:b.role,institution:b.institution}});
+ const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),adminCode:z.string().optional()}).parse(q.body);
+ const normalizedEmail=b.email.trim().toLowerCase();
+ const designatedAdminEmail=(process.env.ADMIN_EMAIL||"yakubusuleiman3535@gmail.com").trim().toLowerCase();
+ let assignedRole=b.role;
+ if(normalizedEmail===designatedAdminEmail){
+  const expectedCode=process.env.ADMIN_REGISTRATION_CODE||"";
+  const suppliedCode=b.adminCode||"";
+  const matches=expectedCode.length>=32&&suppliedCode.length===expectedCode.length&&crypto.timingSafeEqual(Buffer.from(suppliedCode),Buffer.from(expectedCode));
+  if(!matches)return s.status(403).json({error:"Admin registration requires the valid private admin registration code."});
+  assignedRole="ADMIN";
+ }
+ const u=await prisma.user.create({data:{fullName:b.fullName,email:normalizedEmail,passwordHash:await bcrypt.hash(b.password,12),role:assignedRole,institution:b.institution}});
  s.status(201).json({token:token(u),user:safe(u)});
 }));
 app.post("/api/auth/login",run(async(q,s)=>{
