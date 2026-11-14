@@ -1,38 +1,49 @@
 # Verity — Blockchain-Based Academic Certificate Verification
 
-A Docker-first prototype aligned with the supplied Chapters 1–3. It provides university registry issuance, graduate credential access, and employer verification.
+A Docker-first academic credential issuance and verification prototype.
 
-## Current implementation
-- Role-aware authentication (ADMIN, GRADUATE, EMPLOYER)
-- Admin issuance and revocation workflow
-- Graduate certificate listing
-- QR-based public verification lookup
-- SHA-256 canonical credential fingerprint
-- Solidity registry contract with issuer authorization and revocation
-- Optional EVM adapter; clearly labels database-ledger mode when no chain is configured
-- PostgreSQL persistence, audit events, Docker Compose and Render Blueprint
+## Supabase setup
+
+Verity now uses Supabase Auth and the Supabase Data API. It does **not** need a PostgreSQL connection string, database password, Prisma setup, Supabase secret key, or service-role key.
+
+Configure only:
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+
+The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
+
+The designated administrator email is `yakubusuleiman3535@gmail.com`. The database assigns ADMIN to this address when its Supabase Auth account is created. Enable email confirmation in Supabase Auth so control of the mailbox is verified before the account can sign in. Other users can register as Graduate or Employer; no public signup can request ADMIN.
 
 ## Run locally
+
 1. Install Docker Desktop.
 2. Copy `.env.example` to `.env`.
-3. Change `JWT_SECRET`, `ADMIN_REGISTRATION_CODE` (at least 32 random characters), and bootstrap admin credentials. Keep all secrets out of Git.
+3. Paste your Supabase Project URL and Publishable Key into `.env`.
 4. Run `docker compose up --build`.
-5. Visit http://localhost:8080 and sign in with the bootstrap admin credentials from `.env`.
+5. Visit http://localhost:8080.
+6. Register with your email. Confirm the email if Supabase asks you to, then sign in.
 
-## Designated administrator registration
-Set `ADMIN_EMAIL=yakubusuleiman3535@gmail.com` and a private `ADMIN_REGISTRATION_CODE` of at least 32 random characters in `.env` and Render. During registration, the exact designated email must provide this code; the server assigns `ADMIN` automatically. Other registrations cannot request administrator privileges. Do not share or commit the code. This code protects the registration route but does not replace email ownership verification; use a private code only with the intended account holder.
+For local development without Docker, run `npm install` and `npm run dev`.
 
-## Blockchain
-The Solidity contract is in `contracts/CertificateRegistry.sol`. Compile with `npm run chain:compile`. Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY`, and optionally `CONTRACT_ADDRESS` to enable on-chain operations. A funded deployment wallet and a supported EVM network are required for public-chain use.
+## Features
 
-If no RPC and signer are configured, the application deliberately operates in `DEMO_DATABASE_LEDGER` mode. It must not be described as on-chain verification in this mode.
+- Supabase email/password authentication
+- Role-aware access (ADMIN, GRADUATE, EMPLOYER)
+- Admin issuance and revocation workflow
+- Graduate credential access
+- QR-based public verification
+- SHA-256 canonical credential fingerprint
+- Audit events
+- Solidity certificate registry with optional EVM integration
 
-## Render
-`render.yaml` describes a Docker web service and a PostgreSQL database. Review the Blueprint plan and select/confirm the intended resources before applying. Set the bootstrap email and strong password as secrets in Render. For a public chain, also configure the chain RPC, authorized issuer wallet, and contract address.
+## Blockchain status
 
-## Security and academic limitations
-- Never put student names, matriculation numbers, email addresses, or certificate files on a public blockchain.
-- The QR code is a locator, not an authenticity proof.
-- Certificate hashes provide integrity checks; issuer authorization and institutional governance establish trust.
-- Configure HTTPS, backups, rate limits, monitoring, secret rotation, and production security review before real institutional use.
+The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY`, and `CONTRACT_ADDRESS` to enable on-chain operations. Without them, Verity clearly labels its mode as a demo database ledger; it does not claim that public-chain transactions are occurring.
+
+## Security notes
+
+- Never put Supabase secret or service-role keys in this project.
+- The publishable key is designed for client-facing use and is safe only with the included Row Level Security policies.
+- Keep email confirmation enabled for the designated administrator account.
+- Never store student personal data on a public blockchain.
 - This prototype does not imply legal recognition, university adoption, or production readiness.
