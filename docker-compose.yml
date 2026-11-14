@@ -4,7 +4,6 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # Use the same Supabase PostgreSQL database as the Render deployment.
       PUBLIC_APP_URL: http://localhost:8080
     ports:
       - "8080:8080"
