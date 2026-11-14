@@ -12,7 +12,7 @@ Configure only:
 
 The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
 
-The designated administrator email is `yakubusuleiman3535@gmail.com`. The database assigns ADMIN to this address when its Supabase Auth account is created. Enable email confirmation in Supabase Auth so control of the mailbox is verified before the account can sign in. Other users can register as Graduate or Employer; no public signup can request ADMIN.
+The designated administrator email is `yakubusuleiman3535@gmail.com`. The database assigns ADMIN to this address only after Supabase Auth confirms the email address. In the Supabase Dashboard, open **Authentication → Providers → Email** and make sure **Confirm email** is enabled. Other users can register as Graduate or Employer; no public signup can request ADMIN.
 
 ## Run locally
 
