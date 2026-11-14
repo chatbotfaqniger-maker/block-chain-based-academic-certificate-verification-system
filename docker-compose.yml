@@ -1,31 +1,10 @@
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: verity
-      POSTGRES_PASSWORD: verity_dev_password
-      POSTGRES_DB: verity
-    volumes:
-      - verity_postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U verity -d verity"]
-      interval: 5s
-      timeout: 5s
-      retries: 15
-
   app:
     build: .
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://verity:verity_dev_password@db:5432/verity?schema=public
+      # Use the same Supabase PostgreSQL database as the Render deployment.
       PUBLIC_APP_URL: http://localhost:8080
     ports:
       - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  verity_postgres:
