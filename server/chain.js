@@ -1,57 +1,84 @@
 import { ethers } from "ethers";
 
+const EXPECTED_CHAIN_ID = Number(process.env.CHAIN_ID || 80002);
 const ABI = [
   "function issueCertificate(bytes32 certificateId, bytes32 digest) external",
   "function revokeCertificate(bytes32 certificateId, string reason) external",
-  "function verifyCertificate(bytes32 certificateId) external view returns (bytes32 digest, bool revoked, uint256 issuedAt, address issuer)"
+  "function verifyCertificate(bytes32 certificateId) external view returns (bytes32 digest, bool revoked, uint256 issuedAt, address issuer)",
+  "function authorizedIssuers(address) external view returns (bool)",
+  "function owner() external view returns (address)"
 ];
 
-let contract;
 let provider;
+let contract;
+let status = { enabled: false, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: "Blockchain credentials are not configured." };
 
 export async function connectChain() {
-  const rpc = process.env.CHAIN_RPC_URL;
-  const key = process.env.CHAIN_PRIVATE_KEY;
-  const address = process.env.CONTRACT_ADDRESS;
+  contract = undefined;
+  provider = undefined;
+  const { CHAIN_RPC_URL: rpc, CHAIN_PRIVATE_KEY: key, CONTRACT_ADDRESS: address } = process.env;
   if (!rpc || !key || !address) {
-    return { enabled: false, reason: "CHAIN_RPC_URL, CHAIN_PRIVATE_KEY and CONTRACT_ADDRESS are required" };
+    status = { enabled: false, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: "Add the Polygon Amoy RPC URL, project wallet private key and deployed contract address in Render environment settings." };
+    return status;
   }
   try {
-    provider = new ethers.JsonRpcProvider(rpc);
+    if (!ethers.isAddress(address)) throw new Error("CONTRACT_ADDRESS is not a valid EVM address.");
+    provider = new ethers.JsonRpcProvider(rpc, EXPECTED_CHAIN_ID, { staticNetwork: true });
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== EXPECTED_CHAIN_ID) {
+      throw new Error(`Wrong network. Expected chain ID ${EXPECTED_CHAIN_ID}, received ${network.chainId}.`);
+    }
     const wallet = new ethers.Wallet(key, provider);
+    const code = await provider.getCode(address);
+    if (code === "0x") throw new Error("No smart contract was found at CONTRACT_ADDRESS on the configured network.");
     contract = new ethers.Contract(address, ABI, wallet);
-    await provider.getNetwork();
-    return { enabled: true, address };
+    const signer = await wallet.getAddress();
+    const authorized = await contract.authorizedIssuers(signer);
+    if (!authorized) throw new Error("The Render signing wallet is not an authorized issuer in the deployed contract.");
+    status = { enabled: true, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address, signer };
+    return status;
   } catch (error) {
     contract = undefined;
+    provider = undefined;
+    status = { enabled: false, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: error.message };
     console.error("Blockchain connection failed:", error.message);
-    return { enabled: false, reason: error.message };
+    return status;
   }
 }
 
 export function chainStatus() {
-  return { enabled: Boolean(contract), address: contract?.target || null };
+  return { ...status };
 }
+
+const certificateKey = id => ethers.keccak256(ethers.toUtf8Bytes(id));
+const bytes32 = value => {
+  const normalized = String(value || "").replace(/^0x/i, "");
+  if (!/^[0-9a-f]{64}$/i.test(normalized)) throw new Error("Certificate fingerprint must be a 32-byte SHA-256 hash.");
+  return `0x${normalized}`;
+};
 
 export async function issueOnChain(certificateId, digest) {
   if (!contract) return { mode: "DEMO_DATABASE_LEDGER", txHash: null };
-  const id = ethers.keccak256(ethers.toUtf8Bytes(certificateId));
-  const tx = await contract.issueCertificate(id, `0x${digest}`);
+  const tx = await contract.issueCertificate(certificateKey(certificateId), bytes32(digest));
   const receipt = await tx.wait();
-  return { mode: "BLOCKCHAIN", txHash: receipt.hash, chainId: Number((await provider.getNetwork()).chainId), contractAddress: contract.target };
+  if (receipt.status !== 1) throw new Error("The blockchain rejected the certificate registration.");
+  return { mode: "BLOCKCHAIN", txHash: receipt.hash, chainId: EXPECTED_CHAIN_ID, contractAddress: contract.target };
 }
 
 export async function revokeOnChain(certificateId, reason) {
   if (!contract) return { mode: "DEMO_DATABASE_LEDGER", txHash: null };
-  const id = ethers.keccak256(ethers.toUtf8Bytes(certificateId));
-  const tx = await contract.revokeCertificate(id, reason);
+  const tx = await contract.revokeCertificate(certificateKey(certificateId), reason);
   const receipt = await tx.wait();
-  return { mode: "BLOCKCHAIN", txHash: receipt.hash };
+  if (receipt.status !== 1) throw new Error("The blockchain rejected the revocation.");
+  return { mode: "BLOCKCHAIN", txHash: receipt.hash, chainId: EXPECTED_CHAIN_ID, contractAddress: contract.target };
 }
 
 export async function verifyOnChain(certificateId) {
   if (!contract) return { enabled: false };
-  const id = ethers.keccak256(ethers.toUtf8Bytes(certificateId));
-  const [digest, revoked, issuedAt, issuer] = await contract.verifyCertificate(id);
-  return { enabled: true, digest: digest.slice(2), revoked, issuedAt: Number(issuedAt), issuer };
+  try {
+    const [digest, revoked, issuedAt, issuer] = await contract.verifyCertificate(certificateKey(certificateId));
+    return { enabled: true, exists: true, digest: digest.slice(2).toLowerCase(), revoked, issuedAt: Number(issuedAt), issuer, chainId: EXPECTED_CHAIN_ID, contractAddress: contract.target };
+  } catch {
+    return { enabled: true, exists: false, revoked: false, chainId: EXPECTED_CHAIN_ID, contractAddress: contract.target };
+  }
 }
