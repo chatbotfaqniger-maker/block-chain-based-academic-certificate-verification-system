@@ -1,10 +1,3 @@
-databases:
-  - name: verity-postgres
-    databaseName: verity
-    user: verity
-    plan: free
-    region: oregon
-
 services:
   - type: web
     name: verity-academic-credentials
@@ -18,19 +11,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: verity-postgres
-          property: connectionString
-      - key: JWT_SECRET
-        generateValue: true
-      - key: BOOTSTRAP_ADMIN_NAME
-        value: Registry Administrator
-      - key: BOOTSTRAP_ADMIN_EMAIL
+      - key: SUPABASE_URL
+        value: https://fnsnhasnjmvodkwmdqkc.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: BOOTSTRAP_ADMIN_PASSWORD
-        sync: false
-      - key: DEFAULT_INSTITUTION
-        value: Demo University
       - key: PUBLIC_APP_URL
-        sync: false
+        value: https://block-chain-based-academic-certificate.onrender.com
