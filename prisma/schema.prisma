@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  GRADUATE
+  EMPLOYER
+}
+
+enum CertificateStatus {
+  ACTIVE
+  REVOKED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  fullName     String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(GRADUATE)
+  institution  String?
+  createdAt    DateTime      @default(now())
+  certificates Certificate[] @relation("GraduateCertificates")
+  issued       Certificate[] @relation("IssuerCertificates")
+  auditEvents  AuditEvent[]
+}
+
+model Certificate {
+  id              String            @id @default(cuid())
+  certificateId   String            @unique
+  studentName     String
+  studentEmail    String?
+  studentNumber   String
+  institution     String
+  faculty         String
+  department      String
+  programme       String
+  qualification   String
+  classification  String?
+  awardDate       DateTime
+  issuedAt        DateTime          @default(now())
+  digest          String            @unique
+  txHash          String?
+  chainId         Int?
+  contractAddress String?
+  status          CertificateStatus @default(ACTIVE)
+  revokedAt       DateTime?
+  revokeReason    String?
+  graduateId      String?
+  issuerId        String
+  graduate        User?             @relation("GraduateCertificates", fields: [graduateId], references: [id])
+  issuer          User              @relation("IssuerCertificates", fields: [issuerId], references: [id])
+  verifications   Verification[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([studentNumber])
+  @@index([studentName])
+}
+
+model Verification {
+  id            String      @id @default(cuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id])
+  verifierName  String?
+  verifierOrg   String?
+  result        String
+  ipHash        String?
+  createdAt     DateTime    @default(now())
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
