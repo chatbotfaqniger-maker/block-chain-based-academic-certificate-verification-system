@@ -17,6 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+const makeServiceClient = () => { const key=process.env.SUPABASE_SERVICE_ROLE_KEY; if(!key) throw new Error("Scanner callback is not configured: SUPABASE_SERVICE_ROLE_KEY is missing."); return createClient(SUPABASE_URL,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}); };
 const makeClient = (accessToken) => {
   if (!configured) throw new Error("Supabase is not configured. Add the Project URL and Publishable Key.");
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -281,9 +282,10 @@ app.post("/api/internal/document-scan-result",run(async(q,s)=>{
  const secret=process.env.DOCUMENT_SCAN_WEBHOOK_SECRET;
  if(!secret||q.headers.authorization!=="Bearer "+secret)return s.status(401).json({error:"Unauthorized scanner."});
  const b=z.object({documentId:z.string().min(1),result:z.enum(["CLEAN","INFECTED","SCAN_FAILED"])}).parse(q.body);
- const {data,error}=await makeClient().from("CertificateDocument").update({scanStatus:b.result}).eq("id",b.documentId).select("id,scanStatus").single();
+ const service=makeServiceClient();
+ const {data,error}=await service.from("CertificateDocument").update({scanStatus:b.result}).eq("id",b.documentId).select("id,scanStatus").single();
  if(error)throw error;
- if(b.result!=="CLEAN"){const {data:doc}=await makeClient().from("CertificateDocument").select("storagePath").eq("id",b.documentId).single();if(doc?.storagePath)await makeClient().storage.from("verity-certificates").remove([doc.storagePath]);}
+ if(b.result!=="CLEAN"){const {data:doc}=await service.from("CertificateDocument").select("storagePath").eq("id",b.documentId).single();if(doc?.storagePath)await service.storage.from("verity-certificates").remove([doc.storagePath]);}
  s.json({documentId:data.id,scanStatus:data.scanStatus});
 }));
 app.use("/api",(q,s)=>s.status(404).json({error:"API route not found."}));
