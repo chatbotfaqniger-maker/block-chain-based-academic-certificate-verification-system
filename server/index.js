@@ -296,6 +296,65 @@ app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   s.json({verified,status,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
+app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const b=z.object({certificateId:z.string().min(4),purpose:z.string().min(5).max(300).optional()}).parse(q.body);
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
+  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can request certificate access."});
+  const {data:cert,error:ce}=await q.supabase.from("Certificate").select("id,certificateId,graduateId").or("certificateId.eq."+b.certificateId+",verificationKey.eq."+b.certificateId.toUpperCase()).maybeSingle();
+  if(ce)throw ce;if(!cert)return s.status(404).json({error:"Certificate not found."});
+  if(!cert.graduateId)return s.status(409).json({error:"The graduate must link their Verity account to this certificate before private document access can be requested."});
+  const {data:existing,error:ee}=await q.supabase.from("CertificateAccessGrant").select("id,status").eq("certificateId",cert.id).eq("organizationId",org.id).maybeSingle();
+  if(ee)throw ee;
+  if(existing)return s.status(200).json({grant:existing,message:"An access request or decision already exists for this organization and certificate."});
+  const {data:grant,error}=await q.supabase.from("CertificateAccessGrant").insert({id:crypto.randomUUID(),certificateId:cert.id,graduateId:cert.graduateId,organizationId:org.id,requestedBy:q.user.id,purpose:b.purpose||"Employment or academic credential verification",status:"PENDING"}).select().single();
+  if(error)throw error;
+  await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_REQUESTED","CertificateAccessGrant",grant.id,{certificateId:cert.certificateId,organizationId:org.id});
+  s.status(201).json({grant,message:"The graduate must approve access before the original document can be viewed."});
+}));
+
+app.get("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
+  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can view its access requests."});
+  const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,graduateId,purpose,status,createdAt,approvedAt,expiresAt").eq("organizationId",org.id).order("createdAt",{ascending:false});
+  if(error)throw error;
+  const ids=(data||[]).map(x=>x.certificateId);
+  const {data:certs,error:ce}=ids.length?await q.supabase.from("Certificate").select("id,certificateId,studentName,institution,qualification").in("id",ids):{data:[],error:null};
+  if(ce)throw ce;
+  s.json({requests:(data||[]).map(x=>({...x,certificate:(certs||[]).find(c=>c.id===x.certificateId)||null}))});
+}));
+
+app.get("/api/graduate/access-requests",auth,roles("GRADUATE"),run(async(q,s)=>{
+  const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,organizationId,purpose,status,createdAt,approvedAt,expiresAt,Organization:organizationId(name,type)").eq("graduateId",q.user.id).order("createdAt",{ascending:false});
+  if(error)throw error;
+  const ids=(data||[]).map(x=>x.certificateId);
+  const {data:certs,error:ce}=ids.length?await q.supabase.from("Certificate").select("id,certificateId,studentName,institution,qualification").in("id",ids):{data:[],error:null};
+  if(ce)throw ce;
+  s.json({requests:(data||[]).map(x=>({...x,certificate:(certs||[]).find(c=>c.id===x.certificateId)||null}))});
+}));
+
+app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q,s)=>{
+  const b=z.object({status:z.enum(["APPROVED","REJECTED"])}).parse(q.body);
+  const now=new Date().toISOString();
+  const patch={status:b.status,updatedAt:now,approvedAt:b.status==="APPROVED"?now:null,expiresAt:b.status==="APPROVED"?new Date(Date.now()+30*24*60*60*1000).toISOString():null};
+  const {data,error}=await q.supabase.from("CertificateAccessGrant").update(patch).eq("id",q.params.id).eq("graduateId",q.user.id).eq("status","PENDING").select().single();
+  if(error)throw error;
+  await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_"+b.status,"CertificateAccessGrant",data.id,{organizationId:data.organizationId,expiresAt:data.expiresAt});
+  s.json({grant:data});
+}));
+
+app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
+  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
+  const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
+  if(ge)throw ge;if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,scanStatus").eq("certificateId",grant.certificateId).eq("scanStatus","CLEAN").order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  if(de)throw de;if(!doc)return s.status(423).json({error:"The institution's original document is not available yet. It must pass the configured document scan first."});
+  const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
+  if(le)throw le;
+  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_VIEWED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id});
+  s.json({url:link.signedUrl,expiresIn:60,originalName:doc.originalName});
+}));
+
 app.post("/api/verify",run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4),verifierName:z.string().optional(),verifierOrg:z.string().optional()}).parse(q.body);
   const client=makeClient();
