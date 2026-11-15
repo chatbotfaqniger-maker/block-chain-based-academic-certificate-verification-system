@@ -42,7 +42,7 @@ async function ensureOrganization(client, authUser, profile) {
 async function ensureStudentMembership(client, authUser, profile) {
  if(profile.role!=="GRADUATE")return; const code=String(authUser.user_metadata?.organizationCode||"").trim().toUpperCase();if(!code)return;
  const {error}=await client.rpc("request_verity_membership",{p_registration_code:code,p_student_number:authUser.user_metadata?.studentNumber||null});
- if(error && !/already|duplicate/i.test(error.message)) throw error;
+ if(error) console.warn("Student institution-link request was not accepted:",error.message);
 }
 const run = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 app.set("trust proxy",1);
