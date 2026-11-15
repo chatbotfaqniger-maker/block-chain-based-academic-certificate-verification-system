@@ -77,10 +77,27 @@ const canonical = c => JSON.stringify({
 const safe = u => ({id:u.id,fullName:u.fullName,email:u.email,role:u.role,institution:u.institution});
 async function ensureOrganization(client, authUser, profile) {
  if(profile.role!=="EMPLOYER") return null;
- const {data:found,error}=await client.from("Organization").select("*").eq("ownerId",profile.id).maybeSingle(); if(error)throw error;if(found)return found;
- const m=authUser.user_metadata||{}, name=String(m.organizationName||m.institution||profile.institution||"").trim(); if(name.length<2)return null;
- const org={id:crypto.randomUUID(),name,type:m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION",ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber:m.registrationNumber||null,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null};
- const {data,error:e}=await client.from("Organization").insert(org).select().single();if(e)throw e;return data;
+ const {data:found,error}=await client.from("Organization").select("*").eq("ownerId",profile.id).maybeSingle();
+ if(error) throw error;
+ if(found) return found;
+ const m=authUser.user_metadata||{}, name=String(m.organizationName||m.institution||profile.institution||"").trim();
+ if(name.length<2) return null;
+ const registrationNumber=String(m.registrationNumber||"").trim()||null;
+ if(registrationNumber) {
+   const {data:claimed,error:lookupError}=await client.from("Organization").select("id,ownerId").eq("registrationNumber",registrationNumber).maybeSingle();
+   if(lookupError) throw lookupError;
+   if(claimed && claimed.ownerId!==profile.id) throw new Error("This registration number is already linked to another Verity organization account. Sign in with the account that originally registered the organization, or contact the Verity System Administrator to resolve account ownership.");
+   if(claimed && claimed.ownerId===profile.id) {
+     const {data,error:reloadError}=await client.from("Organization").select("*").eq("id",claimed.id).single();
+     if(reloadError) throw reloadError;
+     return data;
+   }
+ }
+ const org={id:crypto.randomUUID(),name,type:m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION",ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null};
+ const {data,error:e}=await client.from("Organization").insert(org).select().single();
+ if(e && e.code==="23505" && /organization_registration_number_unique/.test(e.message||"")) throw new Error("This registration number is already registered in Verity. Sign in with the original organization account or contact the System Administrator. No duplicate organization was created.");
+ if(e) throw e;
+ return data;
 }
 async function ensureStudentMembership(client, authUser, profile) {
  if(profile.role!=="GRADUATE")return; const code=String(authUser.user_metadata?.organizationCode||"").trim().toUpperCase();if(!code)return;
