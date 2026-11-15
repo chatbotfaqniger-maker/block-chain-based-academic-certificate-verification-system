@@ -76,3 +76,6 @@
 .organization-detail .registration-note{background:#edf2f8;color:#526b82}
 .auth-form{max-height:100vh;overflow:auto}
 @media(max-width:850px){.auth-form{max-height:none;overflow:visible}}
+
+/* Separate System Admin review queues */
+.registry-filters{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 22px}.registry-filters button{border:1px solid var(--line,#dce3ec);background:var(--surface,#fff);color:var(--muted,#64748b);border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}.registry-filters button.active{background:#172554;color:#fff;border-color:#172554;box-shadow:0 5px 14px #17255420}.registry-filters button:hover{border-color:#64748b}.org-review-card+.org-review-card{margin-top:18px}
