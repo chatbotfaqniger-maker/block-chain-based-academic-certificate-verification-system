@@ -177,7 +177,7 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
 }));
 
 app.get("/api/dashboard",auth,run(async(q,s)=>{
-  const admin=q.user.role==="ADMIN", graduate=q.user.role==="GRADUATE"; const {data:ownedOrg}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name").eq("ownerId",q.user.id).maybeSingle():{data:null};
+  const admin=q.user.role==="ADMIN", graduate=q.user.role==="GRADUATE"; const {data:ownedOrg}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode").eq("ownerId",q.user.id).maybeSingle():{data:null};
   const base=()=>q.supabase.from("Certificate").select("id",{count:"exact",head:true});
   const scoped=()=>graduate?base().eq("graduateId",q.user.id):q.user.role==="EMPLOYER"?base().eq("organizationId",ownedOrg?.id||""):base();
   const [total,active,revoked,verifications,recent,recentChecks]=await Promise.all([
