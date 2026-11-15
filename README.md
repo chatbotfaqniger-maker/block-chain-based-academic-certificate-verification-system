@@ -47,6 +47,12 @@ For local development without Docker, run `npm install` and `npm run dev`.
 
 The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY`, and `CONTRACT_ADDRESS` to enable on-chain operations. Without them, Verity clearly labels its mode as a demo database ledger; it does not claim that public-chain transactions are occurring.
 
+## Antivirus scanning
+
+Certificate documents and organization identity evidence are submitted to a ClamAV daemon over its TCP INSTREAM protocol before their scan verdict is saved. Only a `CLEAN` verdict permits a signed download; `INFECTED` and `SCAN_FAILED` records remain blocked. Configure `CLAMAV_HOST` to the private hostname of a reachable ClamAV daemon and optionally `CLAMAV_PORT` (default `3310`) and `CLAMAV_TIMEOUT_MS` (default `60000`). The daemon must have current virus definitions and must not be exposed to the public internet. The `/api/health` response reports whether a scanner host is configured; it does not claim the daemon is reachable. If the daemon is missing or unavailable, uploads are retained in quarantine as `SCAN_FAILED` and cannot be downloaded.
+
+The current Render web service is on the Free plan and no ClamAV daemon is provisioned yet. The backend integration is fail-closed, but live malware scanning is not active until a private ClamAV service is provisioned and `CLAMAV_HOST` is configured. ClamAV signature databases and scanning require additional memory; choose an appropriately sized service before enabling production uploads.
+
 ## Security notes
 
 - Never put Supabase secret or service-role keys in this project.
