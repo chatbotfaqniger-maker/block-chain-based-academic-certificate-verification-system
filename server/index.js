@@ -4,6 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
@@ -26,6 +27,48 @@ const makeClient = (accessToken) => {
   });
 };
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
+const CLAMAV_HOST=process.env.CLAMAV_HOST||"";
+const CLAMAV_PORT=Number(process.env.CLAMAV_PORT||3310);
+const CLAMAV_TIMEOUT_MS=Math.min(Math.max(Number(process.env.CLAMAV_TIMEOUT_MS||60000),5000),120000);
+async function scanWithClamAV(bytes) {
+  if(!CLAMAV_HOST) throw new Error("ClamAV scanner is not configured (CLAMAV_HOST is missing).");
+  return new Promise((resolve,reject)=>{
+    const socket=net.createConnection({host:CLAMAV_HOST,port:CLAMAV_PORT});
+    let response="",settled=false;
+    const finish=(error,result)=>{if(settled)return;settled=true;clearTimeout(timer);socket.destroy();error?reject(error):resolve(result);};
+    const timer=setTimeout(()=>finish(new Error("ClamAV scan timed out.")),CLAMAV_TIMEOUT_MS);
+    socket.on("connect",()=>{
+      socket.write("zINSTREAM\\0");
+      const chunkSize=64*1024;
+      for(let offset=0;offset<bytes.length;offset+=chunkSize){
+        const chunk=bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length));
+        const header=Buffer.alloc(4);header.writeUInt32BE(chunk.length);
+        socket.write(header);socket.write(chunk);
+      }
+      const end=Buffer.alloc(4);end.writeUInt32BE(0);socket.write(end);
+    });
+    socket.on("data",data=>{
+      response+=data.toString("utf8");
+      if(response.includes("\\0")||/\\b(?:OK|FOUND|ERROR)\\s*$/.test(response.trim())){
+        if(/: OK(?:\\0|$)/.test(response.trim()))finish(null,{status:"CLEAN",detail:response.trim()});
+        else if(/: .+ FOUND(?:\\0|$)/.test(response.trim()))finish(null,{status:"INFECTED",detail:response.trim()});
+        else finish(new Error("ClamAV returned an unrecognized response."));
+      }
+    });
+    socket.on("error",error=>finish(new Error("ClamAV connection failed: "+error.message)));
+    socket.on("end",()=>{if(!settled)finish(new Error("ClamAV closed the connection before returning a verdict."));});
+  });
+}
+async function recordScanResult(client,table,id,bytes,actorId,entityLabel) {
+  let status="SCAN_FAILED",detail="";
+  try { const result=await scanWithClamAV(bytes);status=result.status;detail=result.detail; }
+  catch(error) { detail=error.message||"ClamAV scan failed.";console.error(entityLabel+" scan failed:",detail); }
+  const {error}=await client.from(table).update({scanStatus:status}).eq("id",id);
+  if(error) throw error;
+  await audit(client,actorId,"ANTIVIRUS_SCAN_"+status,entityLabel,id,{engine:"ClamAV",sha256:digest(bytes),detail:detail.slice(0,500)});
+  return {status,detail};
+}
+
 const canonical = c => JSON.stringify({
   certificateId:c.certificateId, studentName:c.studentName.trim(), studentNumber:c.studentNumber.trim(),
   institution:c.institution.trim(), faculty:c.faculty.trim(), department:c.department.trim(),
@@ -84,7 +127,7 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
   if(error) throw error;
 }
 
-app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus()}));
+app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",antivirus:{engine:"ClamAV",configured:Boolean(CLAMAV_HOST),status:CLAMAV_HOST?"configured":"not_configured"},blockchain:chainStatus()}));
 
 app.post("/api/auth/register",run(async(q,s)=>{
   const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
@@ -159,10 +202,11 @@ app.post("/api/organization/evidence",auth,roles("EMPLOYER"),express.raw({type:[
  const name=String(q.headers["x-file-name"]||("evidence."+spec.ext)).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("evidence."+spec.ext);
  const id=crypto.randomUUID(),path=`${org.id}/${id}.${spec.ext}`,sha256=digest(bytes);
  const {error:up}=await q.supabase.storage.from("verity-organization-evidence").upload(path,bytes,{contentType:mime,upsert:false});if(up)throw up;
- const {data:row,error}=await q.supabase.from("OrganizationEvidence").insert({id,organizationId:org.id,evidenceType:type,storagePath:path,originalName:name,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id}).select("id,evidenceType,originalName,sizeBytes,sha256,scanStatus,createdAt").single();
+ const {data:row,error}=await q.supabase.from("OrganizationEvidence").insert({id,organizationId:org.id,evidenceType:type,storagePath:path,originalName:name,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:"PENDING_SCAN"}).select("id,evidenceType,originalName,sizeBytes,sha256,scanStatus,createdAt").single();
  if(error){await q.supabase.storage.from("verity-organization-evidence").remove([path]);throw error;}
  await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_UPLOADED","OrganizationEvidence",id,{organizationId:org.id,evidenceType:type,sha256});
- s.status(201).json({evidence:row});
+ const scan=await recordScanResult(q.supabase,"OrganizationEvidence",id,bytes,q.user.id,"OrganizationEvidence");
+ s.status(201).json({evidence:{...row,scanStatus:scan.status},scan:{engine:"ClamAV",status:scan.status,detail:scan.detail}});
 }));
 app.get("/api/organization/evidence",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;if(!org)return s.json({evidence:[]});
@@ -170,6 +214,7 @@ app.get("/api/organization/evidence",auth,roles("EMPLOYER"),run(async(q,s)=>{
 }));
 app.get("/api/admin/organizations/:id/evidence/:evidenceId",auth,roles("ADMIN"),run(async(q,s)=>{
  const {data:e,error}=await q.supabase.from("OrganizationEvidence").select("id,organizationId,storagePath,originalName,scanStatus").eq("id",q.params.evidenceId).eq("organizationId",q.params.id).maybeSingle();if(error)throw error;if(!e)return s.status(404).json({error:"Evidence not found."});
+ if(e.scanStatus!=="CLEAN")return s.status(423).json({error:"Evidence is quarantined until ClamAV confirms it is CLEAN.",scanStatus:e.scanStatus});
  const {data:link,error:le}=await q.supabase.storage.from("verity-organization-evidence").createSignedUrl(e.storagePath,60,{download:e.originalName});if(le)throw le;
  await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_REVIEWED","OrganizationEvidence",e.id,{organizationId:e.organizationId});
  s.json({url:link.signedUrl,expiresIn:60,originalName:e.originalName,scanStatus:e.scanStatus});
@@ -289,10 +334,11 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});
   if(uploadError) throw uploadError;
   const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:"PENDING_SCAN"};
-  const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,createdAt").single();
+  const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").single();
   if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
   await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256});
-  s.status(201).json({document:doc,message:"Private certificate document uploaded and fingerprinted."});
+  const scan=await recordScanResult(q.supabase,"CertificateDocument",doc.id,bytes,q.user.id,"CertificateDocument");
+  s.status(201).json({document:{...doc,scanStatus:scan.status},scan:{engine:"ClamAV",status:scan.status,detail:scan.detail},message:scan.status==="CLEAN"?"Certificate uploaded and passed the ClamAV scan.":scan.status==="INFECTED"?"Malware was detected. The document is blocked from download.":"The document is quarantined because the antivirus scan could not be completed."});
 }));
 app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId,graduateId").eq("certificateId",q.params.id).maybeSingle();
