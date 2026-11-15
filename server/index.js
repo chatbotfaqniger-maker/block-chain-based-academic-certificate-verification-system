@@ -135,8 +135,12 @@ app.post("/api/auth/register",run(async(q,s)=>{
     email:b.email.trim().toLowerCase(),password:b.password,
     options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||""}}
   });
-  if(error) return s.status(400).json({error:error.message});
-  if(!data.session) return s.status(201).json({pendingEmailConfirmation:true,message:"Check your email and confirm your account before signing in."});
+  if(error) {
+    const duplicate=/already registered|already exists|user exists/i.test(error.message||"");
+    return s.status(duplicate?409:400).json({error:duplicate?"An account using this email already exists. Please sign in, or use account recovery if you cannot access it.":error.message});
+  }
+  if(Array.isArray(data.user?.identities)&&data.user.identities.length===0) return s.status(409).json({error:"An account using this email already exists. Please sign in instead of creating another account."});
+  if(!data.session) return s.status(201).json({pendingEmailConfirmation:true,message:"Your account request was accepted. Check your email if confirmation is enabled, then sign in."});
   const profile=await profileFor(client,data.user); const organization=await ensureOrganization(client,data.user,profile); await ensureStudentMembership(client,data.user,profile);
   s.status(201).json({token:data.session.access_token,user:safe(profile),organization});
 }));
