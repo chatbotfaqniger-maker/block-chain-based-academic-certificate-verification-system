@@ -158,7 +158,7 @@ app.get("/api/certificates",auth,run(async(q,s)=>{
   const staff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];
   const readableStaffOrgs=staff.filter(x=>hasStaffPermission(x,"certificates:read"));
   if(!["ADMIN","GRADUATE","EMPLOYER"].includes(q.user.role)&&!readableStaffOrgs.length)return s.status(403).json({error:"Permission denied."});
-  let query=q.supabase.from("Certificate").select("id,certificateId,studentName,studentNumber,institution,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,revokedAt,revokeReason").order("issuedAt",{ascending:false}).limit(100);
+  let query=q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,revokedAt,revokeReason").order("issuedAt",{ascending:false}).limit(100);
   if(q.user.role==="GRADUATE") query=readableStaffOrgs.length?query.or(`graduateId.eq.${q.user.id},organizationId.in.(${readableStaffOrgs.map(x=>x.organizationId).join(",")})`):query.eq("graduateId",q.user.id);
   if(q.user.role==="EMPLOYER"){const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;query=query.eq("organizationId",org?.id||"");}
   const {data,error}=await query;
@@ -168,9 +168,11 @@ app.get("/api/certificates",auth,run(async(q,s)=>{
 
 const issue=z.object({studentName:z.string().min(2),studentEmail:z.string().email().optional().or(z.literal("")),studentNumber:z.string().min(2),institution:z.string().min(2),faculty:z.string().min(2),department:z.string().min(2),programme:z.string().min(2),qualification:z.string().min(2),classification:z.string().optional(),awardDate:z.string().datetime()});
 app.post("/api/certificates",auth,roles("ADMIN","EMPLOYER"),run(async(q,s)=>{
-  const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});}
+  const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});if(organization.type!=="INSTITUTION")return s.status(403).json({error:"Only approved academic institutions can issue academic certificates. Verification organizations cannot issue credentials."});}
   const certificateId=`VRT-${new Date().getFullYear()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+  const verificationKey=`VRT-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
   const clean=Object.fromEntries(Object.entries(b).map(([k,v])=>[k,typeof v==="string"?v.trim():v]));
+  if(organization) clean.institution=organization.name;
   const hash=digest(canonical({...clean,certificateId}));
   const chain=await issueOnChain(certificateId,hash);
   let graduateId=null;
@@ -180,7 +182,7 @@ app.post("/api/certificates",auth,roles("ADMIN","EMPLOYER"),run(async(q,s)=>{
     graduateId=graduate?.id||null;
   }
   const now=new Date().toISOString();
-  const record={...clean,id:crypto.randomUUID(),studentEmail:clean.studentEmail||null,certificateId,organizationId:organization?.id||null,digest:hash,awardDate:new Date(clean.awardDate).toISOString(),issuerId:q.user.id,graduateId,txHash:chain.txHash,chainId:chain.chainId,contractAddress:chain.contractAddress,createdAt:now,updatedAt:now,issuedAt:now};
+  const record={...clean,id:crypto.randomUUID(),studentEmail:clean.studentEmail||null,certificateId,verificationKey,organizationId:organization?.id||null,digest:hash,awardDate:new Date(clean.awardDate).toISOString(),issuerId:q.user.id,graduateId,txHash:chain.txHash,chainId:chain.chainId,contractAddress:chain.contractAddress,createdAt:now,updatedAt:now,issuedAt:now};
   const {data,error}=await q.supabase.from("Certificate").insert(record).select().single();
   if(error) throw error;
   await audit(q.supabase,q.user.id,"CERTIFICATE_ISSUED","Certificate",data.id,{certificateId,mode:chain.mode,organizationId:organization?.id||null});
@@ -188,13 +190,14 @@ app.post("/api/certificates",auth,roles("ADMIN","EMPLOYER"),run(async(q,s)=>{
 }));
 
 app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
-  const {data:c,error}=await q.supabase.from("Certificate").select("id,certificateId,graduateId").eq("certificateId",q.params.id).maybeSingle();
+  const {data:c,error}=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,graduateId,organizationId").eq("certificateId",q.params.id).maybeSingle();
   if(error) throw error;
   if(!c) return s.status(404).json({error:"Certificate not found."}); if(q.user.role==="EMPLOYER"){const {data:org}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(!org||org.id!==c.organizationId||org.status!=="APPROVED")return s.status(403).json({error:"You can only revoke certificates issued by your approved organization."});}
   if(q.user.role==="GRADUATE"&&c.graduateId!==q.user.id) return s.status(403).json({error:"Access denied."});
-  if(q.user.role==="EMPLOYER") return s.status(403).json({error:"Use public verification."});
-  const url=`${process.env.PUBLIC_APP_URL||q.protocol+"://"+q.get("host")}/verify/${encodeURIComponent(c.certificateId)}`;
-  s.json({url,dataUrl:await QRCode.toDataURL(url,{width:420,margin:2})});
+  if(q.user.role==="EMPLOYER"){const {data:org,error:oe}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only the issuing institution can generate its certificate QR."});}
+  if(q.user.role==="GRADUATE"&&c.organizationId){const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),c.organizationId);if(staff&&!hasStaffPermission(staff,"certificates:read")&&c.graduateId!==q.user.id)return s.status(403).json({error:"Access denied."});}
+  const url=`${process.env.PUBLIC_APP_URL||q.protocol+"://"+q.get("host")}/verify/${encodeURIComponent(c.verificationKey)}`;
+  s.json({url,key:c.verificationKey,certificateId:c.certificateId,dataUrl:await QRCode.toDataURL(url,{width:420,margin:2})});
 }));
 
 app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async(q,s)=>{
@@ -225,6 +228,7 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError) throw orgError;
   if(!org||org.status!=="APPROVED") return s.status(403).json({error:"Only an approved organization can upload official certificate documents."});
+  const {data:orgType,error:typeError}=await q.supabase.from("Organization").select("type").eq("id",org.id).single();if(typeError)throw typeError;if(orgType.type!=="INSTITUTION")return s.status(403).json({error:"Only an academic issuing institution can upload official certificate documents."});
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId").eq("certificateId",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(certError) throw certError;
   if(!cert) return s.status(404).json({error:"Certificate not found in your organization."});
