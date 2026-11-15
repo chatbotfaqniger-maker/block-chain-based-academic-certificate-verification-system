@@ -167,7 +167,7 @@ app.get("/api/certificates",auth,run(async(q,s)=>{
 }));
 
 const issue=z.object({studentName:z.string().min(2),studentEmail:z.string().email().optional().or(z.literal("")),studentNumber:z.string().min(2),institution:z.string().min(2),faculty:z.string().min(2),department:z.string().min(2),programme:z.string().min(2),qualification:z.string().min(2),classification:z.string().optional(),awardDate:z.string().datetime()});
-app.post("/api/certificates",auth,roles("ADMIN","EMPLOYER"),run(async(q,s)=>{
+app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});if(organization.type!=="INSTITUTION")return s.status(403).json({error:"Only approved academic institutions can issue academic certificates. Verification organizations cannot issue credentials."});}
   const certificateId=`VRT-${new Date().getFullYear()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
   const verificationKey=`VRT-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
