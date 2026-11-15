@@ -70,3 +70,7 @@ The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAI
 11. Public QR / key verification displays limited credential information and does not automatically reveal the private original document.
 
 The database keeps organization profiles and memberships in separate tables and uses Row Level Security to scope records. The existing EMPLOYER database enum value represents the Organization Admin role; ADMIN remains reserved for the Verity platform administrator.
+
+### Institution identity registry
+
+Institution administrators submit their official registration number, official website, accreditation/supervising body, and supporting registration or accreditation evidence. The application remains PENDING until a Verity platform administrator reviews the details and evidence. Organization names alone are not proof of institutional identity. Evidence files are stored in a private bucket and are not publicly accessible. The current workflow is a human review process; it does not claim automated validation against government or regulator registries.
