@@ -176,6 +176,65 @@ app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async
   s.json({certificate:updated,chainMode:chain.mode});
 }));
 
+
+const documentMime = new Map([
+  ["application/pdf",{ext:"pdf",magic:b=>b.subarray(0,5).toString("ascii")==="%PDF-"}],
+  ["image/jpeg",{ext:"jpg",magic:b=>b.length>=3&&b[0]===0xff&&b[1]===0xd8&&b[2]===0xff}],
+  ["image/png",{ext:"png",magic:b=>b.length>=8&&b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))}]
+]);
+app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
+  const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
+  const spec=documentMime.get(mime), bytes=q.body;
+  if(!spec||!Buffer.isBuffer(bytes)||bytes.length===0) return s.status(400).json({error:"Upload a PDF, JPEG or PNG certificate file."});
+  if(bytes.length>10*1024*1024) return s.status(413).json({error:"The maximum file size is 10 MB."});
+  if(!spec.magic(bytes)) return s.status(415).json({error:"The file content does not match its declared type."});
+  const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();
+  if(orgError) throw orgError;
+  if(!org||org.status!=="APPROVED") return s.status(403).json({error:"Only an approved organization can upload official certificate documents."});
+  const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId").eq("certificateId",q.params.id).eq("organizationId",org.id).maybeSingle();
+  if(certError) throw certError;
+  if(!cert) return s.status(404).json({error:"Certificate not found in your organization."});
+  const safeName=String(q.headers["x-file-name"]||("certificate."+spec.ext)).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("certificate."+spec.ext);
+  const fileId=crypto.randomUUID(), storagePath=`${org.id}/${cert.id}/${fileId}.${spec.ext}`;
+  const sha256=digest(bytes);
+  const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});
+  if(uploadError) throw uploadError;
+  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id};
+  const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,createdAt").single();
+  if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256});
+  s.status(201).json({document:doc,message:"Private certificate document uploaded and fingerprinted."});
+}));
+app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
+  const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId,graduateId").eq("certificateId",q.params.id).maybeSingle();
+  if(certError) throw certError;
+  if(!cert) return s.status(404).json({error:"Certificate not found."});
+  if(q.user.role==="EMPLOYER"){
+    const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();
+    if(error) throw error;if(!org||org.id!==cert.organizationId)return s.status(403).json({error:"Access denied."});
+  }
+  if(q.user.role==="GRADUATE"&&cert.graduateId!==q.user.id)return s.status(403).json({error:"Access denied."});
+  const {data,error}=await q.supabase.from("CertificateDocument").select("id,originalName,mimeType,sizeBytes,sha256,createdAt").eq("certificateId",cert.id).order("createdAt",{ascending:false});
+  if(error) throw error;
+  s.json({documents:data||[]});
+}));
+app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
+  const {data:doc,error}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,certificateId,organizationId").eq("id",q.params.id).maybeSingle();
+  if(error) throw error;if(!doc)return s.status(404).json({error:"Document not found."});
+  if(q.user.role==="EMPLOYER"){
+    const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();
+    if(oe)throw oe;if(!org||org.id!==doc.organizationId)return s.status(403).json({error:"Access denied."});
+  }
+  if(q.user.role==="GRADUATE"){
+    const {data:c,error:ce}=await q.supabase.from("Certificate").select("graduateId").eq("id",doc.certificateId).maybeSingle();
+    if(ce)throw ce;if(c?.graduateId!==q.user.id)return s.status(403).json({error:"Access denied."});
+  }
+  const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
+  if(linkError)throw linkError;
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId});
+  s.json({url:link.signedUrl,expiresIn:60});
+}));
+
 app.post("/api/verify",run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4),verifierName:z.string().optional(),verifierOrg:z.string().optional()}).parse(q.body);
   const client=makeClient();
