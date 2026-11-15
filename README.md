@@ -28,7 +28,11 @@ For local development without Docker, run `npm install` and `npm run dev`.
 ## Features
 
 - Supabase email/password authentication
-- Role-aware access (ADMIN, GRADUATE, EMPLOYER)
+- Role-aware access (System Admin, Organization Admin, Student / Graduate)
+- Organization registration with System Admin approval
+- Organization-specific student / employee membership and registration codes
+- Student institution-link requests and organization approval workflow
+- Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
 - QR-based public verification
@@ -47,3 +51,16 @@ The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAI
 - Keep email confirmation enabled for the designated administrator account.
 - Never store student personal data on a public blockchain.
 - This prototype does not imply legal recognition, university adoption, or production readiness.
+
+## Organization and student onboarding
+
+1. A university, school, college, or employer registers using **Organization Admin**.
+2. Verity creates an organization profile in **Pending** status.
+3. The System Admin reviews and approves the organization.
+4. Once approved, the Organization Admin shares its generated registration code with students or employees.
+5. Students register as **Graduate** and enter the code during signup, or sign in and use **Join an institution** later.
+6. The Organization Admin reviews requests under **Students / Employees** and approves or rejects them.
+7. Approved organization administrators can issue and revoke credentials belonging to their organization. Students can access credentials linked to their own account.
+8. Public QR / certificate-ID verification remains available without granting access to private organization records.
+
+The database keeps organization profiles and memberships in separate tables and uses Row Level Security to scope records. The existing EMPLOYER database enum value represents the Organization Admin role; ADMIN remains reserved for the Verity platform administrator.
