@@ -73,10 +73,11 @@ async function auth(req,res,next) {
 }
 const roles=(...allowed)=>(req,res,next)=>allowed.includes(req.user.role)?next():res.status(403).json({error:"Permission denied."});
 async function activeStaffFor(client,userId) {
- const {data,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE").maybeSingle();
+ const {data,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE");
  if(error) throw error;
- return data||null;
+ return data||[];
 }
+const staffForOrganization=(staff,organizationId)=>staff.find(x=>x.organizationId===organizationId)||null;
 const hasStaffPermission=(staff,permission)=>Boolean(staff&&staff.status==="ACTIVE"&&staff.permissions?.includes(permission));
 async function audit(client,actorId,action,entity,entityId,metadata={}) {
   const {error}=await client.from("AuditEvent").insert({id:crypto.randomUUID(),actorId,action,entity,entityId,metadata,createdAt:new Date().toISOString()});
@@ -106,7 +107,7 @@ app.post("/api/auth/login",run(async(q,s)=>{
   const profile=await profileFor(client,data.user); const organization=await ensureOrganization(client,data.user,profile); await ensureStudentMembership(client,data.user,profile);
   s.json({token:data.session.access_token,user:safe(profile),organization});
 }));
-app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=await activeStaffFor(q.supabase,q.user.id);s.json({user:{...safe(q.user),organizationStaff},organization});}));
+app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];s.json({user:{...safe(q.user),organizationStaff},organization});}));
 app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const b=z.object({registrationCode:z.string().min(6),studentNumber:z.string().optional()}).parse(q.body);const {data,error}=await q.supabase.rpc("request_verity_membership",{p_registration_code:b.registrationCode.trim().toUpperCase(),p_student_number:b.studentNumber||null});if(error)return s.status(400).json({error:error.message});s.status(201).json({membership:data});}));
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
 app.get("/api/organization",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;s.json({organization:data});}));
@@ -154,11 +155,11 @@ app.get("/api/dashboard",auth,run(async(q,s)=>{
 }));
 
 app.get("/api/certificates",auth,run(async(q,s)=>{
-  const staff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):null;
-  if(!["ADMIN","GRADUATE","EMPLOYER"].includes(q.user.role)&&!staff)return s.status(403).json({error:"Permission denied."});
-  if(staff&&!hasStaffPermission(staff,"certificates:read"))return s.status(403).json({error:"Your staff account does not have certificate-read permission."});
+  const staff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];
+  const readableStaffOrgs=staff.filter(x=>hasStaffPermission(x,"certificates:read"));
+  if(!["ADMIN","GRADUATE","EMPLOYER"].includes(q.user.role)&&!readableStaffOrgs.length)return s.status(403).json({error:"Permission denied."});
   let query=q.supabase.from("Certificate").select("id,certificateId,studentName,studentNumber,institution,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,revokedAt,revokeReason").order("issuedAt",{ascending:false}).limit(100);
-  if(q.user.role==="GRADUATE") query=staff?query.or(`graduateId.eq.${q.user.id},organizationId.eq.${staff.organizationId}`):query.eq("graduateId",q.user.id);
+  if(q.user.role==="GRADUATE") query=readableStaffOrgs.length?query.or(`graduateId.eq.${q.user.id},organizationId.in.(${readableStaffOrgs.map(x=>x.organizationId).join(",")})`):query.eq("graduateId",q.user.id);
   if(q.user.role==="EMPLOYER"){const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;query=query.eq("organizationId",org?.id||"");}
   const {data,error}=await query;
   if(error) throw error;
@@ -247,8 +248,8 @@ app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUAT
     if(error) throw error;if(!org||org.id!==cert.organizationId)return s.status(403).json({error:"Access denied."});
   }
   if(q.user.role==="GRADUATE"&&cert.graduateId!==q.user.id){
-    const staff=await activeStaffFor(q.supabase,q.user.id);
-    if(!staff||staff.organizationId!==cert.organizationId||!hasStaffPermission(staff,"certificates:read"))return s.status(403).json({error:"Access denied."});
+    const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),cert.organizationId);
+    if(!hasStaffPermission(staff,"certificates:read"))return s.status(403).json({error:"Access denied."});
   }
   const {data,error}=await q.supabase.from("CertificateDocument").select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").eq("certificateId",cert.id).order("createdAt",{ascending:false});
   if(error) throw error;
@@ -266,8 +267,8 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER",
     const {data:c,error:ce}=await q.supabase.from("Certificate").select("graduateId").eq("id",doc.certificateId).maybeSingle();
     if(ce)throw ce;
     if(c?.graduateId!==q.user.id){
-      const staff=await activeStaffFor(q.supabase,q.user.id);
-      if(!staff||staff.organizationId!==doc.organizationId||!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your staff account does not have document-download permission."});
+      const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),doc.organizationId);
+      if(!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your staff account does not have document-download permission."});
     }
   }
   const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
