@@ -255,19 +255,23 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
 }));
 
 app.get("/api/dashboard",auth,run(async(q,s)=>{
-  const admin=q.user.role==="ADMIN", graduate=q.user.role==="GRADUATE"; const {data:ownedOrg}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode").eq("ownerId",q.user.id).maybeSingle():{data:null};
+  const admin=q.user.role==="ADMIN", graduate=q.user.role==="GRADUATE";
+  const {data:ownedOrg,error:orgError}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode").eq("ownerId",q.user.id).maybeSingle():{data:null,error:null};
+  if(orgError)throw orgError;
   const base=()=>q.supabase.from("Certificate").select("id",{count:"exact",head:true});
   const scoped=()=>graduate?base().eq("graduateId",q.user.id):q.user.role==="EMPLOYER"?base().eq("organizationId",ownedOrg?.id||""):base();
+  const recentQuery=()=>{let query=q.supabase.from("Certificate").select("certificateId,studentName,qualification,institution,issuedAt,status").order("issuedAt",{ascending:false}).limit(6);if(graduate)query=query.eq("graduateId",q.user.id);if(q.user.role==="EMPLOYER")query=query.eq("organizationId",ownedOrg?.id||"");return query;};
+  const verificationQuery=()=>{let query=q.supabase.from("Verification").select("id",{count:"exact",head:true});if(q.user.role==="EMPLOYER")query=query.eq("organizationId",ownedOrg?.id||"");return query;};
   const [total,active,revoked,verifications,recent,recentChecks]=await Promise.all([
     scoped(),
     (graduate?base().eq("graduateId",q.user.id):q.user.role==="EMPLOYER"?base().eq("organizationId",ownedOrg?.id||""):base()).eq("status","ACTIVE"),
     (graduate?base().eq("graduateId",q.user.id):q.user.role==="EMPLOYER"?base().eq("organizationId",ownedOrg?.id||""):base()).eq("status","REVOKED"),
-    admin?q.supabase.from("Verification").select("id",{count:"exact",head:true}):q.user.role==="EMPLOYER"?q.supabase.from("Verification").select("id",{count:"exact",head:true}).eq("organizationId",ownedOrg?.id||""):Promise.resolve({count:0}),
-    q.supabase.from("Certificate").select("certificateId,studentName,qualification,institution,issuedAt,status").order("issuedAt",{ascending:false}).limit(6),
-    admin?q.supabase.from("Verification").select("id,result,createdAt,certificateId").order("createdAt",{ascending:false}).limit(6):Promise.resolve({data:[]})
+    admin||q.user.role==="EMPLOYER"?verificationQuery():Promise.resolve({count:0,error:null}),
+    recentQuery(),
+    admin?q.supabase.from("Verification").select("id,result,createdAt,certificateId").order("createdAt",{ascending:false}).limit(6):Promise.resolve({data:[],error:null})
   ]);
   for(const x of [total,active,revoked,verifications,recent,recentChecks]) if(x.error) throw x.error;
-  s.json({stats:{total:total.count||0,active:active.count||0,revoked:revoked.count||0,verifications:verifications.count||0},recent:recent.data||[],recentChecks:recentChecks.data||[],organization:ownedOrg,blockchain:chainStatus()});
+  s.json({stats:{total:total.count||0,active:active.count||0,revoked:revoked.count||0,verifications:verifications.count||0},recent:recent.data||[],recentChecks:recentChecks.data||[],organization:ownedOrg,blockchain:chainStatus(),generatedAt:new Date().toISOString()});
 }));
 
 app.get("/api/certificates",auth,run(async(q,s)=>{
