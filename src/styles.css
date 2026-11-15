@@ -6,3 +6,5 @@
 .success{margin:14px 0;padding:12px 14px;border:1px solid #8dd7c2;border-radius:10px;background:#eaf8f3;color:#176b55;font-size:13px;line-height:1.5}
 
 .invite-code{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px dashed #79a99f;background:#f0f8f6;border-radius:10px;font:800 20px Manrope;letter-spacing:2px;color:#173b50}.invite-code button{border:0;border-radius:7px;background:#173b50;color:#fff;padding:9px 12px;font-size:12px;letter-spacing:0}.org-status{font-size:13px;color:#36596b}
+
+.upload-control{display:inline-flex;align-items:center;gap:6px;border:1px solid #d5e0e7;border-radius:7px;padding:7px 10px;font-size:12px;font-weight:700;color:#24465a;cursor:pointer;background:#fff}.upload-control input{max-width:150px;font-size:11px}
