@@ -35,7 +35,10 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
-- QR-based public verification
+- Unique high-entropy certificate verification keys and QR-based public verification
+- Separate issuer and verifier organization workflows; only approved academic institutions can issue credentials
+- Authenticated verification requests attributed to approved verifier organizations
+- Graduate-controlled, time-limited (30-day) consent for verifier organizations to view original certificate documents
 - SHA-256 canonical credential fingerprint
 - Audit events
 - Solidity certificate registry with optional EVM integration
@@ -60,7 +63,10 @@ The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAI
 4. Once approved, the Organization Admin shares its generated registration code with students or employees.
 5. Students register as **Graduate** and enter the code during signup, or sign in and use **Join an institution** later.
 6. The Organization Admin reviews requests under **Students / Employees** and approves or rejects them.
-7. Approved organization administrators can issue and revoke credentials belonging to their organization. Students can access credentials linked to their own account.
-8. Public QR / certificate-ID verification remains available without granting access to private organization records.
+7. Only approved organizations whose type is INSTITUTION can issue and revoke academic credentials. Employer-type organizations are verifiers and cannot issue certificates.
+8. Each credential receives a unique certificate ID, high-entropy verification key and QR verification URL. Institution admins must upload the official certificate document during registration.
+9. Approved employer-type verification organizations can search by certificate ID or verification key. Verity records the organization making each authenticated lookup.
+10. A verifier must request permission from the linked graduate before viewing the original certificate document. Graduate approval expires after 30 days. Original documents remain private and are only served after a CLEAN scan result.
+11. Public QR / key verification displays limited credential information and does not automatically reveal the private original document.
 
 The database keeps organization profiles and memberships in separate tables and uses Row Level Security to scope records. The existing EMPLOYER database enum value represents the Organization Admin role; ADMIN remains reserved for the Verity platform administrator.
