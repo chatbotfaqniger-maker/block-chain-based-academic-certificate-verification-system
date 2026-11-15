@@ -8,3 +8,53 @@
 .invite-code{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px dashed #79a99f;background:#f0f8f6;border-radius:10px;font:800 20px Manrope;letter-spacing:2px;color:#173b50}.invite-code button{border:0;border-radius:7px;background:#173b50;color:#fff;padding:9px 12px;font-size:12px;letter-spacing:0}.org-status{font-size:13px;color:#36596b}
 
 .upload-control{display:inline-flex;align-items:center;gap:6px;border:1px solid #d5e0e7;border-radius:7px;padding:7px 10px;font-size:12px;font-weight:700;color:#24465a;cursor:pointer;background:#fff}.upload-control input{max-width:150px;font-size:11px}
+
+/* Premium institution review workspace */
+.admin-registry{padding:26px}
+.registry-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:22px}
+.registry-heading h3{font:800 21px Manrope;margin:7px 0}
+.registry-heading p{margin:0;color:#738397;line-height:1.6;font-size:13px}
+.eyebrow{display:block;font-size:10px;font-weight:800;letter-spacing:1.45px;color:#668294}
+.registry-count{white-space:nowrap;border:1px solid #dce7eb;background:#f5f9fa;color:#35576b;padding:8px 12px;border-radius:30px;font-size:11px;font-weight:800}
+.org-review-card{border:1px solid #e4ebef;border-radius:14px;padding:20px;margin-top:16px;background:linear-gradient(180deg,#fff,#fcfdfe);box-shadow:0 7px 24px #173b5009}
+.org-review-top{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}
+.org-review-top h4{font:800 18px Manrope;margin:5px 0}
+.org-review-top small{font-size:11px;color:#8190a0}
+.review-status{font-size:10px;font-weight:800;letter-spacing:.6px;border-radius:30px;padding:7px 11px;background:#fff5e8;color:#9a641c;border:1px solid #f3dfbd}
+.review-status.approved{background:#eaf7f1;color:#216b50;border-color:#cdeadd}
+.review-status.suspended{background:#fff0ee;color:#a34138;border-color:#f1d5d1}
+.org-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}
+.org-facts>div{background:#f6f8fa;border:1px solid #edf1f4;border-radius:9px;padding:12px;min-width:0}
+.org-facts small,.org-facts b{display:block}
+.org-facts small{font-size:10px;color:#8493a2;margin-bottom:6px}
+.org-facts b{font-size:12px;color:#29465b;overflow-wrap:anywhere}
+.evidence-review{border-radius:11px;padding:15px;border:1px solid}
+.has-evidence{background:#f3faf7;border-color:#d7ebe2}
+.missing-evidence{background:#fff9f1;border-color:#f0dfc6}
+.evidence-review-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.evidence-review-head b,.evidence-review-head small{display:block}
+.evidence-review-head b{font-size:13px;color:#29465b}
+.evidence-review-head small{font-size:11px;color:#7d8d9b;margin-top:4px}
+.evidence-counter{font-size:10px;font-weight:800;letter-spacing:.7px;color:#547184;background:#fff;border:1px solid #e2e9ed;border-radius:20px;padding:6px 9px}
+.evidence-file{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid #e3ece8;border-radius:9px;padding:10px;margin-top:10px}
+.file-mark{width:35px;height:38px;display:grid;place-items:center;background:#e9f1f7;color:#315b76;border-radius:7px;font-size:9px;font-weight:900}
+.file-meta{flex:1;min-width:0}
+.file-meta b,.file-meta small{display:block;overflow-wrap:anywhere}
+.file-meta b{font-size:12px;color:#29465b}
+.file-meta small{font-size:10px;color:#8291a0;margin-top:4px}
+.evidence-empty{display:flex;align-items:center;gap:9px;margin-top:13px;color:#946b36;font-size:11px;line-height:1.5}
+.evidence-empty svg{flex:0 0 auto}
+.reviewer-label{display:grid;gap:7px;margin-top:16px;font-size:11px;font-weight:800;color:#53697c}
+.reviewer-label textarea{width:100%;resize:vertical;border:1px solid #dce5eb;border-radius:9px;padding:11px 12px;font:12px 'DM Sans',sans-serif;color:#243d52;background:#fff;outline:none}
+.reviewer-label textarea:focus{border-color:#4c958a;box-shadow:0 0 0 3px #4c958a18}
+.org-review-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:15px}
+.review-hint{font-size:10px;color:#8795a2}
+.btn-outline,.btn-approve,.btn-danger{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:8px;padding:9px 12px;font-size:11px;font-weight:800;transition:all .18s ease}
+.btn-outline{border:1px solid #cbd9e1;background:#fff;color:#31566d}
+.btn-outline:hover:not(:disabled){background:#edf5f7;border-color:#91b3c0}
+.btn-approve{border:1px solid #174c4b;background:linear-gradient(135deg,#174c4b,#226d63);color:#fff;box-shadow:0 4px 10px #174c4b20}
+.btn-approve:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 7px 15px #174c4b25}
+.btn-danger{border:1px solid #efd0cc;background:#fff5f3;color:#a3443a}
+.btn-danger:hover:not(:disabled){background:#fee9e5}
+.btn-outline:disabled,.btn-approve:disabled,.btn-danger:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
+@media(max-width:650px){.admin-registry{padding:17px}.registry-heading{flex-direction:column}.org-facts{grid-template-columns:1fr}.org-review-card{padding:14px}.org-review-actions{align-items:flex-start;flex-direction:column}.evidence-file{align-items:flex-start;flex-wrap:wrap}.evidence-file .btn-outline{margin-left:46px}}
