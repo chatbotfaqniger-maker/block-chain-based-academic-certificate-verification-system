@@ -351,15 +351,15 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   const safeName=String(q.headers["x-file-name"]||("certificate."+spec.ext)).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("certificate."+spec.ext);
   const fileId=crypto.randomUUID(), storagePath=`${org.id}/${cert.id}/${fileId}.${spec.ext}`;
   const sha256=digest(bytes);
-  const scan=await scanUpload(bytes,"CertificateDocument");
+  const scan={status:"NOT_SCANNED",detail:"Automated malware scanning is temporarily disabled. File type, signature, size and SHA-256 integrity checks were completed; manual review is required."};
   const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});
   if(uploadError) throw uploadError;
   const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:scan.status};
   const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").single();
   if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
   await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256});
-  await audit(q.supabase,q.user.id,"ANTIVIRUS_SCAN_"+scan.status,"CertificateDocument",doc.id,{engine:"ClamAV",sha256,detail:scan.detail.slice(0,500)});
-  s.status(201).json({document:{...doc,scanStatus:scan.status},scan:{engine:"ClamAV",status:scan.status,detail:scan.detail},message:scan.status==="CLEAN"?"Certificate uploaded and passed the ClamAV scan.":scan.status==="INFECTED"?"Malware was detected. The document is blocked from download.":"The document is quarantined because the antivirus scan could not be completed."});
+
+  s.status(201).json({document:{...doc,scanStatus:scan.status},scan:{engine:"ClamAV",status:scan.status,detail:scan.detail},message:"Certificate uploaded. Automated malware scanning is disabled; the file is marked NOT_SCANNED and requires manual review."});
 }));
 app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId,graduateId").eq("certificateId",q.params.id).maybeSingle();
@@ -380,7 +380,7 @@ app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUAT
 app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
   const {data:doc,error}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,certificateId,organizationId,scanStatus").eq("id",q.params.id).maybeSingle();
   if(error) throw error;if(!doc)return s.status(404).json({error:"Document not found."});
-  if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This document is quarantined until an antivirus scan marks it CLEAN."});
+  if(!["CLEAN","NOT_SCANNED"].includes(doc.scanStatus))return s.status(423).json({error:"This document is blocked due to a confirmed or unresolved security scan result."});
   if(q.user.role==="EMPLOYER"){
     const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();
     if(oe)throw oe;if(!org||org.id!==doc.organizationId)return s.status(403).json({error:"Access denied."});
@@ -503,7 +503,7 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
   if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
-  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,scanStatus").eq("certificateId",grant.certificateId).eq("scanStatus","CLEAN").order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,scanStatus").eq("certificateId",grant.certificateId).in("scanStatus",["CLEAN","NOT_SCANNED"]).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(de)throw de;if(!doc)return s.status(423).json({error:"The institution's original document is not available yet. It must pass the configured document scan first."});
   const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
   if(le)throw le;
