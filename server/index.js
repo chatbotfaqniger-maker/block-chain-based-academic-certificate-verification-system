@@ -221,13 +221,12 @@ app.post("/api/organization/evidence",auth,roles("EMPLOYER"),express.raw({type:[
  if(!org||org.status!=="PENDING")return s.status(403).json({error:"Evidence can only be submitted while the organization application is pending."});
  const name=String(q.headers["x-file-name"]||("evidence."+spec.ext)).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("evidence."+spec.ext);
  const id=crypto.randomUUID(),path=`${org.id}/${id}.${spec.ext}`,sha256=digest(bytes);
- const scan=await scanUpload(bytes,"OrganizationEvidence");
+ const scanStatus="NOT_SCANNED";
  const {error:up}=await q.supabase.storage.from("verity-organization-evidence").upload(path,bytes,{contentType:mime,upsert:false});if(up)throw up;
- const {data:row,error}=await q.supabase.from("OrganizationEvidence").insert({id,organizationId:org.id,evidenceType:type,storagePath:path,originalName:name,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:scan.status}).select("id,evidenceType,originalName,sizeBytes,sha256,scanStatus,createdAt").single();
+ const {data:row,error}=await q.supabase.from("OrganizationEvidence").insert({id,organizationId:org.id,evidenceType:type,storagePath:path,originalName:name,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus}).select("id,evidenceType,originalName,sizeBytes,sha256,scanStatus,createdAt").single();
  if(error){await q.supabase.storage.from("verity-organization-evidence").remove([path]);throw error;}
- await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_UPLOADED","OrganizationEvidence",id,{organizationId:org.id,evidenceType:type,sha256});
- await audit(q.supabase,q.user.id,"ANTIVIRUS_SCAN_"+scan.status,"OrganizationEvidence",id,{engine:"ClamAV",sha256,detail:scan.detail.slice(0,500)});
- s.status(201).json({evidence:{...row,scanStatus:scan.status},scan:{engine:"ClamAV",status:scan.status,detail:scan.detail}});
+ await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_UPLOADED","OrganizationEvidence",id,{organizationId:org.id,evidenceType:type,sha256,scanStatus});
+ s.status(201).json({evidence:row,scan:{engine:"ClamAV",status:"DISABLED",detail:"Antivirus scanning is temporarily isolated. This evidence has not been scanned and is available for administrator review only."}});
 }));
 app.get("/api/organization/evidence",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;if(!org)return s.json({evidence:[]});
@@ -235,7 +234,7 @@ app.get("/api/organization/evidence",auth,roles("EMPLOYER"),run(async(q,s)=>{
 }));
 app.get("/api/admin/organizations/:id/evidence/:evidenceId",auth,roles("ADMIN"),run(async(q,s)=>{
  const {data:e,error}=await q.supabase.from("OrganizationEvidence").select("id,organizationId,storagePath,originalName,scanStatus").eq("id",q.params.evidenceId).eq("organizationId",q.params.id).maybeSingle();if(error)throw error;if(!e)return s.status(404).json({error:"Evidence not found."});
- if(e.scanStatus!=="CLEAN")return s.status(423).json({error:"Evidence is quarantined until ClamAV confirms it is CLEAN.",scanStatus:e.scanStatus});
+ if(!["CLEAN","NOT_SCANNED"].includes(e.scanStatus))return s.status(423).json({error:"Evidence is unavailable for review because its scan status is "+e.scanStatus+".",scanStatus:e.scanStatus});
  const {data:link,error:le}=await q.supabase.storage.from("verity-organization-evidence").createSignedUrl(e.storagePath,60,{download:e.originalName});if(le)throw le;
  await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_REVIEWED","OrganizationEvidence",e.id,{organizationId:e.organizationId});
  s.json({url:link.signedUrl,expiresIn:60,originalName:e.originalName,scanStatus:e.scanStatus});
