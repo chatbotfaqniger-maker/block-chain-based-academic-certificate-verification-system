@@ -119,7 +119,7 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  if(org.status!=="PENDING")return s.status(403).json({error:"Organization identity details can only be edited while the application is pending."});
  const patch={registrationNumber:b.registrationNumber?.trim()||null,officialWebsite:b.officialWebsite?.trim()||null,officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||null,accreditationBody:b.accreditationBody?.trim()||null,updatedAt:new Date().toISOString()};
  if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.officialWebsite||!patch.accreditationBody))return s.status(400).json({error:"Institutions must provide a registration number, official website and accreditation body."});
- if(patch.officialWebsite&&!/^https?:\\/\\//i.test(patch.officialWebsite))return s.status(400).json({error:"Enter the official website with https:// or http://."});
+ if(patch.officialWebsite&&!/^https?:\/\//i.test(patch.officialWebsite))return s.status(400).json({error:"Enter the official website with https:// or http://."});
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("*").single();if(error)throw error;
  await audit(q.supabase,q.user.id,"ORGANIZATION_IDENTITY_UPDATED","Organization",org.id,{organizationId:org.id});
  s.json({organization:data});
