@@ -103,6 +103,28 @@ app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrga
 app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const b=z.object({registrationCode:z.string().min(6),studentNumber:z.string().optional()}).parse(q.body);const {data,error}=await q.supabase.rpc("request_verity_membership",{p_registration_code:b.registrationCode.trim().toUpperCase(),p_student_number:b.studentNumber||null});if(error)return s.status(400).json({error:error.message});s.status(201).json({membership:data});}));
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
 app.get("/api/organization",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;s.json({organization:data});}));
+
+const staffPermissions=["certificates:read","certificates:issue","certificates:revoke","members:manage","documents:download"];
+app.get("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({staff:[]});
+ const {data,error:e}=await q.supabase.from("OrganizationStaff").select("id,userId,permissions,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;
+ const ids=(data||[]).map(x=>x.userId);const {data:users,error:ue}=ids.length?await q.supabase.from("User").select("id,fullName,email,role").in("id",ids):{data:[],error:null};if(ue)throw ue;
+ s.json({staff:(data||[]).map(x=>({...x,user:(users||[]).find(u=>u.id===x.userId)||null})),organizationStatus:org.status});
+}));
+app.post("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({email:z.string().email(),permissions:z.array(z.enum(staffPermissions)).min(1)}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization can add staff."});
+ const {data:person,error:pe}=await q.supabase.from("User").select("id,email,role").eq("email",b.email.trim().toLowerCase()).maybeSingle();if(pe)throw pe;if(!person)return s.status(404).json({error:"This person must create a Verity account before you can add them."});if(person.id===q.user.id)return s.status(400).json({error:"The organization owner is already an administrator."});if(person.role==="ADMIN"||person.role==="EMPLOYER")return s.status(400).json({error:"This account cannot be assigned as organization staff."});
+ const {data,error:ie}=await q.supabase.from("OrganizationStaff").upsert({id:crypto.randomUUID(),organizationId:org.id,userId:person.id,permissions:b.permissions,status:"ACTIVE",createdBy:q.user.id,updatedAt:new Date().toISOString()},{onConflict:"organizationId,userId"}).select().single();if(ie)throw ie;
+ await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_ADDED","OrganizationStaff",data.id,{organizationId:org.id,permissions:b.permissions});s.status(201).json({staff:data});
+}));
+app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({status:z.enum(["ACTIVE","SUSPENDED"]),permissions:z.array(z.enum(staffPermissions)).min(1).optional()}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});
+ const patch={status:b.status,updatedAt:new Date().toISOString()};if(b.permissions)patch.permissions=b.permissions;
+ const {data,error:e}=await q.supabase.from("OrganizationStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(e)throw e;
+ await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
+}));
 app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
 app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved first."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
 app.get("/api/admin/organizations",auth,roles("ADMIN"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").order("createdAt",{ascending:false});if(error)throw error;s.json({organizations:data||[]});}));
@@ -199,7 +221,7 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   const sha256=digest(bytes);
   const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});
   if(uploadError) throw uploadError;
-  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id};
+  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:"PENDING_SCAN"};
   const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,createdAt").single();
   if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
   await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256});
@@ -253,6 +275,16 @@ app.get("/api/audit",auth,roles("ADMIN"),run(async(q,s)=>{
   const {data,error}=await q.supabase.from("AuditEvent").select("id,action,entity,entityId,metadata,createdAt,actor:User!AuditEvent_actorId_fkey(fullName,email)").order("createdAt",{ascending:false}).limit(100);
   if(error) throw error;
   s.json({events:data||[]});
+}));
+
+app.post("/api/internal/document-scan-result",run(async(q,s)=>{
+ const secret=process.env.DOCUMENT_SCAN_WEBHOOK_SECRET;
+ if(!secret||q.headers.authorization!=="Bearer "+secret)return s.status(401).json({error:"Unauthorized scanner."});
+ const b=z.object({documentId:z.string().min(1),result:z.enum(["CLEAN","INFECTED","SCAN_FAILED"])}).parse(q.body);
+ const {data,error}=await makeClient().from("CertificateDocument").update({scanStatus:b.result}).eq("id",b.documentId).select("id,scanStatus").single();
+ if(error)throw error;
+ if(b.result!=="CLEAN"){const {data:doc}=await makeClient().from("CertificateDocument").select("storagePath").eq("id",b.documentId).single();if(doc?.storagePath)await makeClient().storage.from("verity-certificates").remove([doc.storagePath]);}
+ s.json({documentId:data.id,scanStatus:data.scanStatus});
 }));
 app.use("/api",(q,s)=>s.status(404).json({error:"API route not found."}));
 app.use((e,q,s,_n)=>{if(e instanceof z.ZodError)return s.status(400).json({error:"Please check the form fields.",details:e.issues});console.error(e);s.status(500).json({error:e.message||"Unexpected server error."});});
