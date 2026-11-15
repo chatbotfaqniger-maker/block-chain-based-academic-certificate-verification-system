@@ -4,3 +4,5 @@
 @media(max-width:600px){.sidebar{position:relative;width:auto;min-height:auto;padding:18px}.sidebar>.brand{padding:0 0 15px}.sidebar>small,.workspace,.sidebar nav,.side-bottom{display:none}.content{margin:0;padding:18px}.content>header{padding-bottom:14px}.welcome{padding:20px;margin:20px 0}.welcome h1{font-size:21px}.stats{gap:9px}.stat{padding:15px}.stat strong{font-size:24px}.panel{padding:17px}.panel-head{align-items:flex-start;flex-direction:column}.gridform{grid-template-columns:1fr}.actions{flex-wrap:wrap}.public{padding:20px}.public .panel{margin:25px auto;padding:22px}}
 
 .success{margin:14px 0;padding:12px 14px;border:1px solid #8dd7c2;border-radius:10px;background:#eaf8f3;color:#176b55;font-size:13px;line-height:1.5}
+
+.invite-code{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px dashed #79a99f;background:#f0f8f6;border-radius:10px;font:800 20px Manrope;letter-spacing:2px;color:#173b50}.invite-code button{border:0;border-radius:7px;background:#173b50;color:#fff;padding:9px 12px;font-size:12px;letter-spacing:0}.org-status{font-size:13px;color:#36596b}
