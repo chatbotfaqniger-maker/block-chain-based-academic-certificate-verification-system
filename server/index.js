@@ -25,47 +25,6 @@ const makeClient = (accessToken) => {
   });
 };
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
-const CLAMAV_HOST=process.env.CLAMAV_HOST||"";
-const CLAMAV_PORT=Number(process.env.CLAMAV_PORT||3310);
-const CLAMAV_TIMEOUT_MS=Math.min(Math.max(Number(process.env.CLAMAV_TIMEOUT_MS||60000),5000),120000);
-async function scanWithClamAV(bytes) {
-  if(!CLAMAV_HOST) throw new Error("ClamAV scanner is not configured (CLAMAV_HOST is missing).");
-  return new Promise((resolve,reject)=>{
-    const socket=net.createConnection({host:CLAMAV_HOST,port:CLAMAV_PORT});
-    let response="",settled=false;
-    const finish=(error,result)=>{if(settled)return;settled=true;clearTimeout(timer);socket.destroy();error?reject(error):resolve(result);};
-    const timer=setTimeout(()=>finish(new Error("ClamAV scan timed out.")),CLAMAV_TIMEOUT_MS);
-    socket.on("connect",()=>{
-      socket.write("zINSTREAM\0");
-      const chunkSize=64*1024;
-      for(let offset=0;offset<bytes.length;offset+=chunkSize){
-        const chunk=bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length));
-        const header=Buffer.alloc(4);header.writeUInt32BE(chunk.length);
-        socket.write(header);socket.write(chunk);
-      }
-      const end=Buffer.alloc(4);end.writeUInt32BE(0);socket.write(end);
-    });
-    socket.on("data",data=>{
-      response+=data.toString("utf8");
-      if(response.includes("\0")||/\b(?:OK|FOUND|ERROR)\s*$/.test(response.trim())){
-        if(/: OK(?:\0|$)/.test(response.trim()))finish(null,{status:"CLEAN",detail:response.trim()});
-        else if(/: .+ FOUND(?:\0|$)/.test(response.trim()))finish(null,{status:"INFECTED",detail:response.trim()});
-        else finish(new Error("ClamAV returned an unrecognized response."));
-      }
-    });
-    socket.on("error",error=>finish(new Error("ClamAV connection failed: "+error.message)));
-    socket.on("end",()=>{if(!settled)finish(new Error("ClamAV closed the connection before returning a verdict."));});
-  });
-}
-async function scanUpload(bytes,entityLabel) {
-  try { return await scanWithClamAV(bytes); }
-  catch(error) {
-    const detail=error.message||"ClamAV scan failed.";
-    console.error(entityLabel+" scan failed:",detail);
-    return {status:"SCAN_FAILED",detail};
-  }
-}
-
 const canonical = c => JSON.stringify({
   certificateId:c.certificateId, studentName:c.studentName.trim(), studentNumber:c.studentNumber.trim(),
   institution:c.institution.trim(), faculty:c.faculty.trim(), department:c.department.trim(),
