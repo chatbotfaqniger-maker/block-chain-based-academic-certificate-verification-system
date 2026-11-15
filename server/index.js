@@ -38,7 +38,7 @@ async function scanWithClamAV(bytes) {
     const finish=(error,result)=>{if(settled)return;settled=true;clearTimeout(timer);socket.destroy();error?reject(error):resolve(result);};
     const timer=setTimeout(()=>finish(new Error("ClamAV scan timed out.")),CLAMAV_TIMEOUT_MS);
     socket.on("connect",()=>{
-      socket.write("zINSTREAM\\0");
+      socket.write("zINSTREAM\0");
       const chunkSize=64*1024;
       for(let offset=0;offset<bytes.length;offset+=chunkSize){
         const chunk=bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length));
@@ -49,9 +49,9 @@ async function scanWithClamAV(bytes) {
     });
     socket.on("data",data=>{
       response+=data.toString("utf8");
-      if(response.includes("\\0")||/\\b(?:OK|FOUND|ERROR)\\s*$/.test(response.trim())){
-        if(/: OK(?:\\0|$)/.test(response.trim()))finish(null,{status:"CLEAN",detail:response.trim()});
-        else if(/: .+ FOUND(?:\\0|$)/.test(response.trim()))finish(null,{status:"INFECTED",detail:response.trim()});
+      if(response.includes("\0")||/\b(?:OK|FOUND|ERROR)\s*$/.test(response.trim())){
+        if(/: OK(?:\0|$)/.test(response.trim()))finish(null,{status:"CLEAN",detail:response.trim()});
+        else if(/: .+ FOUND(?:\0|$)/.test(response.trim()))finish(null,{status:"INFECTED",detail:response.trim()});
         else finish(new Error("ClamAV returned an unrecognized response."));
       }
     });
