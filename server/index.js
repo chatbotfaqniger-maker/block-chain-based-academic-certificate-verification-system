@@ -374,12 +374,14 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER",
     if(oe)throw oe;
     if(!org||org.id!==doc.organizationId||org.status!=="APPROVED")return s.status(403).json({error:"Access denied."});
   }
+  let staffDownload=false;
   if(q.user.role==="GRADUATE"){
     const {data:c,error:ce}=await q.supabase.from("Certificate").select("graduateId").eq("id",doc.certificateId).maybeSingle();
     if(ce)throw ce;
     if(c?.graduateId!==q.user.id){
       const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),doc.organizationId);
       if(!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your active staff assignment does not allow document downloads for this organization."});
+      staffDownload=true;
     }
   }
   if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This document is quarantined and cannot be downloaded until ClamAV returns a CLEAN result.",scanStatus:doc.scanStatus});
@@ -387,7 +389,7 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER",
   if(fileError)throw fileError;
   const bytes=Buffer.from(await file.arrayBuffer());
   const safeName=(doc.originalName||"VERITY-CERTIFICATE").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120);
-  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId,scanStatus:doc.scanStatus,staffDownload:q.user.role==="GRADUATE"});
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId,scanStatus:doc.scanStatus,staffDownload});
   s.setHeader("Content-Type",doc.mimeType);
   s.setHeader("Content-Disposition",`attachment; filename="${safeName}"`);
   s.setHeader("Content-Length",String(bytes.length));
