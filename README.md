@@ -29,6 +29,9 @@ For local development without Docker, run `npm install` and `npm run dev`.
 
 - Supabase email/password authentication
 - Role-aware access (System Admin, Organization Admin, Student / Graduate)
+- Role-filtered User Guidelines with dedicated module walkthroughs, action references, permissions, warnings and troubleshooting
+- 58-second cinematic in-app VERITY product film using live dashboard totals and an interactive credential verification action
+- Organization-scoped staff credential verification with an explicit `credentials:verify` permission and audit event
 - Organization registration with System Admin approval
 - Organization-specific student / employee membership and registration codes
 - Student institution-link requests and organization approval workflow
