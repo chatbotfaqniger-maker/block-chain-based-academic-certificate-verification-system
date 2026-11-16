@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 const clean = (value, fallback = "—", max = 78) => {
-  const text = String(value ?? "").replace(/[\\r\\n\\t]+/g, " ").replace(/[^\\p{L}\\p{N} .,:;()/_+&-•→·]/gu, "").trim();
+  const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/[^\p{L}\p{N} .,:;()/_+&-•→·]/gu, "").trim();
   return (text || fallback).slice(0, max);
 };
 const mask = value => {
