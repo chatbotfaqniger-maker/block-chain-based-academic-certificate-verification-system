@@ -56,8 +56,8 @@ export default function VerityShowcase({data, certificates=[], organization, onV
     if (next === scenes.length - 1) setPlaying(false);
   }
   async function verifyActual() {
-    if (!sample?.certificateId || !onVerify) return;
-    try { const result = await onVerify(sample.certificateId); setVerifyResult(result); }
+    if (!reference.trim() || !onVerify) return;
+    try { const result = await onVerify(reference.trim()); setVerifyResult(result); }
     catch (error) { setVerifyResult({verified:false,status:"CHECK FAILED",message:error.message}); }
   }
 
