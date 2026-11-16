@@ -10,6 +10,7 @@ import QRCode from "qrcode";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
+import { scanBuffer } from "./malware-scanner.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -89,9 +90,15 @@ async function auth(req,res,next) {
 }
 const roles=(...allowed)=>(req,res,next)=>allowed.includes(req.user.role)?next():res.status(403).json({error:"Permission denied."});
 async function activeStaffFor(client,userId) {
- const {data,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE");
+ const {data:staff,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE");
  if(error) throw error;
- return data||[];
+ const rows=staff||[];
+ if(!rows.length)return [];
+ const organizationIds=[...new Set(rows.map(x=>x.organizationId))];
+ const {data:organizations,error:orgError}=await client.from("Organization").select("id,status").in("id",organizationIds);
+ if(orgError)throw orgError;
+ const approved=new Set((organizations||[]).filter(x=>x.status==="APPROVED").map(x=>x.id));
+ return rows.filter(x=>approved.has(x.organizationId));
 }
 const staffForOrganization=(staff,organizationId)=>staff.find(x=>x.organizationId===organizationId)||null;
 const hasStaffPermission=(staff,permission)=>Boolean(staff&&staff.status==="ACTIVE"&&staff.permissions?.includes(permission));
@@ -100,7 +107,7 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
   if(error) throw error;
 }
 
-app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus()}));
+app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),malwareScanning:{provider:"ClamAV",configured:Boolean(process.env.CLAMAV_HOST?.trim()),enforcement:"quarantine_until_clean"}}));
 
 app.post("/api/auth/register",run(async(q,s)=>{
   const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
@@ -198,12 +205,15 @@ app.get("/api/admin/organizations/:id/evidence/:evidenceId",auth,roles("ADMIN"),
 }));
 app.get("/api/admin/certificates/:id/document-preview",auth,roles("ADMIN"),run(async(q,res)=>{
   const {data:cert,error:ce}=await q.supabase.from("Certificate").select("id,certificateId,studentName,studentNumber,institution,department").eq("certificateId",q.params.id).maybeSingle();
-  if(ce)throw ce;if(!cert)return res.status(404).json({error:"Certificate not found."});
-  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,sha256").eq("certificateId",cert.id).order("createdAt",{ascending:false}).limit(1).maybeSingle();
-  if(de)throw de;if(!doc)return res.status(404).json({error:"The institution has not uploaded a certificate file for this record yet."});
+  if(ce)throw ce;
+  if(!cert)return res.status(404).json({error:"Certificate not found."});
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,sha256,scanStatus").eq("certificateId",cert.id).order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  if(de)throw de;
+  if(!doc)return res.status(404).json({error:"The institution has not uploaded a certificate file for this record yet."});
+  if(doc.scanStatus!=="CLEAN")return res.status(423).json({error:"This document is quarantined until ClamAV returns a CLEAN result.",scanStatus:doc.scanStatus});
   const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60);
   if(le)throw le;
-  await audit(q.supabase,q.user.id,"ADMIN_CERTIFICATE_DOCUMENT_PREVIEWED","CertificateDocument",doc.id,{certificateId:cert.certificateId});
+  await audit(q.supabase,q.user.id,"ADMIN_CERTIFICATE_DOCUMENT_PREVIEWED","CertificateDocument",doc.id,{certificateId:cert.certificateId,scanStatus:doc.scanStatus});
   res.json({url:link.signedUrl,mimeType:doc.mimeType,originalName:doc.originalName,student:cert,expiresIn:60});
 }));
 
@@ -279,11 +289,17 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
 
 app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
   const {data:c,error}=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,graduateId,organizationId").eq("certificateId",q.params.id).maybeSingle();
-  if(error) throw error;
-  if(!c) return s.status(404).json({error:"Certificate not found."}); if(q.user.role==="EMPLOYER"){const {data:org}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(!org||org.id!==c.organizationId||org.status!=="APPROVED")return s.status(403).json({error:"You can only revoke certificates issued by your approved organization."});}
-  if(q.user.role==="GRADUATE"&&c.graduateId!==q.user.id) return s.status(403).json({error:"Access denied."});
-  if(q.user.role==="EMPLOYER"){const {data:org,error:oe}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only the issuing institution can generate its certificate QR."});}
-  if(q.user.role==="GRADUATE"&&c.organizationId){const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),c.organizationId);if(staff&&!hasStaffPermission(staff,"certificates:read")&&c.graduateId!==q.user.id)return s.status(403).json({error:"Access denied."});}
+  if(error)throw error;
+  if(!c)return s.status(404).json({error:"Certificate not found."});
+  if(q.user.role==="EMPLOYER"){
+    const {data:org,error:oe}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
+    if(oe)throw oe;
+    if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only the approved issuing institution can generate its certificate QR."});
+  }
+  if(q.user.role==="GRADUATE"&&c.graduateId!==q.user.id){
+    const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),c.organizationId);
+    if(!hasStaffPermission(staff,"certificates:read"))return s.status(403).json({error:"Your active staff assignment does not allow certificate reading for this organization."});
+  }
   const url=`${process.env.PUBLIC_APP_URL||q.protocol+"://"+q.get("host")}/verify/${encodeURIComponent(c.verificationKey)}`;
   s.json({url,key:c.verificationKey,certificateId:c.certificateId,dataUrl:await QRCode.toDataURL(url,{width:420,margin:2})});
 }));
@@ -310,29 +326,29 @@ const documentMime = new Map([
 app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
   const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
   const spec=documentMime.get(mime), bytes=q.body;
-  if(!spec||!Buffer.isBuffer(bytes)||bytes.length===0) return s.status(400).json({error:"Upload a PDF, JPEG or PNG certificate file."});
-  if(bytes.length>10*1024*1024) return s.status(413).json({error:"The maximum file size is 10 MB."});
-  if(!spec.magic(bytes)) return s.status(415).json({error:"The file content does not match its declared type."});
-  const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();
-  if(orgError) throw orgError;
-  if(!org||org.status!=="APPROVED") return s.status(403).json({error:"Only an approved organization can upload official certificate documents."});
-  const {data:orgType,error:typeError}=await q.supabase.from("Organization").select("type").eq("id",org.id).single();if(typeError)throw typeError;if(orgType.type!=="INSTITUTION")return s.status(403).json({error:"Only an academic issuing institution can upload official certificate documents."});
+  if(!spec||!Buffer.isBuffer(bytes)||bytes.length===0)return s.status(400).json({error:"Upload a PDF, JPEG or PNG certificate file."});
+  if(bytes.length>10*1024*1024)return s.status(413).json({error:"The maximum file size is 10 MB."});
+  if(!spec.magic(bytes))return s.status(415).json({error:"The file content does not match its declared type."});
+  const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
+  if(orgError)throw orgError;
+  if(!org||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only an approved academic institution can upload official certificate documents."});
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId").eq("certificateId",q.params.id).eq("organizationId",org.id).maybeSingle();
-  if(certError) throw certError;
-  if(!cert) return s.status(404).json({error:"Certificate not found in your organization."});
+  if(certError)throw certError;
+  if(!cert)return s.status(404).json({error:"Certificate not found in your organization."});
   const safeName=String(q.headers["x-file-name"]||("certificate."+spec.ext)).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("certificate."+spec.ext);
-  const fileId=crypto.randomUUID(), storagePath=`${org.id}/${cert.id}/${fileId}.${spec.ext}`;
+  const fileId=crypto.randomUUID(),storagePath=`${org.id}/${cert.id}/${fileId}.${spec.ext}`;
   const sha256=digest(bytes);
-   
+  const scan=await scanBuffer(bytes);
   const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});
-  if(uploadError) throw uploadError;
-  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:"NOT_SCANNED"};
+  if(uploadError)throw uploadError;
+  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:scan.status};
   const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").single();
   if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
-  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256});
-
-  s.status(201).json({document:doc,message:"Certificate document uploaded and stored privately."});
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256,scanStatus:scan.status,scannerConfigured:scan.scannerConfigured});
+  const message=scan.status==="CLEAN"?"Document scanned by ClamAV and cleared for authorized access.":scan.status==="INFECTED"?"A malware signature was detected. The document is quarantined and cannot be opened.":"Document stored privately and quarantined until a successful malware scan is available.";
+  s.status(201).json({document:doc,message,scan:{status:scan.status,scannerConfigured:scan.scannerConfigured}});
 }));
+
 app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId,graduateId").eq("certificateId",q.params.id).maybeSingle();
   if(certError) throw certError;
@@ -351,22 +367,25 @@ app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUAT
 }));
 app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
   const {data:doc,error}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,certificateId,organizationId,scanStatus").eq("id",q.params.id).maybeSingle();
-  if(error) throw error;if(!doc)return s.status(404).json({error:"Document not found."});
-    if(q.user.role==="EMPLOYER"){
-    const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();
-    if(oe)throw oe;if(!org||org.id!==doc.organizationId)return s.status(403).json({error:"Access denied."});
+  if(error)throw error;
+  if(!doc)return s.status(404).json({error:"Document not found."});
+  if(q.user.role==="EMPLOYER"){
+    const {data:org,error:oe}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();
+    if(oe)throw oe;
+    if(!org||org.id!==doc.organizationId||org.status!=="APPROVED")return s.status(403).json({error:"Access denied."});
   }
   if(q.user.role==="GRADUATE"){
     const {data:c,error:ce}=await q.supabase.from("Certificate").select("graduateId").eq("id",doc.certificateId).maybeSingle();
     if(ce)throw ce;
     if(c?.graduateId!==q.user.id){
       const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),doc.organizationId);
-      if(!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your staff account does not have document-download permission."});
+      if(!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your active staff assignment does not allow document downloads for this organization."});
     }
   }
+  if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This document is quarantined and cannot be downloaded until ClamAV returns a CLEAN result.",scanStatus:doc.scanStatus});
   const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
   if(linkError)throw linkError;
-  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId});
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId,scanStatus:doc.scanStatus});
   s.json({url:link.signedUrl,expiresIn:60});
 }));
 
@@ -483,24 +502,32 @@ app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q
 
 app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
+  if(oe)throw oe;
+  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
-  if(ge)throw ge;if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
-  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
-  if(de)throw de;if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
+  if(ge)throw ge;
+  if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,scanStatus").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  if(de)throw de;
+  if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
+  if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This document is quarantined until ClamAV returns a CLEAN result.",scanStatus:doc.scanStatus});
   const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60);
   if(le)throw le;
-  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_VIEWED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id});
+  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_VIEWED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id,scanStatus:doc.scanStatus});
   s.json({url:link.signedUrl,expiresIn:60,originalName:doc.originalName,mimeType:doc.mimeType});
 }));
 
 app.get("/api/organization/access-requests/:id/document/download",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can download shared documents."});
+  if(oe)throw oe;
+  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can download shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
-  if(ge)throw ge;if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
-  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
-  if(de)throw de;if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
+  if(ge)throw ge;
+  if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,scanStatus").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  if(de)throw de;
+  if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
+  if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This document is quarantined until ClamAV returns a CLEAN result.",scanStatus:doc.scanStatus});
   const {data:file,error:fe}=await q.supabase.storage.from("verity-certificates").download(doc.storagePath);
   if(fe)throw fe;
   const source=Buffer.from(await file.arrayBuffer());
@@ -528,7 +555,7 @@ app.get("/api/organization/access-requests/:id/document/download",auth,roles("EM
   }
   const output=Buffer.from(await pdf.save());
   const safeName=(doc.originalName||"certificate").replace(/[^a-zA-Z0-9._-]/g,"_").replace(/\.(pdf|png|jpe?g)$/i,"");
-  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id,watermarked:true});
+  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id,watermarked:true,scanStatus:doc.scanStatus});
   s.setHeader("Content-Type","application/pdf");
   s.setHeader("Content-Disposition",`attachment; filename="${safeName}-VERITY-WATERMARKED.pdf"`);
   s.setHeader("Cache-Control","private, no-store");
