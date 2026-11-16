@@ -599,6 +599,7 @@ async function start(){
   const chain=await connectChain();
   console.log("Supabase Auth and Data API configured.");
   console.log("Blockchain:",chain.enabled?"connected":"demo database ledger");
+  console.log("Certificate malware scanning:",process.env.CLAMAV_HOST?.trim()?"ClamAV host configured; upload verdicts are still required before access.":"ClamAV not configured; certificate uploads remain PENDING_SCAN.");
   app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
 }
 start().catch(e=>{console.error(e);process.exit(1);});
