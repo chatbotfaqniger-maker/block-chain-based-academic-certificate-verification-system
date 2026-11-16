@@ -486,12 +486,12 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
   if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
-  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(de)throw de;if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
   const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
   if(le)throw le;
   await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_VIEWED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id});
-  s.json({url:link.signedUrl,expiresIn:60,originalName:doc.originalName});
+  s.json({url:link.signedUrl,expiresIn:60,originalName:doc.originalName,mimeType:doc.mimeType});
 }));
 
 app.post("/api/verify",run(async(q,s)=>{
