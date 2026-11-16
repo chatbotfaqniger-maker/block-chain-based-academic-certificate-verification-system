@@ -41,7 +41,22 @@ export async function createVerityMarketingMp4() {
    filters.push("drawtext=fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf:text='0"+(i+1)+" / 08':fontcolor=0x75939b:fontsize=14:x=1140:y=680:enable='between(t,"+start+","+end+")'");
   }
   const output=path.join(dir,"VERITY-Marketing-Showcase.mp4");
-  await run(["-y","-f","lavfi","-i","color=c=0x071722:s=1280x720:r=30:d=58","-vf",filters.join(","),"-t","58","-r","30","-an","-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-movflags","+faststart",output]);
+  const args=["-y","-f","lavfi","-i","color=c=0x071722:s=1280x720:r=30:d=58"];
+  for (const frequency of [55,110,164.81,220,329.63,440]) {
+   args.push("-f","lavfi","-t","58","-i","sine=frequency="+frequency+":sample_rate=44100");
+  }
+  args.push("-filter_complex",
+   "[1:a]volume=0.16,lowpass=f=180[bass];"+
+   "[2:a]volume=0.075,lowpass=f=500[lowpad];"+
+   "[3:a]volume=0.065,lowpass=f=700[midpad];"+
+   "[4:a]volume=0.055,lowpass=f=1100[highpad];"+
+   "[5:a]volume=0.028,lowpass=f=1800[shimmer];"+
+   "[6:a]volume=0.018,highpass=f=1800,lowpass=f=6500[air];"+
+   "[bass][lowpad][midpad][highpad][shimmer][air]amix=inputs=6:duration=longest:normalize=0,afade=t=in:st=0:d=3,afade=t=out:st=54:d=4,alimiter=limit=0.88[aout]",
+   "-map","0:v","-map","[aout]","-vf",filters.join(","),"-t","58","-r","30",
+   "-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p",
+   "-c:a","aac","-b:a","192k","-ar","44100","-movflags","+faststart",output);
+  await run(args);
   return await readFile(output);
  } finally { await rm(dir,{recursive:true,force:true}); }
 }
