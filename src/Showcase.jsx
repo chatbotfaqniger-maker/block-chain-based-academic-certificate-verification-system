@@ -14,11 +14,12 @@ const scenes = [
 
 function MiniMetric({label,value}) { return <div className="film-metric"><small>{label}</small><b>{value}</b></div>; }
 
-export default function VerityShowcase({data, certificates=[], auditEvents=null, organization, onVerify}) {
+export default function VerityShowcase({data, certificates=[], auditEvents=null, organization, onVerify, canDownload=false}) {
   const [scene,setScene] = useState(0);
   const [playing,setPlaying] = useState(false);
   const [elapsed,setElapsed] = useState(0);
   const [verifyResult,setVerifyResult] = useState(null);
+  const [downloading,setDownloading] = useState(false);
   const [reference,setReference] = useState(certificates?.[0]?.certificateId || "");
   const duration = 58000;
   const current = scenes[scene];
@@ -60,7 +61,7 @@ export default function VerityShowcase({data, certificates=[], auditEvents=null,
   }
 
   return <section className="verity-film-page">
-    <div className="film-topline"><div className="film-brand"><ShieldCheck/><b>VERITY</b><span>.</span></div><span>PRODUCT FILM · 00:58</span></div>
+    <div className="film-topline"><div className="film-brand"><ShieldCheck/><b>VERITY</b><span>.</span></div><span>PRODUCT FILM · 00:58</span>{canDownload&&<button className="film-download" disabled={downloading} onClick={async()=>{setDownloading(true);try{const token=localStorage.getItem("verity_token");const response=await fetch("/api/admin/showcase-video",{headers:token?{Authorization:"Bearer "+token}:{}});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||"Unable to generate the MP4.");}const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="VERITY-Marketing-Showcase.mp4";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}catch(error){window.alert(error.message);}finally{setDownloading(false);}}}>{downloading?"Preparing MP4…":"Download MP4"}</button>}</div>
     <div className="film-stage" key={scene}>
       <div className="film-light film-light-one"/><div className="film-light film-light-two"/>
       <div className="film-stage-copy"><small>{current.kicker}</small><h1>{current.title}</h1><p>{current.copy}</p><span className="film-scene-label">{current.label}</span></div>
