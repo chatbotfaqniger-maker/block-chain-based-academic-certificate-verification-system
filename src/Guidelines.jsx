@@ -130,17 +130,17 @@ const graduateGuides = [
 ];
 
 const staffGuides = [
-  g("certificates","Organization Credentials",FileCheck2,"Read credential records belonging to the organization that assigned your staff access.","Active authorized organization staff with certificates:read permission.",
+  g("certificates","Organization Credentials",FileCheck2,"Read certificate records available to your assigned organization. Institution staff can inspect their institution’s issued records; verifier organizations do not issue certificates.","Active authorized organization staff with certificates:read permission.",
     ["Open Organization Credentials to view records scoped to your assigned organization(s).","Search by graduate name, certificate ID, institution or programme.","Review the credential status and details needed for your assigned task.","Use the QR control only if the interface makes it available to your assigned role; ask the owner if an action is blocked."],
     ["Search credentials — filters the records visible to your account.","QR — displays a shareable verification reference when allowed.","Preview file — available only where the server grants document preview permission; document downloads require documents:download and valid graduate consent."],
     "Your Organization Staff assignment must be ACTIVE and include certificates:read. Staff cannot issue/revoke certificates, manage organization identity or add staff.",
     ["Only view records for the assigned organization and approved work purpose.","Do not export, copy or disclose student information unnecessarily."],
-    ["If no records appear, ask the organization owner to confirm your ACTIVE assignment and certificates:read permission.","If access is denied, do not retry using another user’s credentials; ask the owner to review your access."]),
-  g("verify","Verify Credentials",ClipboardCheck,"Verify certificate references only within the organization that assigned your staff account.","Active authorized organization staff with credentials:verify permission.",
+    ["If no records appear, confirm whether your assigned organization is an issuing institution; verifier organizations do not create certificate records. Ask the owner to confirm your ACTIVE assignment and certificates:read permission.","If access is denied, do not retry using another user’s credentials; ask the owner to review your access."]),
+  g("verify","Verify Credentials",ClipboardCheck,"Verify certificate references through the organization that assigned your staff account.","Active authorized organization staff with credentials:verify permission.",
     ["Select the assigned organization shown in your staff assignment, if more than one is available.","Enter the certificate ID or verification key exactly as provided.","Select Verify credential and review the returned status and issuer details.","Escalate NOT FOUND, REVOKED or INTEGRITY MISMATCH results to the organization owner before communicating a final decision."],
     ["Organization selector — identifies which assigned organization’s records may be checked.","Certificate ID or verification key — accepts the credential reference.","Verify credential — performs an organization-scoped integrity check."],
     "Requires an ACTIVE staff assignment and the explicit credentials:verify permission. If this permission is not assigned, the module is not shown.",
-    ["Staff verification is scoped to the assigned organization; it is not a platform-wide search.","Do not treat a registry match as independent identity verification or claim an on-chain result when the network is disabled."],
+    ["The assigned institution can verify only its own issued records. Staff assigned to an approved verifier organization can check registry credentials through that organization’s authorized verification workflow.","Do not treat a registry match as independent identity verification or claim an on-chain result when the network is disabled."],
     ["If the module is missing, ask the owner to grant credentials:verify.","If a reference is not found, confirm the exact reference and selected organization before escalating."])
 ];
 
