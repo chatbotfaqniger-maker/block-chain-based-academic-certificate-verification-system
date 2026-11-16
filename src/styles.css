@@ -272,3 +272,54 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 /* Verity interaction polish: live analytics, account actions and confirmation */
 .header-actions{display:flex;align-items:center;gap:20px}.header-signout{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 15px;border:1px solid #d7e2e6;border-radius:10px;background:linear-gradient(180deg,#fff,#f5f8f9);color:#29495a;font-size:12px;font-weight:800;box-shadow:0 4px 12px rgba(16,38,58,.06)}.header-signout:hover{border-color:#9dbab8;background:#edf6f3;color:#1b6259;transform:translateY(-1px)}.analytics-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 12px;color:#6f8490;font-size:11px;font-weight:700}.analytics-head>div{display:flex;align-items:center;gap:12px}.analytics-head small{color:#82929c;font-size:10px}.signout-overlay{z-index:100}.confirm-modal{width:min(420px,100%);padding:30px;border-radius:18px;background:#fff;box-shadow:0 24px 80px rgba(4,22,36,.28);text-align:left}.confirm-icon{width:46px;height:46px;display:grid;place-items:center;border-radius:13px;background:#f7eeee;color:#9a4b4b}.confirm-modal h3{margin:18px 0 8px;font:800 20px Manrope;color:#18364a}.confirm-modal p{margin:0;color:#738391;font-size:13px;line-height:1.65}.confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:25px}.confirm-signout{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #8f4148;border-radius:9px;background:linear-gradient(135deg,#813d48,#a34d55);color:white;font-size:12px;font-weight:800}.confirm-signout:hover{background:#71333e;transform:translateY(-1px)}@media(max-width:600px){.header-actions{gap:8px}.header-account{display:none!important}.header-signout{min-height:36px;padding:0 11px}.analytics-head{align-items:flex-start;flex-direction:column}.analytics-head>div{width:100%;justify-content:space-between}.confirm-modal{padding:23px}}
+
+/* Premium Verity motion system and role-based user guidelines */
+@keyframes verityRise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes verityGlow{0%,100%{box-shadow:0 10px 28px rgba(15,49,65,.07)}50%{box-shadow:0 16px 42px rgba(22,104,99,.15)}}
+@keyframes verityShimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+@keyframes verityFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.content>header,.welcome,.stats,.panel,.rowitem,.auth-form,.auth-brand{animation:verityRise .55s cubic-bezier(.2,.75,.25,1) both}
+.stats .stat:nth-child(2){animation-delay:.06s}.stats .stat:nth-child(3){animation-delay:.12s}.stats .stat:nth-child(4){animation-delay:.18s}
+.panel,.stat,.registration-choice,.guideline-card{transition:transform .28s cubic-bezier(.2,.75,.25,1),box-shadow .28s,border-color .28s}
+.panel:hover,.stat:hover,.registration-choice:hover{transform:translateY(-3px);box-shadow:0 16px 36px rgba(16,48,65,.10)}
+button,.btn-outline,.primary{transition:transform .2s ease,box-shadow .2s ease,background .2s ease,border-color .2s ease}
+button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translateY(-1px)}
+.primary{background-size:200% 100%;background-image:linear-gradient(110deg,#15384b 0%,#21685f 50%,#15384b 100%);animation:verityShimmer 7s linear infinite}
+.primary:hover:not(:disabled){box-shadow:0 12px 26px rgba(24,100,91,.22);transform:translateY(-2px)}
+.sidebar nav button{transition:background .22s,border-color .22s,transform .22s,color .22s}
+.sidebar nav button:hover{transform:translateX(3px)}
+.brand svg{filter:drop-shadow(0 0 8px rgba(121,198,186,.16))}
+.guidelines-page{animation:verityRise .55s cubic-bezier(.2,.75,.25,1) both}
+.guidelines-hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:22px;padding:30px 32px;margin:0 0 22px;border:1px solid rgba(137,194,187,.22);border-radius:20px;background:radial-gradient(circle at 88% 18%,rgba(105,187,170,.24),transparent 30%),linear-gradient(120deg,#102c40,#174d55 70%,#1d625a);color:#fff;box-shadow:0 18px 40px rgba(14,44,59,.14)}
+.guidelines-hero:after{content:"";position:absolute;width:260px;height:260px;border:1px solid rgba(255,255,255,.08);border-radius:50%;right:-85px;bottom:-170px;box-shadow:0 0 0 24px rgba(255,255,255,.025),0 0 0 52px rgba(255,255,255,.02)}
+.guidelines-orbit{width:58px;height:58px;flex:0 0 58px;display:grid;place-items:center;border:1px solid rgba(162,224,206,.45);border-radius:17px;background:rgba(255,255,255,.08);color:#9bd8c8;animation:verityFloat 4s ease-in-out infinite}
+.guidelines-hero>div:nth-child(2){max-width:670px;position:relative;z-index:1}
+.guidelines-hero small{font-size:9px;letter-spacing:2px;font-weight:800;color:#9ed3c7}
+.guidelines-hero h1{font:800 clamp(22px,3vw,31px)/1.18 Manrope;margin:10px 0;color:#fff;letter-spacing:-.7px}
+.guidelines-hero p{font-size:13px;line-height:1.7;color:#d0e0e3;margin:0}
+.guidelines-role{margin-left:auto;align-self:flex-start;white-space:nowrap;padding:9px 12px;border:1px solid rgba(255,255,255,.2);border-radius:30px;color:#c4e5dc;font-size:9px;font-weight:800;letter-spacing:1px}
+.guidelines-intro{display:flex;justify-content:space-between;align-items:center;margin:0 0 14px}
+.guidelines-intro b{font:800 16px Manrope;color:#1b3a4d}
+.guidelines-intro p{margin:5px 0 0;color:#7b8c96;font-size:11px}
+.guidelines-intro>span{display:flex;align-items:center;gap:7px;color:#477e78;font-size:11px;font-weight:800}
+.guideline-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.guideline-card{align-self:start;border:1px solid #e1e9eb;border-radius:15px;background:linear-gradient(150deg,#fff,#fbfdfd);box-shadow:0 5px 18px rgba(21,51,67,.035);overflow:hidden}
+.guideline-card:hover,.guideline-card.is-open{border-color:#b8d7d0;box-shadow:0 12px 30px rgba(21,75,75,.09)}
+.guideline-toggle{width:100%;display:flex;align-items:center;gap:13px;padding:19px;text-align:left;background:transparent;border:0;color:inherit}
+.guideline-icon{width:43px;height:43px;flex:0 0 43px;display:grid;place-items:center;border-radius:13px;background:linear-gradient(145deg,#e8f4f0,#f1f7f7);color:#32766e}
+.guideline-heading{display:flex;flex-direction:column;gap:5px;min-width:0}
+.guideline-heading small{font-size:8px;letter-spacing:1.5px;color:#7d9a9b;font-weight:800}
+.guideline-heading b{font:800 14px Manrope;color:#1b3a4d}
+.guideline-heading em{font-style:normal;font-size:10px;line-height:1.55;color:#7b8d96}
+.guideline-arrow{margin-left:auto;color:#6b9d94;transition:transform .25s}
+.guideline-card.is-open .guideline-arrow{transform:rotate(90deg)}
+.guideline-details{padding:0 20px 18px 75px;animation:verityRise .3s ease both}
+.guideline-details ol{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.guideline-details li{display:grid;grid-template-columns:25px 1fr;gap:9px;color:#586d78;font-size:11px;line-height:1.6}
+.guideline-details li span{font-size:9px;font-weight:900;color:#3c8a7d;padding-top:2px}
+.guidelines-foot{display:flex;gap:13px;align-items:flex-start;margin:18px 0;padding:18px 20px;border:1px solid #dceae6;border-radius:14px;background:linear-gradient(110deg,#f0f7f4,#f8fbfa);color:#32776d}
+.guidelines-foot b{font:800 12px Manrope;color:#28594f}
+.guidelines-foot p{margin:5px 0 0;color:#728b86;font-size:10px;line-height:1.6}
+@media(max-width:850px){.guidelines-role{display:none}.guideline-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.guidelines-hero{padding:21px 18px;gap:13px;border-radius:15px}.guidelines-orbit{width:43px;height:43px;flex-basis:43px;border-radius:12px}.guidelines-hero h1{font-size:21px}.guidelines-hero p{font-size:11px}.guidelines-intro{align-items:flex-start;gap:8px}.guidelines-intro p{max-width:260px}.guideline-toggle{padding:15px;gap:10px}.guideline-icon{width:37px;height:37px;flex-basis:37px}.guideline-heading b{font-size:12px}.guideline-heading em{font-size:9px}.guideline-details{padding:0 15px 16px 62px}.guidelines-foot{padding:15px}}
+@media(prefers-reduced-motion:reduce){.content>header,.welcome,.stats,.panel,.rowitem,.auth-form,.auth-brand,.guidelines-page,.guideline-details{animation:none!important}.guidelines-orbit{animation:none!important}.primary{animation:none!important}}
