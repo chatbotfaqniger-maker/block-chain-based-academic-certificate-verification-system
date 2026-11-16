@@ -381,8 +381,8 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   if(error)throw error;
   if(!c){const result=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
   if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This certificate reference was not found in your institution's own issuance records."});
-  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
-  const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
+  const recomputed=org.type==="INSTITUTION"?digest(canonical(c)):null,dbOk=org.type!=="INSTITUTION"||recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   await audit(q.supabase,q.user.id,"INSTITUTION_CERTIFICATE_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
