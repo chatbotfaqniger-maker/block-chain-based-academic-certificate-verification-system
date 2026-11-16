@@ -580,8 +580,46 @@ app.post("/api/verify",run(async(q,s)=>{
 }));
 
 app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
-  const video=await createVerityMarketingMp4();
-  await audit(q.supabase,q.user.id,"ADMIN_MARKETING_VIDEO_DOWNLOADED","Platform",null,{format:"mp4",durationSeconds:58});
+  const count=()=>q.supabase.from("Certificate").select("id",{count:"exact",head:true});
+  const [total,active,revoked,verifications,latestCertificate,auditResult]=await Promise.all([
+    count(),
+    count().eq("status","ACTIVE"),
+    count().eq("status","REVOKED"),
+    q.supabase.from("Verification").select("id",{count:"exact",head:true}),
+    q.supabase.from("Certificate").select("certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,graduateId").eq("status","ACTIVE").order("issuedAt",{ascending:false}).limit(1).maybeSingle(),
+    q.supabase.from("AuditEvent").select("action,entity,createdAt,metadata").order("createdAt",{ascending:false}).limit(5)
+  ]);
+  for(const result of [total,active,revoked,verifications,latestCertificate,auditResult]) if(result.error) throw result.error;
+
+  const certificate=latestCertificate.data||null;
+  let verification=null;
+  if(certificate?.verificationKey){
+    try{
+      const {data:record,error}=await q.supabase.rpc("lookup_verity_certificate",{p_certificate_id:certificate.verificationKey,p_verifier_name:null,p_verifier_org:null});
+      if(error) throw error;
+      if(!record?.found){
+        verification={verified:false,status:"NOT_FOUND",message:"The live registry did not return this credential."};
+      }else{
+        const chain=await verifyOnChain(record.certificateId);
+        const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(record.digest||"").toLowerCase()&&!chain.revoked);
+        const verified=record.status==="ACTIVE"&&chainOk;
+        verification={verified,status:record.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH"};
+      }
+    }catch(error){
+      verification={verified:false,status:"LIVE CHECK UNAVAILABLE",message:error.message};
+    }
+  }else{
+    verification={verified:false,status:"NO ACTIVE CREDENTIAL",message:"Issue an active credential to demonstrate a live registry check."};
+  }
+
+  const video=await createVerityMarketingMp4({
+    stats:{total:total.count||0,active:active.count||0,revoked:revoked.count||0,verifications:verifications.count||0},
+    certificate,
+    auditEvents:auditResult.data||[],
+    chain:chainStatus(),
+    verification
+  });
+  await audit(q.supabase,q.user.id,"ADMIN_MARKETING_VIDEO_DOWNLOADED","Platform",null,{format:"mp4",durationSeconds:90,source:"live-dashboard-and-credential-record",verificationStatus:verification?.status||"UNAVAILABLE"});
   s.setHeader("Content-Type","video/mp4");
   s.setHeader("Content-Disposition",'attachment; filename="VERITY-Marketing-Showcase.mp4"');
   s.setHeader("Content-Length",video.length);
