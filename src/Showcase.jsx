@@ -23,7 +23,8 @@ export default function VerityShowcase({data, certificates=[], auditEvents=null,
   const duration = 58000;
   const current = scenes[scene];
   const progress = Math.min(100, elapsed / duration * 100);
-  const sample = certificates?.[0];\n  const latestAudit = auditEvents?.[0];
+  const sample = certificates?.[0];
+  const latestAudit = auditEvents?.[0];
   const orgName = organization?.name || "Your institution";
   const stats = data?.stats || {};
   const chainActive = !!data?.blockchain?.enabled;
