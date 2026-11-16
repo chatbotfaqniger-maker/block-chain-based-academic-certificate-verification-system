@@ -290,13 +290,29 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 .sidebar nav button:hover{transform:translateX(3px)}
 .brand svg{filter:drop-shadow(0 0 8px rgba(121,198,186,.16))}
 .guidelines-page{animation:verityRise .55s cubic-bezier(.2,.75,.25,1) both}
-.guidelines-hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:22px;padding:30px 32px;margin:0 0 22px;border:1px solid rgba(137,194,187,.22);border-radius:20px;background:radial-gradient(circle at 88% 18%,rgba(105,187,170,.24),transparent 30%),linear-gradient(120deg,#102c40,#174d55 70%,#1d625a);color:#fff;box-shadow:0 18px 40px rgba(14,44,59,.14)}
+.guidelines-hero{position:relative;isolation:isolate;overflow:hidden;min-height:300px;display:flex;align-items:center;gap:28px;padding:38px 36px;margin:0 0 24px;border:1px solid rgba(137,194,187,.25);border-radius:22px;background:linear-gradient(112deg,#0b2639 0%,#123f4d 52%,#17645d 100%);color:#fff;box-shadow:0 22px 55px rgba(14,44,59,.2)}
 .guidelines-hero:after{content:"";position:absolute;width:260px;height:260px;border:1px solid rgba(255,255,255,.08);border-radius:50%;right:-85px;bottom:-170px;box-shadow:0 0 0 24px rgba(255,255,255,.025),0 0 0 52px rgba(255,255,255,.02)}
-.guidelines-orbit{width:58px;height:58px;flex:0 0 58px;display:grid;place-items:center;border:1px solid rgba(162,224,206,.45);border-radius:17px;background:rgba(255,255,255,.08);color:#9bd8c8;animation:verityFloat 4s ease-in-out infinite}
-.guidelines-hero>div:nth-child(2){max-width:670px;position:relative;z-index:1}
-.guidelines-hero small{font-size:9px;letter-spacing:2px;font-weight:800;color:#9ed3c7}
-.guidelines-hero h1{font:800 clamp(22px,3vw,31px)/1.18 Manrope;margin:10px 0;color:#fff;letter-spacing:-.7px}
-.guidelines-hero p{font-size:13px;line-height:1.7;color:#d0e0e3;margin:0}
+.guide-hero-backdrop{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.guide-hero-backdrop i{position:absolute;width:440px;height:440px;border:1px solid rgba(165,225,211,.12);border-radius:50%;right:-90px;top:-260px;animation:guideOrbit 22s linear infinite}
+.guide-hero-backdrop i:nth-child(2){width:560px;height:560px;right:-150px;top:-320px;animation-duration:32s;animation-direction:reverse}
+.guide-hero-backdrop i:nth-child(3){width:690px;height:690px;right:-215px;top:-385px;animation-duration:44s}
+.guide-sweep{position:absolute;top:-40%;left:-45%;width:35%;height:190%;transform:rotate(22deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.075),transparent);animation:guideSweep 8s ease-in-out infinite}
+.guide-hero-mark{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;width:100px;height:112px;flex:0 0 100px;border-right:1px solid rgba(177,222,211,.26);color:#9ed8c9}
+.guide-hero-mark svg{filter:drop-shadow(0 0 18px rgba(139,221,198,.3));animation:guideMarkPulse 4s ease-in-out infinite}
+.guide-hero-mark span{font:800 12px Manrope;letter-spacing:3px;color:#fff}
+.guide-hero-copy{max-width:640px;position:relative;z-index:1}
+.guide-hero-copy small{font-size:9px;letter-spacing:2.1px;font-weight:800;color:#9ed3c7}
+.guide-hero-copy h1{font:800 clamp(25px,3.4vw,38px)/1.13 Manrope;margin:13px 0;color:#fff;letter-spacing:-1.1px}
+.guide-hero-copy h1 span{background:linear-gradient(90deg,#fff,#a7ded0,#e0f1e9);background-clip:text;-webkit-background-clip:text;color:transparent}
+.guide-hero-copy p{font-size:13px;line-height:1.8;color:#d0e0e3;margin:0;max-width:560px}
+.guide-hero-tags{display:flex;flex-wrap:wrap;gap:9px;margin-top:19px}
+.guide-hero-tags span{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid rgba(196,231,220,.22);border-radius:30px;background:rgba(255,255,255,.055);font-size:10px;font-weight:700;color:#d8eee6}
+.guidelines-role{position:absolute;z-index:2;top:18px;right:18px;margin:0}
+.guide-hero-index{position:absolute;z-index:1;right:24px;bottom:20px;color:rgba(224,244,238,.56);font-size:9px;font-weight:800;letter-spacing:1.5px}
+.guide-hero-index b{color:#a9ded0;margin:0 4px}
+@keyframes guideSweep{0%,12%{left:-45%;opacity:0}25%{opacity:1}55%,100%{left:125%;opacity:0}}
+@keyframes guideOrbit{to{transform:rotate(360deg)}}
+@keyframes guideMarkPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 8px rgba(139,221,198,.15))}50%{transform:scale(1.07);filter:drop-shadow(0 0 20px rgba(139,221,198,.4))}}
 .guidelines-role{margin-left:auto;align-self:flex-start;white-space:nowrap;padding:9px 12px;border:1px solid rgba(255,255,255,.2);border-radius:30px;color:#c4e5dc;font-size:9px;font-weight:800;letter-spacing:1px}
 .guidelines-intro{display:flex;justify-content:space-between;align-items:center;margin:0 0 14px}
 .guidelines-intro b{font:800 16px Manrope;color:#1b3a4d}
@@ -320,6 +336,6 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 .guidelines-foot{display:flex;gap:13px;align-items:flex-start;margin:18px 0;padding:18px 20px;border:1px solid #dceae6;border-radius:14px;background:linear-gradient(110deg,#f0f7f4,#f8fbfa);color:#32776d}
 .guidelines-foot b{font:800 12px Manrope;color:#28594f}
 .guidelines-foot p{margin:5px 0 0;color:#728b86;font-size:10px;line-height:1.6}
-@media(max-width:850px){.guidelines-role{display:none}.guideline-grid{grid-template-columns:1fr}}
-@media(max-width:600px){.guidelines-hero{padding:21px 18px;gap:13px;border-radius:15px}.guidelines-orbit{width:43px;height:43px;flex-basis:43px;border-radius:12px}.guidelines-hero h1{font-size:21px}.guidelines-hero p{font-size:11px}.guidelines-intro{align-items:flex-start;gap:8px}.guidelines-intro p{max-width:260px}.guideline-toggle{padding:15px;gap:10px}.guideline-icon{width:37px;height:37px;flex-basis:37px}.guideline-heading b{font-size:12px}.guideline-heading em{font-size:9px}.guideline-details{padding:0 15px 16px 62px}.guidelines-foot{padding:15px}}
-@media(prefers-reduced-motion:reduce){.content>header,.welcome,.stats,.panel,.rowitem,.auth-form,.auth-brand,.guidelines-page,.guideline-details{animation:none!important}.guidelines-orbit{animation:none!important}.primary{animation:none!important}}
+@media(max-width:850px){.guidelines-role{display:none}.guideline-grid{grid-template-columns:1fr}.guidelines-hero{min-height:270px}}
+@media(max-width:600px){.guidelines-hero{min-height:0;padding:27px 20px 34px;gap:14px;align-items:flex-start;flex-direction:column;border-radius:17px}.guide-hero-mark{width:auto;height:auto;flex:0 0 auto;flex-direction:row;justify-content:flex-start;border-right:0;border-bottom:1px solid rgba(177,222,211,.26);padding:0 0 12px;gap:10px}.guide-hero-mark svg{width:27px;height:27px}.guide-hero-mark span{font-size:11px}.guide-hero-copy h1{font-size:25px;margin:10px 0}.guide-hero-copy p{font-size:11px;line-height:1.7}.guide-hero-copy small{font-size:8px;letter-spacing:1.5px}.guide-hero-tags{margin-top:14px;gap:6px}.guide-hero-tags span{font-size:9px;padding:7px 9px}.guide-hero-index{right:15px;bottom:11px;font-size:8px}.guidelines-intro{align-items:flex-start;gap:8px}.guidelines-intro p{max-width:260px}.guideline-toggle{padding:15px;gap:10px}.guideline-icon{width:37px;height:37px;flex-basis:37px}.guideline-heading b{font-size:12px}.guideline-heading em{font-size:9px}.guideline-details{padding:0 15px 16px 62px}.guidelines-foot{padding:15px}}
+@media(prefers-reduced-motion:reduce){.content>header,.welcome,.stats,.panel,.rowitem,.auth-form,.auth-brand,.guidelines-page,.guideline-details{animation:none!important}.guidelines-orbit{animation:none!important}.guide-hero-backdrop i,.guide-sweep,.guide-hero-mark svg{animation:none!important}.primary{animation:none!important}}
