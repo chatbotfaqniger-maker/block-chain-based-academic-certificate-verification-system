@@ -431,17 +431,26 @@ app.post("/api/staff/verify",auth,roles("GRADUATE"),run(async(q,s)=>{
   if(oe)throw oe;
   if(!org||org.status!=="APPROVED")return s.status(403).json({error:"The assigned organization is not approved for credential verification."});
   const reference=b.certificateId.trim();
-  const fields="id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId";
-  let {data:c,error}=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("certificateId",reference).maybeSingle();
-  if(error)throw error;
-  if(!c){const result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
-  if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This credential reference was not found in the assigned organization's records."});
+  let c=null;
+  if(org.type==="INSTITUTION"){
+    const fields="id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId";
+    let result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("certificateId",reference).maybeSingle();
+    if(result.error)throw result.error;
+    c=result.data;
+    if(!c){result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();if(result.error)throw result.error;c=result.data;}
+    if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This credential reference was not found in the assigned institution's issuance records."});
+  }else if(org.type==="EMPLOYER"){
+    const {data,error}=await q.supabase.rpc("lookup_verity_certificate_for_org",{p_certificate_id:reference});
+    if(error)throw error;
+    if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the Verity registry."});
+    c=data;
+  }else return s.status(403).json({error:"This organization type cannot verify academic credentials."});
   const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
-  await audit(q.supabase,q.user.id,"STAFF_CREDENTIAL_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
-  s.json({verified,status,message:verified?"Credential matches the assigned organization's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+  await audit(q.supabase,q.user.id,"STAFF_CREDENTIAL_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,organizationType:org.type,status});
+  s.json({verified,status,message:verified?"Credential matches the registered Verity record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
 app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,res)=>{
