@@ -383,10 +383,17 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER",
     }
   }
   if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This document is quarantined and cannot be downloaded until ClamAV returns a CLEAN result.",scanStatus:doc.scanStatus});
-  const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
-  if(linkError)throw linkError;
-  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId,scanStatus:doc.scanStatus});
-  s.json({url:link.signedUrl,expiresIn:60});
+  const {data:file,error:fileError}=await q.supabase.storage.from("verity-certificates").download(doc.storagePath);
+  if(fileError)throw fileError;
+  const bytes=Buffer.from(await file.arrayBuffer());
+  const safeName=(doc.originalName||"VERITY-CERTIFICATE").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120);
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId,scanStatus:doc.scanStatus,staffDownload:q.user.role==="GRADUATE"});
+  s.setHeader("Content-Type",doc.mimeType);
+  s.setHeader("Content-Disposition",`attachment; filename="${safeName}"`);
+  s.setHeader("Content-Length",String(bytes.length));
+  s.setHeader("Cache-Control","private, no-store");
+  s.setHeader("X-Content-Type-Options","nosniff");
+  s.send(bytes);
 }));
 
 app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
