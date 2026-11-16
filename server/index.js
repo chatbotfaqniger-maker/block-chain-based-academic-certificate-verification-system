@@ -364,7 +364,7 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER",
       if(!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your staff account does not have document-download permission."});
     }
   }
-  const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60);
+  const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
   if(linkError)throw linkError;
   await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId});
   s.json({url:link.signedUrl,expiresIn:60});
