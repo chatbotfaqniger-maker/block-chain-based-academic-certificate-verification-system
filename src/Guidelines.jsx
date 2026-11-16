@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import VerityShowcase from "./Showcase.jsx";
 import {
   BookOpen, ShieldCheck, ArrowRight, AlertTriangle, LockKeyhole,
   CheckCircle2, LayoutDashboard, Building2, FileCheck2, Activity,
@@ -144,7 +145,7 @@ const staffGuides = [
     ["If the module is missing, ask the owner to grant credentials:verify.","If a reference is not found, confirm the exact reference and selected organization before escalating."])
 ];
 
-export default function RoleGuidelines({ user, organization, onOpen }) {
+export default function RoleGuidelines({ user, organization, onOpen, data, certificates = [], auditEvents = null, onVerify, canDownload = false }) {
   const [expanded, setExpanded] = useState(0);
   const staffAssignments = (user?.organizationStaff || []).filter(x => x.status === "ACTIVE");
   const isStaff = user?.role === "GRADUATE" && staffAssignments.length > 0;
@@ -164,6 +165,7 @@ export default function RoleGuidelines({ user, organization, onOpen }) {
       <div className="guide-hero-copy"><small>YOUR VERITY WORKSPACE · MODULE-BY-MODULE HELP</small><h1>Every module.<br/><span>One clear way forward.</span></h1><p>Practical instructions for the modules and permissions available to your account.</p><div className="guide-hero-tags"><span><CheckCircle2 size={14}/> Step-by-step guidance</span><span><LockKeyhole size={14}/> Role-based access</span></div></div>
       <div className="guidelines-role">{role}</div><div className="guide-hero-index">VERITY <b>01</b> / MODULE GUIDES</div>
     </section>
+    <section className="guide-documentary" aria-label="VERITY product documentary"><div className="guide-documentary-heading"><small>THE VERITY PRODUCT DOCUMENTARY</small><h2>See the platform in action.</h2><p>A guided film showing the real institution, graduate, organization and administrator workflows.</p></div><VerityShowcase data={data} certificates={certificates} auditEvents={auditEvents} organization={organization} onVerify={onVerify} canDownload={canDownload}/></section>
     <div className="guidelines-intro"><div><b>Your module guidebook</b><p>Open a guide for its purpose, intended users, steps, action reference, permissions, warnings and troubleshooting.</p></div><span><BookOpen size={17}/> {modules.length} modules</span></div>
     <div className="guideline-grid">{modules.map((item,i) => { const Icon=item.icon; return <section className={"guideline-card "+(expanded===i?"is-open":"")} key={item.page}>
       <button className="guideline-toggle" onClick={() => setExpanded(expanded===i?-1:i)}><span className="guideline-icon"><Icon size={21}/></span><span className="guideline-heading"><small>MODULE GUIDE {String(i+1).padStart(2,"0")}</small><b>{item.title}</b><em>{item.intro}</em></span><span className="guideline-arrow"><ArrowRight size={17}/></span></button>
