@@ -18,7 +18,8 @@ export default function VerityShowcase({data, certificates=[], organization, onV
   const [scene,setScene] = useState(0);
   const [playing,setPlaying] = useState(false);
   const [elapsed,setElapsed] = useState(0);
-  const [verifyResult,setVerifyResult] = useState(null);\n  const [reference,setReference] = useState(certificates?.[0]?.certificateId || "");
+  const [verifyResult,setVerifyResult] = useState(null);
+  const [reference,setReference] = useState(certificates?.[0]?.certificateId || "");
   const duration = 58000;
   const current = scenes[scene];
   const progress = Math.min(100, elapsed / duration * 100);
