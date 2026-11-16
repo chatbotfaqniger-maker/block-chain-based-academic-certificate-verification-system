@@ -154,6 +154,7 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
 }));
 
 const staffPermissions=["certificates:read","documents:download"];
+const staffPermissionArray=z.array(z.enum(staffPermissions)).min(1).refine(v=>!v.includes("documents:download")||v.includes("certificates:read"),{message:"Document download requires certificate read access."});
 app.get("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({staff:[]});
  const {data,error:e}=await q.supabase.from("OrganizationStaff").select("id,userId,permissions,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;
@@ -161,15 +162,15 @@ app.get("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
  s.json({staff:(data||[]).map(x=>({...x,user:(users||[]).find(u=>u.id===x.userId)||null})),organizationStatus:org.status});
 }));
 app.post("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
- const b=z.object({email:z.string().email(),permissions:z.array(z.enum(staffPermissions)).min(1)}).parse(q.body);
+ const b=z.object({email:z.string().email(),permissions:staffPermissionArray}).parse(q.body);
  const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization can add staff."});
  const {data:person,error:pe}=await q.supabase.from("User").select("id,email,role").ilike("email",b.email.trim()).maybeSingle();if(pe)throw pe;if(!person)return s.status(404).json({error:"This person must create a Verity account before you can add them."});if(person.id===q.user.id)return s.status(400).json({error:"The organization owner is already an administrator."});if(person.role==="ADMIN"||person.role==="EMPLOYER")return s.status(400).json({error:"This account cannot be assigned as organization staff."});
  const {data,error:ie}=await q.supabase.from("OrganizationStaff").upsert({id:crypto.randomUUID(),organizationId:org.id,userId:person.id,permissions:b.permissions,status:"ACTIVE",createdBy:q.user.id,updatedAt:new Date().toISOString()},{onConflict:"organizationId,userId"}).select().single();if(ie)throw ie;
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_ADDED","OrganizationStaff",data.id,{organizationId:org.id,permissions:b.permissions});s.status(201).json({staff:data});
 }));
 app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
- const b=z.object({status:z.enum(["ACTIVE","SUSPENDED"]),permissions:z.array(z.enum(staffPermissions)).min(1).optional()}).parse(q.body);
- const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});
+ const b=z.object({status:z.enum(["ACTIVE","SUSPENDED"]),permissions:staffPermissionArray.optional()}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});if(org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization can manage staff assignments."});
  const patch={status:b.status,updatedAt:new Date().toISOString()};if(b.permissions)patch.permissions=b.permissions;
  const {data,error:e}=await q.supabase.from("OrganizationStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(e)throw e;
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
