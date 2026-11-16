@@ -151,9 +151,10 @@ export default function RoleGuidelines({ user, organization, onOpen }) {
   const isAdmin = user?.role === "ADMIN";
   const isInstitution = user?.role === "EMPLOYER" && organization?.type === "INSTITUTION";
   const isOrganization = user?.role === "EMPLOYER" && organization?.type === "EMPLOYER";
+  const canReadAsStaff = staffAssignments.some(x => x.permissions?.includes("certificates:read"));
   const canVerifyAsStaff = staffAssignments.some(x => x.permissions?.includes("credentials:verify"));
   const modules = isAdmin ? adminGuides : isInstitution ? institutionGuides : isOrganization ? organizationGuides : isStaff
-    ? staffGuides.filter(x => x.page !== "verify" || canVerifyAsStaff)
+    ? staffGuides.filter(x => (x.page !== "certificates" || canReadAsStaff) && (x.page !== "verify" || canVerifyAsStaff))
     : graduateGuides;
   const role = isAdmin ? "SYSTEM ADMINISTRATOR" : isInstitution ? "ACADEMIC INSTITUTION" : isOrganization ? "VERIFICATION ORGANIZATION" : isStaff ? "AUTHORIZED STAFF" : "GRADUATE / STUDENT";
   return <div className="guidelines-page">
