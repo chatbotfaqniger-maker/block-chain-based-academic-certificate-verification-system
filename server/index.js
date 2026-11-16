@@ -256,7 +256,7 @@ app.get("/api/certificates",auth,run(async(q,s)=>{
   const staff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];
   const readableStaffOrgs=staff.filter(x=>hasStaffPermission(x,"certificates:read"));
   if(!["ADMIN","GRADUATE","EMPLOYER"].includes(q.user.role)&&!readableStaffOrgs.length)return s.status(403).json({error:"Permission denied."});
-  let query=q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,revokedAt,revokeReason").order("issuedAt",{ascending:false}).limit(100);
+  let query=q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,revokedAt,revokeReason,organizationId,graduateId").order("issuedAt",{ascending:false}).limit(100);
   if(q.user.role==="GRADUATE") query=readableStaffOrgs.length?query.or(`graduateId.eq.${q.user.id},organizationId.in.(${readableStaffOrgs.map(x=>x.organizationId).join(",")})`):query.eq("graduateId",q.user.id);
   if(q.user.role==="EMPLOYER"){const {data:org,error:oe}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;query=query.eq("organizationId",org?.id||"");}
   const {data,error}=await query;
