@@ -29,6 +29,9 @@ For local development without Docker, run `npm install` and `npm run dev`.
 
 - Supabase email/password authentication
 - Role-aware access (System Admin, Organization Admin, Student / Graduate)
+- Role-filtered User Guidelines with dedicated module walkthroughs, action references, permissions, warnings and troubleshooting
+- 90-second cinematic in-app VERITY product film using live dashboard totals and an interactive credential verification action
+- Assignment-authorized staff credential verification with an explicit `credentials:verify` permission and audit event; institution checks are issuer-scoped and verifier-organization checks are attributed to the assigned organization
 - Organization registration with System Admin approval
 - Organization-specific student / employee membership and registration codes
 - Student institution-link requests and organization approval workflow
@@ -43,6 +46,16 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - SHA-256 canonical credential fingerprint
 - Audit events
 - Solidity certificate registry with optional EVM integration
+
+
+
+## Complete documentation
+
+The full user and operations manual is available here:
+
+**[VERITY Complete User and Operations Guide](docs/VERITY-COMPLETE-USER-AND-OPERATIONS-GUIDE.md)**
+
+It covers graduate onboarding and credential access, institution approval and issuance, employer verification and graduate consent, staff permissions, System Administrator workflows, the end-to-end credential lifecycle, security and privacy, blockchain and database-ledger modes, malware-scanning limitations, troubleshooting, deployment configuration and a production-readiness checklist.
 
 ## Blockchain status
 

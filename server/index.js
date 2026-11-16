@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { createVerityMarketingMp4 } from "./marketing-video.js";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
 import { scanBuffer } from "./malware-scanner.js";
 
@@ -153,7 +154,7 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  s.json({organization:data});
 }));
 
-const staffPermissions=["certificates:read","documents:download"];
+const staffPermissions=["certificates:read","documents:download","credentials:verify"];
 const staffPermissionArray=z.array(z.enum(staffPermissions)).min(1).refine(v=>!v.includes("documents:download")||v.includes("certificates:read"),{message:"Document download requires certificate read access."});
 app.get("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({staff:[]});
@@ -410,8 +411,8 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   if(error)throw error;
   if(!c){const result=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
   if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This certificate reference was not found in your institution's own issuance records."});
-  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
-  const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
+  const recomputed=org.type==="INSTITUTION"?digest(canonical(c)):null,dbOk=org.type!=="INSTITUTION"||recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   await audit(q.supabase,q.user.id,"INSTITUTION_CERTIFICATE_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
@@ -450,6 +451,36 @@ app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   s.json({verified,status,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+}));
+
+app.post("/api/staff/verify",auth,roles("GRADUATE"),run(async(q,s)=>{
+  const b=z.object({organizationId:z.string().uuid(),certificateId:z.string().min(4).max(200)}).parse(q.body);
+  const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),b.organizationId);
+  if(!hasStaffPermission(staff,"credentials:verify"))return s.status(403).json({error:"Your active staff assignment does not include credential verification permission."});
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("id",b.organizationId).maybeSingle();
+  if(oe)throw oe;
+  if(!org||org.status!=="APPROVED")return s.status(403).json({error:"The assigned organization is not approved for credential verification."});
+  const reference=b.certificateId.trim();
+  let c=null;
+  if(org.type==="INSTITUTION"){
+    const fields="id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId";
+    let result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("certificateId",reference).maybeSingle();
+    if(result.error)throw result.error;
+    c=result.data;
+    if(!c){result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();if(result.error)throw result.error;c=result.data;}
+    if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This credential reference was not found in the assigned institution's issuance records."});
+  }else if(org.type==="EMPLOYER"){
+    const {data,error}=await q.supabase.rpc("lookup_verity_certificate",{p_certificate_id:reference,p_verifier_name:q.user.fullName,p_verifier_org:org.name});
+    if(error)throw error;
+    if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the Verity registry."});
+    c=data;
+  }else return s.status(403).json({error:"This organization type cannot verify academic credentials."});
+  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
+  const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
+  const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
+  await audit(q.supabase,q.user.id,"STAFF_CREDENTIAL_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,organizationType:org.type,status});
+  s.json({verified,status,message:verified?"Credential matches the registered Verity record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
 app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,res)=>{
@@ -583,6 +614,54 @@ app.post("/api/verify",run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   s.json({verified,status,message:verified?(chain.enabled?"Credential record and blockchain fingerprint match.":"Credential is registered in the issuing institution's Verity record; public-chain integrity checking is not active.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_FINGERPRINT_MATCH":"DATABASE_LEDGER_ONLY",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Demo database ledger; configure Polygon Amoy RPC, project signer and deployed contract for on-chain verification."}});
+}));
+
+app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
+  const count=()=>q.supabase.from("Certificate").select("id",{count:"exact",head:true});
+  const [total,active,revoked,verifications,latestCertificate,auditResult]=await Promise.all([
+    count(),
+    count().eq("status","ACTIVE"),
+    count().eq("status","REVOKED"),
+    q.supabase.from("Verification").select("id",{count:"exact",head:true}),
+    q.supabase.from("Certificate").select("certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,graduateId").eq("status","ACTIVE").order("issuedAt",{ascending:false}).limit(1).maybeSingle(),
+    q.supabase.from("AuditEvent").select("action,entity,createdAt,metadata").order("createdAt",{ascending:false}).limit(5)
+  ]);
+  for(const result of [total,active,revoked,verifications,latestCertificate,auditResult]) if(result.error) throw result.error;
+
+  const certificate=latestCertificate.data||null;
+  let verification=null;
+  if(certificate?.verificationKey){
+    try{
+      const {data:record,error}=await q.supabase.rpc("lookup_verity_certificate",{p_certificate_id:certificate.verificationKey,p_verifier_name:null,p_verifier_org:null});
+      if(error) throw error;
+      if(!record?.found){
+        verification={verified:false,status:"NOT_FOUND",message:"The live registry did not return this credential."};
+      }else{
+        const chain=await verifyOnChain(record.certificateId);
+        const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(record.digest||"").toLowerCase()&&!chain.revoked);
+        const verified=record.status==="ACTIVE"&&chainOk;
+        verification={verified,status:record.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH"};
+      }
+    }catch(error){
+      verification={verified:false,status:"LIVE CHECK UNAVAILABLE",message:error.message};
+    }
+  }else{
+    verification={verified:false,status:"NO ACTIVE CREDENTIAL",message:"Issue an active credential to demonstrate a live registry check."};
+  }
+
+  const video=await createVerityMarketingMp4({
+    stats:{total:total.count||0,active:active.count||0,revoked:revoked.count||0,verifications:verifications.count||0},
+    certificate,
+    auditEvents:auditResult.data||[],
+    chain:chainStatus(),
+    verification
+  });
+  await audit(q.supabase,q.user.id,"ADMIN_MARKETING_VIDEO_DOWNLOADED","Platform",null,{format:"mp4",durationSeconds:90,source:"live-dashboard-and-credential-record",verificationStatus:verification?.status||"UNAVAILABLE"});
+  s.setHeader("Content-Type","video/mp4");
+  s.setHeader("Content-Disposition",'attachment; filename="VERITY-Marketing-Showcase.mp4"');
+  s.setHeader("Content-Length",video.length);
+  s.setHeader("Cache-Control","private, no-store");
+  s.send(video);
 }));
 
 app.get("/api/audit",auth,roles("ADMIN"),run(async(q,s)=>{
