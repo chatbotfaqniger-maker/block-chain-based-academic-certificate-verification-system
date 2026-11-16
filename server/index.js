@@ -196,6 +196,17 @@ app.get("/api/admin/organizations/:id/evidence/:evidenceId",auth,roles("ADMIN"),
  await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_REVIEWED","OrganizationEvidence",e.id,{organizationId:e.organizationId});
  s.json({url:link.signedUrl,expiresIn:60,originalName:e.originalName});
 }));
+app.get("/api/admin/certificates/:id/document-preview",auth,roles("ADMIN"),run(async(q,res)=>{
+  const {data:cert,error:ce}=await q.supabase.from("Certificate").select("id,certificateId,studentName,studentNumber,institution,department").eq("certificateId",q.params.id).maybeSingle();
+  if(ce)throw ce;if(!cert)return res.status(404).json({error:"Certificate not found."});
+  const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,sha256").eq("certificateId",cert.id).order("createdAt",{ascending:false}).limit(1).maybeSingle();
+  if(de)throw de;if(!doc)return res.status(404).json({error:"The institution has not uploaded a certificate file for this record yet."});
+  const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60);
+  if(le)throw le;
+  await audit(q.supabase,q.user.id,"ADMIN_CERTIFICATE_DOCUMENT_PREVIEWED","CertificateDocument",doc.id,{certificateId:cert.certificateId});
+  res.json({url:link.signedUrl,mimeType:doc.mimeType,originalName:doc.originalName,student:cert,expiresIn:60});
+}));
+
 app.get("/api/admin/organizations",auth,roles("ADMIN"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").order("createdAt",{ascending:false});if(error)throw error;const ids=(data||[]).map(o=>o.id);const {data:evidence,error:ee}=ids.length?await q.supabase.from("OrganizationEvidence").select("id,organizationId,evidenceType,originalName,scanStatus,createdAt").in("organizationId",ids).order("createdAt",{ascending:false}):{data:[],error:null};if(ee)throw ee;s.json({organizations:(data||[]).map(o=>({...o,evidence:(evidence||[]).filter(e=>e.organizationId===o.id)}))});}));
 app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  const b=z.object({status:z.enum(["APPROVED","SUSPENDED"]),verificationNotes:z.string().max(1000).optional()}).parse(q.body);
@@ -353,7 +364,7 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","EMPLOYER",
       if(!hasStaffPermission(staff,"documents:download"))return s.status(403).json({error:"Your staff account does not have document-download permission."});
     }
   }
-  const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
+  const {data:link,error:linkError}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60);
   if(linkError)throw linkError;
   await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:doc.organizationId});
   s.json({url:link.signedUrl,expiresIn:60});
@@ -410,6 +421,18 @@ app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   s.json({verified,status,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+}));
+
+app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,res)=>{
+  const b=z.object({studentName:z.string().min(2).max(120),studentNumber:z.string().min(2).max(80),institution:z.string().min(2).max(160),department:z.string().min(2).max(160)}).parse(q.body);
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
+  if(oe)throw oe;
+  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return res.status(403).json({error:"Only an approved verification organization can search student records."});
+  const {data,error}=await q.supabase.from("Certificate").select("certificateId,studentName,studentNumber,institution,department,status,graduateId").eq("studentNumber",b.studentNumber.trim()).ilike("studentName",b.studentName.trim()).ilike("institution",b.institution.trim()).ilike("department",b.department.trim()).limit(5);
+  if(error)throw error;
+  const matches=(data||[]).map(c=>({certificateId:c.certificateId,studentName:c.studentName,studentNumber:c.studentNumber,institution:c.institution,department:c.department,status:c.status,requestable:!!c.graduateId}));
+  await audit(q.supabase,q.user.id,"ORGANIZATION_STUDENT_LOOKUP","Certificate",null,{organizationId:org.id,matchCount:matches.length});
+  res.json({matches});
 }));
 
 app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
