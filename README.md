@@ -31,7 +31,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Role-aware access (System Admin, Organization Admin, Student / Graduate)
 - Role-filtered User Guidelines with dedicated module walkthroughs, action references, permissions, warnings and troubleshooting
 - 58-second cinematic in-app VERITY product film using live dashboard totals and an interactive credential verification action
-- Organization-scoped staff credential verification with an explicit `credentials:verify` permission and audit event
+- Assignment-authorized staff credential verification with an explicit `credentials:verify` permission and audit event; institution checks are issuer-scoped and verifier-organization checks are attributed to the assigned organization
 - Organization registration with System Admin approval
 - Organization-specific student / employee membership and registration codes
 - Student institution-link requests and organization approval workflow
