@@ -146,7 +146,7 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  s.json({organization:data});
 }));
 
-const staffPermissions=["certificates:read","documents:download"];
+const staffPermissions=["certificates:read","documents:download","credentials:verify"];
 app.get("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({staff:[]});
  const {data,error:e}=await q.supabase.from("OrganizationStaff").select("id,userId,permissions,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;
@@ -421,6 +421,27 @@ app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   s.json({verified,status,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+}));
+
+app.post("/api/staff/verify",auth,roles("GRADUATE"),run(async(q,s)=>{
+  const b=z.object({organizationId:z.string().uuid(),certificateId:z.string().min(4).max(200)}).parse(q.body);
+  const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),b.organizationId);
+  if(!hasStaffPermission(staff,"credentials:verify"))return s.status(403).json({error:"Your active staff assignment does not include credential verification permission."});
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("id",b.organizationId).maybeSingle();
+  if(oe)throw oe;
+  if(!org||org.status!=="APPROVED")return s.status(403).json({error:"The assigned organization is not approved for credential verification."});
+  const reference=b.certificateId.trim();
+  const fields="id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId";
+  let {data:c,error}=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("certificateId",reference).maybeSingle();
+  if(error)throw error;
+  if(!c){const result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
+  if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This credential reference was not found in the assigned organization's records."});
+  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
+  const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
+  const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
+  await audit(q.supabase,q.user.id,"STAFF_CREDENTIAL_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
+  s.json({verified,status,message:verified?"Credential matches the assigned organization's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
 app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,res)=>{
