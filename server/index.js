@@ -482,16 +482,44 @@ app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q
 }));
 
 app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),run(async(q,s)=>{
-  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
+  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
+  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can download shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
   const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(de)throw de;if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
-  const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60,{download:doc.originalName});
-  if(le)throw le;
-  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_VIEWED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id});
-  s.json({url:link.signedUrl,expiresIn:60,originalName:doc.originalName,mimeType:doc.mimeType});
+  const {data:file,error:fe}=await q.supabase.storage.from("verity-certificates").download(doc.storagePath);
+  if(fe)throw fe;
+  const source=Buffer.from(await file.arrayBuffer());
+  const {PDFDocument,StandardFonts,rgb,degrees}=await import("pdf-lib");
+  const pdf=doc.mimeType==="application/pdf"?await PDFDocument.load(source):await PDFDocument.create();
+  if(doc.mimeType==="image/png"||doc.mimeType==="image/jpeg"){
+    const image=doc.mimeType==="image/png"?await pdf.embedPng(source):await pdf.embedJpg(source);
+    const scale=Math.min(842/image.width,595/image.height,1);
+    const page=pdf.addPage([image.width*scale,image.height*scale]);
+    page.drawImage(image,{x:0,y:0,width:image.width*scale,height:image.height*scale});
+  }else if(doc.mimeType!=="application/pdf"){
+    return s.status(415).json({error:"Only PDF, JPEG and PNG certificates can be watermarked for organization download."});
+  }
+  const font=await pdf.embedFont(StandardFonts.HelveticaBold);
+  for(const page of pdf.getPages()){
+    const {width,height}=page.getSize();
+    const size=Math.max(20,Math.min(34,width/18));
+    for(let y=-height;y<height*2;y+=Math.max(125,height/3)){
+      for(let x=-width;x<width*2;x+=Math.max(180,width/2)){
+        page.drawText("VERITY · AUTHORIZED COPY",{x,y,size,font,color:rgb(0.05,0.30,0.34),opacity:0.19,rotate:degrees(-32)});
+      }
+    }
+    page.drawRectangle({x:0,y:0,width,height:26,color:rgb(0.04,0.15,0.22),opacity:0.88});
+    page.drawText("VERITY  |  VERIFIED DOCUMENT COPY  |  "+doc.originalName.slice(0,90),{x:12,y:8,size:9,font,color:rgb(1,1,1),maxWidth:width-24});
+  }
+  const output=Buffer.from(await pdf.save());
+  const safeName=(doc.originalName||"certificate").replace(/[^a-zA-Z0-9._-]/g,"_").replace(/\.(pdf|png|jpe?g)$/i,"");
+  await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_DOWNLOADED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id,watermarked:true});
+  s.setHeader("Content-Type","application/pdf");
+  s.setHeader("Content-Disposition",`attachment; filename="${safeName}-VERITY-WATERMARKED.pdf"`);
+  s.setHeader("Cache-Control","private, no-store");
+  s.send(output);
 }));
 
 app.post("/api/verify",run(async(q,s)=>{
