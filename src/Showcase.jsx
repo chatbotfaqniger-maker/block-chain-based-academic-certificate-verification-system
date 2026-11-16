@@ -32,16 +32,16 @@ export default function VerityShowcase({data, certificates=[], organization, onV
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => {
-      setElapsed(value => {
-        const next = Math.min(duration, value + 100);
-        const nextScene = Math.min(scenes.length - 1, Math.floor(next / (duration / scenes.length)));
-        setScene(nextScene);
-        if (next >= duration) setPlaying(false);
-        return next;
-      });
+      setElapsed(value => Math.min(duration, value + 100));
     }, 100);
     return () => window.clearInterval(timer);
   }, [playing]);
+
+  useEffect(() => {
+    const nextScene = Math.min(scenes.length - 1, Math.floor(elapsed / (duration / scenes.length)));
+    setScene(nextScene);
+    if (elapsed >= duration) setPlaying(false);
+  }, [elapsed]);
 
   const sceneProgress = useMemo(() => {
     const sceneStart = scene * (duration / scenes.length);
@@ -70,7 +70,7 @@ export default function VerityShowcase({data, certificates=[], organization, onV
         <div className="film-window-bar"><span/><span/><span/><b>VERITY / {["NETWORK","OVERVIEW","INSTITUTION","GRADUATE","VERIFICATION","CONTROL CENTRE","INTEGRITY CHECK","VERITY"][scene]}</b></div>
         {scene===0||scene===7 ? <div className="film-logo-scene"><ShieldCheck/><strong>VERITY<span>.</span></strong><small>ACADEMIC CREDENTIAL NETWORK</small></div> :
         scene===1 ? <div className="film-dashboard"><div className="film-dash-head"><div><small>PLATFORM OVERVIEW</small><b>Credential network</b></div><span className={chainActive?"film-live":"film-demo"}>{chainActive?"BLOCKCHAIN CONNECTED":"DATABASE LEDGER"}</span></div><div className="film-metrics"><MiniMetric label="Total credentials" value={stats.total??"—"}/><MiniMetric label="Active" value={stats.active??"—"}/><MiniMetric label="Revoked" value={stats.revoked??"—"}/><MiniMetric label="Verifications" value={stats.verifications??"—"}/></div><div className="film-record"><FileCheck2/><div><b>Recent credential activity</b><small>{sample?.qualification||"Academic qualification"} · {sample?.institution||orgName}</small></div><span>{sample?.status||"REGISTERED"}</span></div></div> :
-        scene===2 ? <div className="film-module"><div className="film-module-icon"><Building2/></div><div><small>INSTITUTION WORKSPACE</small><b>{orgName}</b><p>Student record → Academic review → Certificate issuance</p></div><div className="film-steps"><span><CheckCircle2/> Student registered</span><span><CheckCircle2/> Award details reviewed</span><span><Fingerprint/> Credential fingerprint created</span></div><div className="film-issued"><b>VRT-{new Date().getFullYear()}-••••••••</b><small>Unique credential reference · QR verification</small></div></div> :
+        scene===2 ? <div className="film-module"><div className="film-module-icon"><Building2/></div><div><small>INSTITUTION WORKSPACE</small><b>{orgName}</b><p>Student record → Academic review → Certificate issuance</p></div><div className="film-steps"><span><CheckCircle2/> Graduate account linked</span><span><CheckCircle2/> Award details reviewed</span><span><Fingerprint/> Credential fingerprint created</span></div><div className="film-issued"><b>VRT-{new Date().getFullYear()}-••••••••</b><small>Unique credential reference · QR verification</small></div></div> :
         scene===3 ? <div className="film-module graduate"><div className="film-module-icon"><GraduationCap/></div><div><small>GRADUATE WORKSPACE</small><b>My credentials</b><p>Personal academic records and sharing controls</p></div><div className="film-credential"><span><FileCheck2/></span><div><b>{sample?.qualification||"Academic credential"}</b><small>{sample?.institution||"Issuing institution"} · {sample?.status||"ACTIVE"}</small></div><ArrowUpRight/></div><div className="film-consent"><LockKeyhole/><span>Original document sharing</span><b>Graduate consent required</b></div></div> :
         scene===4 ? <div className="film-module"><div className="film-module-icon"><Building2/></div><div><small>ORGANIZATION WORKSPACE</small><b>Verify a credential</b><p>Reference lookup · Issuer match · Status review</p></div><div className="film-verify-row"><span>Certificate reference</span><b>{sample?.certificateId||"Enter certificate ID or key"}</b></div><div className="film-verify-state"><CheckCircle2/><div><b>Registry response</b><small>Credential status and issuer details returned</small></div></div></div> :
         scene===5 ? <div className="film-admin"><div><Users/><span>Organizations</span><b>Identity review & approval</b></div><div><Activity/><span>Audit activity</span><b>Action history & accountability</b></div><div><CheckCircle2/><span>System health</span><b>{chainActive?"EVM network connected":"Database ledger mode"}</b></div></div> :
