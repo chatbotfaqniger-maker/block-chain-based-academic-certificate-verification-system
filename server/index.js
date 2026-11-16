@@ -440,7 +440,7 @@ app.post("/api/staff/verify",auth,roles("GRADUATE"),run(async(q,s)=>{
     if(!c){result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();if(result.error)throw result.error;c=result.data;}
     if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This credential reference was not found in the assigned institution's issuance records."});
   }else if(org.type==="EMPLOYER"){
-    const {data,error}=await q.supabase.rpc("lookup_verity_certificate_for_org",{p_certificate_id:reference});
+    const {data,error}=await q.supabase.rpc("lookup_verity_certificate",{p_certificate_id:reference,p_verifier_name:q.user.fullName,p_verifier_org:org.name});
     if(error)throw error;
     if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the Verity registry."});
     c=data;
