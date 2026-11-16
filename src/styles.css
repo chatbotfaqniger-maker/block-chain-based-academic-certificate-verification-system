@@ -444,3 +444,8 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 @media(max-width:850px){.film-stage{grid-template-columns:1fr;gap:30px;padding:38px 5%;min-height:0}.film-stage-copy{max-width:650px}.film-ui-window{justify-self:center}.film-corner{top:17px;bottom:auto;right:5%;left:auto}}
 @media(max-width:560px){.verity-film-page{padding-top:0}.film-stage{padding:31px 16px 46px;border-radius:13px;gap:24px}.film-stage-copy h1{font-size:34px}.film-stage-copy p{font-size:12px}.film-ui-window{min-height:300px}.film-dashboard,.film-module,.film-admin,.film-proof{padding:18px 13px}.film-metrics{gap:5px}.film-metric{padding:9px 6px}.film-metric small{font-size:8px}.film-metric b{font-size:17px}.film-record{padding:9px}.film-record small{font-size:8px}.film-admin>div{grid-template-columns:22px 1fr;gap:7px}.film-admin b{grid-column:2}.film-consent{flex-wrap:wrap}.film-consent b{margin-left:0}.film-topline>span{font-size:8px}.film-control-row{align-items:flex-start}.film-buttons{gap:5px}.film-buttons button{padding:9px;font-size:10px}.film-buttons .film-icon-button{padding:8px}}
 @media(prefers-reduced-motion:reduce){.film-stage,.film-stage-copy,.film-ui-window,.film-logo-scene>svg,.film-stage:before{animation:none!important;transition:none!important}}
+
+.film-reference-field{width:min(100%,360px);display:grid;gap:5px;text-align:left;margin-top:4px}
+.film-reference-field span{font-size:9px;color:#708894}
+.film-reference-field input{width:100%;border:1px solid #dbe5e8;border-radius:6px;background:#fff;padding:10px 11px;color:#1c4053;font-size:10px;outline:none}
+.film-reference-field input:focus{border-color:#4d9a8e;box-shadow:0 0 0 3px #4d9a8e18}
