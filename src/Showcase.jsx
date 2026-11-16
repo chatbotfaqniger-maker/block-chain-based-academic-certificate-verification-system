@@ -14,7 +14,7 @@ const scenes = [
 
 function MiniMetric({label,value}) { return <div className="film-metric"><small>{label}</small><b>{value}</b></div>; }
 
-export default function VerityShowcase({data, certificates=[], organization, onVerify}) {
+export default function VerityShowcase({data, certificates=[], auditEvents=null, organization, onVerify}) {
   const [scene,setScene] = useState(0);
   const [playing,setPlaying] = useState(false);
   const [elapsed,setElapsed] = useState(0);
@@ -23,7 +23,7 @@ export default function VerityShowcase({data, certificates=[], organization, onV
   const duration = 58000;
   const current = scenes[scene];
   const progress = Math.min(100, elapsed / duration * 100);
-  const sample = certificates?.[0];
+  const sample = certificates?.[0];\n  const latestAudit = auditEvents?.[0];
   const orgName = organization?.name || "Your institution";
   const stats = data?.stats || {};
   const chainActive = !!data?.blockchain?.enabled;
@@ -70,7 +70,7 @@ export default function VerityShowcase({data, certificates=[], organization, onV
         scene===2 ? <div className="film-module"><div className="film-module-icon"><Building2/></div><div><small>INSTITUTION WORKSPACE</small><b>{orgName}</b><p>Student record → Academic review → Certificate issuance</p></div><div className="film-steps"><span><CheckCircle2/> Graduate account linked</span><span><CheckCircle2/> Award details reviewed</span><span><Fingerprint/> Credential fingerprint created</span></div><div className="film-issued"><b>VRT-{new Date().getFullYear()}-••••••••</b><small>Unique credential reference · QR verification</small></div></div> :
         scene===3 ? <div className="film-module graduate"><div className="film-module-icon"><GraduationCap/></div><div><small>GRADUATE WORKSPACE</small><b>My credentials</b><p>Personal academic records and sharing controls</p></div><div className="film-credential"><span><FileCheck2/></span><div><b>{sample?.qualification||"Academic credential"}</b><small>{sample?.institution||"Issuing institution"} · {sample?.status||"ACTIVE"}</small></div><ArrowUpRight/></div><div className="film-consent"><LockKeyhole/><span>Original document sharing</span><b>Graduate consent required</b></div></div> :
         scene===4 ? <div className="film-module"><div className="film-module-icon"><Building2/></div><div><small>ORGANIZATION WORKSPACE</small><b>Verify a credential</b><p>Reference lookup · Issuer match · Status review</p></div><div className="film-verify-row"><span>Certificate reference</span><b>{sample?.certificateId||"Enter certificate ID or key"}</b></div><div className="film-verify-state"><CheckCircle2/><div><b>Registry response</b><small>Credential status and issuer details returned</small></div></div></div> :
-        scene===5 ? <div className="film-admin"><div><Users/><span>Organizations</span><b>Identity review & approval</b></div><div><Activity/><span>Audit activity</span><b>Action history & accountability</b></div><div><CheckCircle2/><span>System health</span><b>{chainActive?"EVM network connected":"Database ledger mode"}</b></div></div> :
+        scene===5 ? <div className="film-admin"><div><Users/><span>Organizations</span><b>Identity review & approval</b></div><div><Activity/><span>Audit activity</span><b>{latestAudit?latestAudit.action?.replaceAll("_"," ")+" · "+(latestAudit.actor?.fullName||"System"):auditEvents?"No recent audit events":"Administrator-only audit history"}</b></div><div><CheckCircle2/><span>System health</span><b>{chainActive?"EVM network connected":"Database ledger mode"}</b></div></div> :
         <div className="film-proof"><div className="film-proof-icon"><Fingerprint/></div><small>VERITY CREDENTIAL CHECK</small><b>{formatStatus || "Registry integrity check"}</b><p>{verifyResult?.message || "Reference lookup · Record fingerprint · Revocation status"}</p><span>{chainActive?"ON-CHAIN STATUS AVAILABLE":"DATABASE LEDGER · NO LIVE CHAIN CLAIM"}</span><label className="film-reference-field"><span>Credential ID or verification key</span><input value={reference} onChange={e=>{setReference(e.target.value);setVerifyResult(null);}} placeholder="Enter a real Verity credential reference"/></label><button onClick={verifyActual} disabled={!onVerify||!reference.trim()}>Run actual credential check</button></div>}
       </div>
       <div className="film-corner">VERITY <b>{String(scene+1).padStart(2,"0")}</b> / 08</div>
