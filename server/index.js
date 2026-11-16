@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { createVerityMarketingMp4 } from "./marketing-video.js";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
 
 const app = express();
@@ -576,6 +577,16 @@ app.post("/api/verify",run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   s.json({verified,status,message:verified?(chain.enabled?"Credential record and blockchain fingerprint match.":"Credential is registered in the issuing institution's Verity record; public-chain integrity checking is not active.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_FINGERPRINT_MATCH":"DATABASE_LEDGER_ONLY",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Demo database ledger; configure Polygon Amoy RPC, project signer and deployed contract for on-chain verification."}});
+}));
+
+app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
+  const video=await createVerityMarketingMp4();
+  await audit(q.supabase,q.user.id,"ADMIN_MARKETING_VIDEO_DOWNLOADED","Platform",null,{format:"mp4",durationSeconds:58});
+  s.setHeader("Content-Type","video/mp4");
+  s.setHeader("Content-Disposition",'attachment; filename="VERITY-Marketing-Showcase.mp4"');
+  s.setHeader("Content-Length",video.length);
+  s.setHeader("Cache-Control","private, no-store");
+  s.send(video);
 }));
 
 app.get("/api/audit",auth,roles("ADMIN"),run(async(q,s)=>{
