@@ -38,6 +38,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
+- Organization staff access limited to the assigned approved organization; currently supports only `certificates:read` and `documents:download` (download requires read access)
 - Unique high-entropy certificate verification keys and QR-based public verification
 - Separate issuer and verifier organization workflows; only approved academic institutions can issue credentials
 - Authenticated verification requests attributed to approved verifier organizations
@@ -62,9 +63,17 @@ The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAI
 
 ## Antivirus scanning
 
-Certificate documents and organization identity evidence are submitted to a ClamAV daemon over its TCP INSTREAM protocol before their scan verdict is saved. Only a `CLEAN` verdict permits a signed download; `INFECTED` and `SCAN_FAILED` records remain blocked. Configure `CLAMAV_HOST` to the private hostname of a reachable ClamAV daemon and optionally `CLAMAV_PORT` (default `3310`) and `CLAMAV_TIMEOUT_MS` (default `60000`). The daemon must have current virus definitions and must not be exposed to the public internet. The `/api/health` response reports whether a scanner host is configured; it does not claim the daemon is reachable. If the daemon is missing or unavailable, uploads are retained in quarantine as `SCAN_FAILED` and cannot be downloaded.
+Certificate-document uploads use an optional ClamAV daemon over its TCP INSTREAM protocol. The application fails closed:
 
-The current Render web service is on the Free plan and no ClamAV daemon is provisioned yet. The backend integration is fail-closed, but live malware scanning is not active until a private ClamAV service is provisioned and `CLAMAV_HOST` is configured. ClamAV signature databases and scanning require additional memory; choose an appropriately sized service before enabling production uploads.
+- A ClamAV `OK` verdict is the only result that sets `scanStatus=CLEAN`.
+- A ClamAV `FOUND` verdict sets `INFECTED`.
+- If no scanner host is configured, the document remains `PENDING_SCAN`.
+- A timeout, connection error or unexpected daemon response sets `SCAN_FAILED`.
+- Only `CLEAN` certificate documents can be previewed or downloaded. Non-clean documents remain in the private storage bucket and are blocked by both API checks and Storage RLS.
+
+Configure `CLAMAV_HOST` to the private hostname of a reachable ClamAV daemon, and optionally `CLAMAV_PORT` (default `3310`) and `CLAMAV_TIMEOUT_MS` (default `60000`). Keep the daemon on a private network, update its signature definitions, and do not expose its TCP port to the public internet. The `/api/health` response reports whether a host is configured; it does not claim that the daemon is reachable or that a scan has passed.
+
+The current Render web service is on the Free plan and no ClamAV daemon has been provisioned. The fail-closed adapter and quarantine enforcement are implemented, but live malware scanning is **not active** until a private ClamAV service is provisioned, `CLAMAV_HOST` is configured, and a real upload receives a successful `CLEAN` verdict. Organization identity evidence is a separate upload workflow and is not covered by this certificate-document scanner integration.
 
 ## Security notes
 
