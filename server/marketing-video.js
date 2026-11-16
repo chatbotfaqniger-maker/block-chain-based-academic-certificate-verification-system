@@ -58,9 +58,10 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
       const start = i * 10;
       const end = start + 10;
       const files = [];
-      for (let j = 0; j < 8; j++) {
+      const textValues = [...scenes[i].slice(0, 5), ...scenes[i][5]];
+      for (let j = 0; j < textValues.length; j++) {
         const file = path.join(dir, "scene-" + i + "-" + j + ".txt");
-        await writeFile(file, clean(scenes[i][j] || "", " ", 112), "utf8");
+        await writeFile(file, clean(textValues[j] || "", " ", 112), "utf8");
         files.push(file);
       }
       const add = (file, size, color, x, y) => filters.push(
