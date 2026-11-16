@@ -428,7 +428,7 @@ app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,r
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
   if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return res.status(403).json({error:"Only an approved verification organization can search student records."});
-  const {data,error}=await q.supabase.from("Certificate").select("certificateId,studentName,studentNumber,institution,department,status,graduateId").eq("studentNumber",b.studentNumber.trim()).ilike("studentName",b.studentName.trim()).ilike("institution",b.institution.trim()).ilike("department",b.department.trim()).limit(5);
+  const {data,error}=await q.supabase.from("Certificate").select("certificateId,studentName,studentNumber,institution,department,status,graduateId").eq("studentNumber",b.studentNumber.trim()).eq("studentName",b.studentName.trim()).eq("institution",b.institution.trim()).eq("department",b.department.trim()).limit(5);
   if(error)throw error;
   const matches=(data||[]).map(c=>({certificateId:c.certificateId,studentName:c.studentName,studentNumber:c.studentNumber,institution:c.institution,department:c.department,status:c.status,requestable:!!c.graduateId}));
   await audit(q.supabase,q.user.id,"ORGANIZATION_STUDENT_LOOKUP","Certificate",null,{organizationId:org.id,matchCount:matches.length});
