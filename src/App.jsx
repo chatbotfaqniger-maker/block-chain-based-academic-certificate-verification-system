@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from "react";
 import RoleGuidelines from "./Guidelines.jsx";
 import VerityShowcase from "./Showcase.jsx";
-import {ShieldCheck,LayoutDashboard,GraduationCap,BadgeCheck,Search,Plus,LogOut,Activity,CheckCircle2,AlertTriangle,Copy,ExternalLink,Menu,X,LockKeyhole,BookOpen,ArrowRight,FileCheck2,Users,Building2,Download,KeyRound,Film} from "lucide-react";
+import {ShieldCheck,LayoutDashboard,GraduationCap,BadgeCheck,Search,Plus,LogOut,Activity,CheckCircle2,AlertTriangle,Copy,ExternalLink,X,LockKeyhole,BookOpen,FileCheck2,Users,Building2,Download,Film} from "lucide-react";
 const api=async(path,opts={})=>{const t=localStorage.getItem("verity_token");const r=await fetch("/api"+path,{...opts,headers:{"Content-Type":"application/json",...(t?{Authorization:"Bearer "+t}:{}),...opts.headers}});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Request failed");return d;};
 const fmt=v=>v?new Date(v).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
 const initials=n=>(n||"V").split(" ").slice(0,2).map(x=>x[0]).join("").toUpperCase();
