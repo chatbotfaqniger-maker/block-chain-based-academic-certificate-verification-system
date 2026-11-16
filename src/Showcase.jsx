@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ShieldCheck, Play, Pause, RotateCcw, SkipForward, CheckCircle2, Building2, GraduationCap, Users, Activity, LockKeyhole, ArrowUpRight, FileCheck2, Fingerprint } from "lucide-react";
 
 const scenes = [
@@ -43,10 +43,7 @@ export default function VerityShowcase({data, certificates=[], organization, onV
     if (elapsed >= duration) setPlaying(false);
   }, [elapsed]);
 
-  const sceneProgress = useMemo(() => {
-    const sceneStart = scene * (duration / scenes.length);
-    return Math.max(0, Math.min(100, (elapsed - sceneStart) / (duration / scenes.length) * 100));
-  }, [elapsed, scene]);
+
 
   function replay() { setElapsed(0); setScene(0); setVerifyResult(null); setPlaying(true); }
   function skip() {
