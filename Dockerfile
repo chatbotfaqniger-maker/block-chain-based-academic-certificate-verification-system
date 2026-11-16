@@ -1,6 +1,6 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl ffmpeg font-dejavu
 COPY package*.json ./
 RUN npm install
 COPY . .
