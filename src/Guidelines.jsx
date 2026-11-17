@@ -10,6 +10,13 @@ const g = (page, title, icon, intro, audience, steps, actions, permissions, warn
   page, title, icon, intro, audience, steps, actions, permissions, warnings, fixes
 });
 
+const workspaceOverview = g("overview","Overview",LayoutDashboard,"Your workspace home summarizes the services available to your signed-in role.","Graduate, institution owner or verification organization owner.",
+  ["Open Overview after signing in to see the services available to your account.","Review the cards and recent activity shown for your role; these differ between graduates, institutions and verifier organizations.","Use the navigation to open a module, then return to Overview for a workspace summary.","Refresh the page after important actions when you need the latest status."],
+  ["Overview cards — summarize the activity available to your role.","Navigation — opens the modules enabled for your account."],
+  "Only modules allowed by your account role and organization approval are available. Institution staff permissions are limited to certificates:read and documents:download.",
+  ["Dashboard totals are snapshots and can change after a refresh.","A database-ledger status is not evidence of a live blockchain transaction."],
+  ["If a module is missing, check your role and organization approval.","If data does not load, refresh the page and check System Health where available."]);
+
 const adminGuides = [
   g("overview","Overview",LayoutDashboard,"A live summary of credential activity and the platform workspace.","Verity System Administrators.",
     ["Open Overview after signing in. Review total, active and revoked credentials and verification counts.","Review the recent credentials list for the latest registry activity.","Use Refresh now to reload dashboard and certificate data; the page also refreshes periodically."],
@@ -50,6 +57,7 @@ const adminGuides = [
 ];
 
 const institutionGuides = [
+  workspaceOverview,
   g("identity","Identity",Building2,"Submit official institutional identity details and supporting evidence for review.","Institution administrator / organization owner for an academic institution.",
     ["Open Institution Identity and confirm the institution name and current application status.","Enter the official registration number, website, email domain and accreditation or supervising body where requested.","Upload the official registration or accreditation evidence using the evidence form.","Submit the evidence and wait for a Verity System Administrator to review it. Respond to any clarification request."],
     ["Evidence type — labels the kind of official document being submitted.","Choose file — selects the supporting evidence file.","Submit evidence — uploads the file to the private evidence area for manual review."],
@@ -62,10 +70,10 @@ const institutionGuides = [
     "Organization owner must be approved to approve membership requests. Graduates create their own Verity accounts and request the link.",
     ["Verify identity and student number before approving.","Treat registration codes as controlled invitations; do not publish them publicly."],
     ["If a student is missing, ask them to register and submit the correct code.","If approval is disabled, confirm the institution is APPROVED and you are signed in as its owner."]),
-  g("staff","Staff",Users,"Assign limited, auditable access to existing Verity accounts.","Institution or organization owner.",
-    ["Ask the staff member to create and verify their own Verity account first.","Open Staff and enter the exact email address used by that account.","Select only the permissions needed: read certificate records, download consent-approved documents, and/or verify credentials.","Select Add staff member and confirm the new entry appears as ACTIVE.","Suspend access promptly when the staff member changes role or leaves."],
-    ["Staff email — identifies an existing Verity account.","Read certificate records — grants access to assigned organization credential records.","Download approved documents — permits downloads only where the required graduate consent is valid.","Verify credentials — permits staff to verify credentials belonging to the assigned organization.","Add staff member — creates or updates the assignment; Suspend / Reactivate changes active access."],
-    "Only the organization owner can assign or change staff permissions. Staff cannot issue or revoke certificates or administer other staff.",
+  g("staff","Staff",Users,"Assign limited, auditable access to existing Verity graduate accounts.","Approved academic institution owner.",
+    ["Ask the staff member to create their own Verity graduate account first.","Open Staff and enter the exact email address used by that account.","Assign certificates:read for read-only access to this institution’s credential records.","Add documents:download only when the staff member needs to retrieve original certificate files; this permission requires certificates:read as well.","Select Add staff member and confirm the assignment appears as ACTIVE. Suspend access promptly when duties change or the staff member leaves."],
+    ["Staff email — identifies an existing Verity account.","certificates:read — grants read-only access to this institution’s certificate records.","documents:download — allows downloads for this institution after the file has a CLEAN scan verdict.","Add staff member — creates or updates the assignment; Suspend / Reactivate changes active access."],
+    "Only an approved academic institution owner can assign staff. The only implemented staff permissions are certificates:read and documents:download. Verifier-organization staff and verification permissions are not available yet. Staff cannot issue or revoke certificates or administer other staff.",
     ["Never share an owner account or grant permissions for convenience.","Only enable document download when required for the staff member’s work."],
     ["If an email is not found, ask the person to register using that exact email.","If a staff member cannot see a module, check their ACTIVE status and assigned permission set."]),
   g("certificates","Certificates",FileCheck2,"Review credentials issued by your institution and manage available certificate records.","Approved institution owner; staff access is read-only and limited to assigned permissions.",
@@ -89,21 +97,23 @@ const institutionGuides = [
 ];
 
 const organizationGuides = [
+  workspaceOverview,
   g("verify","Verify Credentials",Search,"Verify a credential reference or find a graduate record for a legitimate verification purpose.","Approved employer, recruiter, admissions or other verification organization.",
     ["Confirm that the verification request is within your organization’s lawful and stated purpose.","Enter the certificate ID or verification key and select Verify credential; alternatively use the student lookup form with exact name, matriculation number, institution and department.","Review the returned credential status, issuer and qualification details.","If the graduate is linked to Verity, request permission to view the original document only when it is necessary."],
     ["Verify credential — checks the reference against the Verity registry.","Search Verity records — searches using the exact four student identifiers.","Request graduate consent — sends a private-document access request to the graduate."],
     "Organization must be APPROVED and registered as an EMPLOYER/verifier organization. Only its owner or staff with the appropriate permission can use the module.",
     ["A registry match does not independently establish the identity of the person presenting the credential.","Do not attempt broad searches or access documents without a legitimate purpose and graduate consent."],
     ["If no record is found, confirm the exact ID/key with the graduate or issuing institution.","If the organization is pending or suspended, contact the Verity administrator about its status."]),
-  g("access","Verification Requests",Share2,"Review graduate consent and access only the private original documents explicitly approved for your organization.","Approved verification organization owner and staff with valid document-access permission.",
+  g("access","Verification Requests",Share2,"Review graduate consent and access only the private original documents explicitly approved for your organization.","Approved verification organization owner. Staff access for verifier organizations is not implemented yet.",
     ["Open Verification Requests and review the graduate, credential, stated purpose and request status.","Wait until the graduate approves the request; do not attempt to bypass a pending or rejected request.","For an approved request, select Preview original to inspect it inside Verity.","Use Download watermarked copy only when a retained copy is necessary for the stated purpose.","Stop using the document when consent expires or the purpose is complete."],
     ["Preview original — opens a temporary in-app view of the approved original.","Download watermarked copy — downloads the permitted watermarked PDF.","Request status — shows PENDING, APPROVED or REJECTED."],
-    "Organization must be APPROVED. Original document access requires graduate approval and expires after 30 days. Staff also need documents:download for downloads.",
+    "Organization must be APPROVED. Original document access requires graduate approval and expires after 30 days. Verifier-organization staff downloads are not implemented yet.",
     ["Never share, repurpose or retain a certificate beyond the approved purpose and applicable retention rules.","A public verification result does not grant access to the original certificate file."],
     ["If preview/download is denied, check request status, expiry, staff permission and document scan status.","If the graduate is not linked to the certificate, ask them to link their account before sending another request."])
 ];
 
 const graduateGuides = [
+  workspaceOverview,
   g("certificates","My Credentials",FileCheck2,"View credentials linked to your graduate profile and share a verification reference.","Graduate / student account.",
     ["Open My Credentials and review each linked credential.","Check the institution, qualification, award date and current status.","Select QR to display your QR code and verification link.","Use Copy verification link or Copy key to share the reference with a verifier.","Contact the issuing institution if a credential is missing, incorrect or revoked unexpectedly."],
     ["QR — opens the QR and sharing panel.","Copy verification link — copies the public verification URL.","Copy key — copies the unique verification key.","Download — retrieves your linked original document when available and permitted."],
