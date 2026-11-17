@@ -131,19 +131,19 @@ const graduateGuides = [
 ];
 
 const staffGuides = [
-  g("certificates","Organization Credentials",FileCheck2,"Read certificate records available to your assigned organization. Institution staff can inspect their institution’s issued records; verifier organizations do not issue certificates.","Active authorized organization staff with certificates:read permission.",
-    ["Open Organization Credentials to view records scoped to your assigned organization(s).","Search by graduate name, certificate ID, institution or programme.","Review the credential status and details needed for your assigned task.","Use the QR control only if the interface makes it available to your assigned role; ask the owner if an action is blocked."],
-    ["Search credentials — filters the records visible to your account.","QR — displays a shareable verification reference when allowed.","Preview file — available only where the server grants document preview permission; document downloads require documents:download and valid graduate consent."],
-    "Your Organization Staff assignment must be ACTIVE and include certificates:read. Staff cannot issue/revoke certificates, manage organization identity or add staff.",
-    ["Only view records for the assigned organization and approved work purpose.","Do not export, copy or disclose student information unnecessarily."],
-    ["If no records appear, confirm whether your assigned organization is an issuing institution; verifier organizations do not create certificate records. Ask the owner to confirm your ACTIVE assignment and certificates:read permission.","If access is denied, do not retry using another user’s credentials; ask the owner to review your access."]),
-  g("verify","Verify Credentials",ClipboardCheck,"Verify certificate references through the organization that assigned your staff account.","Active authorized organization staff with credentials:verify permission.",
-    ["Open Verify Credentials from the navigation shown for your active staff permissions. The current workflow uses the first active organization assignment that includes credentials:verify.","Enter the certificate ID or verification key exactly as provided.","Select Verify credential and review the returned status and issuer details.","Escalate NOT FOUND, REVOKED or INTEGRITY MISMATCH results to the organization owner before communicating a final decision."],
-    ["Organization selector — identifies which assigned organization’s records may be checked.","Certificate ID or verification key — accepts the credential reference.","Verify credential — performs an organization-scoped integrity check."],
-    "Requires an ACTIVE staff assignment and the explicit credentials:verify permission. If this permission is not assigned, the module is not shown.",
-    ["The assigned institution can verify only its own issued records. Staff assigned to an approved verifier organization can check registry credentials through that organization’s authorized verification workflow.","Do not treat a registry match as independent identity verification or claim an on-chain result when the network is disabled."],
-    ["If the module is missing, ask the owner to grant credentials:verify.","If a reference is not found, confirm the exact reference and selected organization before escalating."])
-];
+  g("overview","Overview",LayoutDashboard,"A quick orientation to your institution staff workspace.","Active staff member at an approved academic institution.",
+    ["Open Overview after signing in to confirm your workspace is available.","Use Organization Credentials to review records for the institution that assigned you.","Only certificates:read and documents:download are currently supported staff permissions.","If your assignment or institution is suspended, access is withdrawn."],
+    ["Overview — provides a quick workspace orientation.","Organization Credentials — opens records available to your staff assignment."],
+    "Staff access is limited to the approved academic institution that created the assignment. Verifier-organization staff workflows are not implemented yet.",
+    ["Never share your login or use another staff member’s credentials.","Do not treat the demo database ledger as a blockchain transaction."],
+    ["If Organization Credentials is missing, ask the owner to check your ACTIVE assignment and certificates:read permission.","If the institution is suspended, contact the Verity System Administrator."]),
+  g("certificates","Organization Credentials",FileCheck2,"Read certificate records and, where assigned, download clean original files for your institution.","Active staff member with certificates:read at an approved academic institution.",
+    ["Open Organization Credentials to view records scoped to the institution that assigned you.","Search by graduate name, certificate ID, institution or programme.","Review the credential status and details needed for your assigned task.","Open document details to check the file name and scan status. Download only when documents:download is also assigned and the scan status is CLEAN."],
+    ["Search credentials — filters records visible to your account.","QR — displays a shareable verification reference when available.","Document details — shows the uploaded file and its scan status.","Download — retrieves the original file only when documents:download is assigned and the document is CLEAN."],
+    "Requires an ACTIVE staff assignment and certificates:read. Document downloads additionally require documents:download. Both permissions are limited to the same approved academic institution.",
+    ["Staff cannot issue, edit or revoke certificates, manage students, approve graduate access requests or administer staff.","A pending, failed or infected scan never permits document download."],
+    ["If no records appear, ask the owner to confirm your assignment and institution status.","If download is denied, ask the owner to verify documents:download and check that the file has a CLEAN scan verdict."])
+];;
 
 export default function RoleGuidelines({ user, organization, onOpen, data, certificates = [], auditEvents = null, onVerify, canDownload = false }) {
   const [expanded, setExpanded] = useState(0);
@@ -153,9 +153,8 @@ export default function RoleGuidelines({ user, organization, onOpen, data, certi
   const isInstitution = user?.role === "EMPLOYER" && organization?.type === "INSTITUTION";
   const isOrganization = user?.role === "EMPLOYER" && organization?.type === "EMPLOYER";
   const canReadAsStaff = staffAssignments.some(x => x.permissions?.includes("certificates:read"));
-  const canVerifyAsStaff = staffAssignments.some(x => x.permissions?.includes("credentials:verify"));
   const modules = isAdmin ? adminGuides : isInstitution ? institutionGuides : isOrganization ? organizationGuides : isStaff
-    ? staffGuides.filter(x => (x.page !== "certificates" || canReadAsStaff) && (x.page !== "verify" || canVerifyAsStaff))
+    ? staffGuides.filter(x => x.page !== "certificates" || canReadAsStaff)
     : graduateGuides;
   const role = isAdmin ? "SYSTEM ADMINISTRATOR" : isInstitution ? "ACADEMIC INSTITUTION" : isOrganization ? "VERIFICATION ORGANIZATION" : isStaff ? "AUTHORIZED STAFF" : "GRADUATE / STUDENT";
   return <div className="guidelines-page">
