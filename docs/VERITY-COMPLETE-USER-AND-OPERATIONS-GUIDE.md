@@ -230,13 +230,14 @@ An organization owner can assign limited access to existing VERITY accounts.
 2. Open **Staff**.
 3. Enter the exact email address used by the staff member's VERITY account.
 4. Select only the permissions required for their job:
-   - `certificates:read` — read certificate records assigned to the organization.
-   - `documents:download` — download documents only when the required graduate consent is valid.
-   - `credentials:verify` — verify credentials within the assigned organization scope.
+   - `certificates:read` — read certificate records belonging to the institution that assigned the staff member.
+   - `documents:download` — download that institution's original certificate documents only when the file has a persisted `CLEAN` scan verdict. This permission also requires `certificates:read`.
+
+Only these two staff permissions are implemented. Staff cannot perform verifier-organization lookups, issue or revoke certificates, approve graduate sharing requests, or administer staff accounts.
 5. Add the staff member and confirm that the assignment is active.
 6. Suspend or remove access when the person changes role or leaves.
 
-Staff permissions do not grant authority to issue or revoke credentials or to administer other staff. The server checks both the active assignment and the requested permission.
+Staff access is restricted to the staff member's own approved academic institution. The database checks the active assignment, the graduate account role, the institution type and approval status, and the requested permission. Suspending the staff assignment or the institution withdraws access. Staff permissions do not grant authority to issue or revoke credentials, approve verifier access, or administer other staff.
 
 ### 5.4 Issue a certificate
 
@@ -303,7 +304,7 @@ An approved Employer organization is a verifier, not an academic issuer.
 6. Check whether the credential is active or revoked.
 7. If the result is not found, do not assume the credential is genuine; confirm the reference with the graduate or issuing institution.
 
-When an authenticated organization performs a lookup, VERITY attributes the verification request to that organization and records relevant activity where configured. Staff verification is restricted to the assigned organization and requires the `credentials:verify` permission.
+When an approved verifier organization performs a lookup, VERITY attributes the verification request to that organization and records relevant activity where configured. Institution staff can read their institution's credential records only with `certificates:read`; staff do not receive verifier-organization lookup permission.
 
 ### 6.3 Request access to the original document
 
@@ -430,9 +431,9 @@ The following sequence describes the intended operational flow:
 
 ### 9.2 Private documents and malware scanning
 
-Certificate documents and organization identity evidence are stored in private storage. The backend submits uploaded files to a ClamAV daemon using its TCP INSTREAM protocol. Only a **CLEAN** verdict permits a signed document download. **INFECTED** and **SCAN_FAILED** files remain blocked.
+Certificate documents and organization identity evidence are stored in private storage. The current ClamAV integration covers **certificate documents only**; organization identity evidence follows a separate workflow and is not scanned by this integration. Before a certificate upload can be released, the backend must complete a ClamAV `PING/PONG` and genuine `VERSION` handshake, then receive an `INSTREAM` verdict. Only a verified terminal **CLEAN** verdict that is successfully persisted permits authorized preview or download. **INFECTED**, **SCAN_FAILED** and **PENDING_SCAN** documents remain blocked.
 
-A scanner host being configured is not proof that scanning is active. The current documented Render Free deployment does not have a ClamAV daemon provisioned. Until a reachable private scanner with current definitions is configured, uploads may remain quarantined as SCAN_FAILED and cannot be downloaded. Do not disable fail-closed behavior to make a document available.
+A scanner host being configured is not proof that scanning is active. If no `CLAMAV_HOST` is configured, certificate uploads remain `PENDING_SCAN`. If ClamAV is configured but the server-only `SUPABASE_SERVICE_ROLE_KEY` is unavailable, the scan verdict cannot be promoted in the database and the document remains quarantined. The administrator rescan endpoint requires both the private scanner and server-only key. The current Render deployment has no ClamAV daemon configured, so live malware scanning is **not active**. Do not disable fail-closed behavior to make a document available.
 
 ### 9.3 Blockchain and the database ledger
 
@@ -473,8 +474,8 @@ VERITY is a software system and does not by itself confer government recognition
 | Graduate cannot find institution | Check the registration code with the institution and submit a membership request. |
 | Membership is pending | The institution must compare the submitted details with its records and approve or reject the request. |
 | Staff cannot see records | Confirm the staff assignment is ACTIVE, the correct organization is assigned and `certificates:read` is enabled. |
-| Staff cannot verify | Confirm the assignment is ACTIVE and `credentials:verify` is enabled for the assigned organization. |
-| Staff cannot download a document | Confirm `documents:download` is enabled, graduate consent is valid and the file has a CLEAN scan verdict. |
+| Staff cannot verify | Institution staff do not have verifier-organization lookup permission. Use the institution's owner account for issuer-side verification, or use an approved verifier-organization account for external verification. |
+| Staff cannot download a document | Confirm the assignment is ACTIVE, the organization is an approved institution, both `certificates:read` and `documents:download` are assigned, and the document has a persisted CLEAN scan verdict. Graduate consent applies to external verifier organizations, not institution staff. |
 | Credential not found | Recheck the certificate ID/key for typing errors and ask the issuer to confirm the reference. Do not infer authenticity from a screenshot. |
 | Credential is revoked | Contact the issuing institution for clarification. Do not treat the record as active. |
 | Original document is unavailable | Check whether the graduate approved access, the 30-day consent is still valid and the malware scan is CLEAN. |
@@ -499,7 +500,7 @@ The documented Supabase setup uses:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 
-The application does not require a direct PostgreSQL connection string, Prisma setup, Supabase secret key or service-role key for the documented setup. Keep environment values in the deployment platform's secret/environment settings, never in committed source code.
+The core application does not require a direct PostgreSQL connection string, Prisma setup, Supabase secret key or service-role key. Optional certificate-scan verdict persistence and administrator rescans require `SUPABASE_SERVICE_ROLE_KEY` as a server-only environment variable. Keep all environment values in the deployment platform's protected settings, never in committed source code or browser code.
 
 ### 11.2 Optional blockchain configuration
 
@@ -507,12 +508,12 @@ Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY` and `CONTRACT_ADDRESS` only when 
 
 ### 11.3 Malware scanner configuration
 
-Configure `CLAMAV_HOST` to a private, reachable ClamAV daemon. Optional settings:
+Configure `CLAMAV_HOST` to a private, reachable ClamAV daemon. Also set `SUPABASE_SERVICE_ROLE_KEY` in the server's protected environment so a verified verdict can be persisted and the administrator rescan endpoint can operate. Optional scanner settings:
 
 - `CLAMAV_PORT` — defaults to `3310`.
 - `CLAMAV_TIMEOUT_MS` — defaults to `60000`.
 
-Keep the daemon private and maintain current virus definitions. Provision adequate memory for the scanner. The health response's scanner-host configuration indicator is not a live scan test.
+Keep the daemon private and maintain current virus definitions. Provision adequate memory for the scanner. The health response distinguishes endpoint configuration from a verified scanner handshake on a real scan. No scan is active merely because an environment variable is present.
 
 ### 11.4 Local development
 
