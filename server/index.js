@@ -106,9 +106,9 @@ async function activeStaffFor(client,userId) {
  const rows=staff||[];
  if(!rows.length)return [];
  const organizationIds=[...new Set(rows.map(x=>x.organizationId))];
- const {data:organizations,error:orgError}=await client.from("Organization").select("id,status").in("id",organizationIds);
+ const {data:organizations,error:orgError}=await client.from("Organization").select("id,status,type").in("id",organizationIds);
  if(orgError)throw orgError;
- const approved=new Set((organizations||[]).filter(x=>x.status==="APPROVED").map(x=>x.id));
+ const approved=new Set((organizations||[]).filter(x=>x.status==="APPROVED"&&x.type==="INSTITUTION").map(x=>x.id));
  return rows.filter(x=>approved.has(x.organizationId));
 }
 const staffForOrganization=(staff,organizationId)=>staff.find(x=>x.organizationId===organizationId)||null;
@@ -117,7 +117,15 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
   if(error) throw error;
 }
 
-app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),malwareScanning:{provider:"ClamAV",endpointConfigured:Boolean(process.env.CLAMAV_HOST?.trim()),scannerConnection:"not_verified",rescanAvailable:Boolean(process.env.CLAMAV_HOST?.trim()&&SUPABASE_SERVER_KEY),enforcement:"quarantine_until_clean",cleanVerdictRequired:true}}));
+const scannerRuntime = { lastVerifiedAt: null, version: null, lastFailure: null };
+async function scanCertificateBuffer(bytes) {
+  const result = await scanBuffer(bytes);
+  if (result.scannerVerified) { scannerRuntime.lastVerifiedAt = new Date().toISOString(); scannerRuntime.version = result.scannerVersion || null; scannerRuntime.lastFailure = null; }
+  else if (result.status === "SCAN_FAILED") scannerRuntime.lastFailure = result.detail || "scanner_failed";
+  return result;
+}
+
+app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),malwareScanning:{provider:"ClamAV",endpointConfigured:Boolean(process.env.CLAMAV_HOST?.trim()),scannerConnection:scannerRuntime.lastVerifiedAt?"verified_on_last_scan":process.env.CLAMAV_HOST?.trim()?"not_verified":"not_configured",scannerVersion:scannerRuntime.version,lastVerifiedAt:scannerRuntime.lastVerifiedAt,lastFailure:scannerRuntime.lastFailure,rescanAvailable:Boolean(process.env.CLAMAV_HOST?.trim()&&SUPABASE_SERVER_KEY),cleanVerdictPromotionAvailable:Boolean(SUPABASE_SERVER_KEY),enforcement:"quarantine_until_clean",cleanVerdictRequired:true}}));
 
 app.post("/api/auth/register",run(async(q,s)=>{
   const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
@@ -165,14 +173,14 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
 
 const staffPermissionArray=z.array(z.enum(STAFF_PERMISSIONS)).min(1).refine(isValidStaffPermissions,{message:"Only certificates:read and documents:download are supported; document downloads require certificate-read access."});
 app.get("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
- const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({staff:[]});
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({staff:[]});if(org.type!=="INSTITUTION")return s.status(403).json({error:"Organization staff access is currently available to academic institutions only. Verifier-organization staff permissions require a dedicated verification permission."});
  const {data,error:e}=await q.supabase.from("OrganizationStaff").select("id,userId,permissions,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;
  const ids=(data||[]).map(x=>x.userId);const {data:users,error:ue}=ids.length?await q.supabase.from("User").select("id,fullName,email,role").in("id",ids):{data:[],error:null};if(ue)throw ue;
  s.json({staff:(data||[]).map(x=>({...x,user:(users||[]).find(u=>u.id===x.userId)||null})),organizationStatus:org.status});
 }));
 app.post("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({email:z.string().email(),permissions:staffPermissionArray}).parse(q.body);
- const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization can add staff."});
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only an approved academic institution can add staff. Verifier-organization staff permissions are not implemented yet."});
  const {data:person,error:pe}=await q.supabase.from("User").select("id,email,role").ilike("email",b.email.trim()).maybeSingle();if(pe)throw pe;if(!person)return s.status(404).json({error:"This person must create a Verity account before you can add them."});if(person.id===q.user.id)return s.status(400).json({error:"The organization owner is already an administrator."});if(person.role==="ADMIN"||person.role==="EMPLOYER")return s.status(400).json({error:"This account cannot be assigned as organization staff."});
  const {data:existing,error:existingError}=await q.supabase.from("OrganizationStaff").select("id").eq("organizationId",org.id).eq("userId",person.id).maybeSingle();if(existingError)throw existingError;
  let staffData,staffError;
@@ -188,7 +196,7 @@ app.post("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
 }));
 app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({status:z.enum(["ACTIVE","SUSPENDED"]),permissions:staffPermissionArray.optional()}).parse(q.body);
- const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});if(org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization can manage staff assignments."});
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});if(org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only an approved academic institution can manage staff assignments."});
  const patch={status:b.status,updatedAt:new Date().toISOString()};if(b.permissions)patch.permissions=b.permissions;
  const {data,error:e}=await q.supabase.from("OrganizationStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(e)throw e;
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
@@ -406,15 +414,24 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   const safeName=String(q.headers["x-file-name"]||("certificate."+spec.ext)).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("certificate."+spec.ext);
   const fileId=crypto.randomUUID(),storagePath=`${org.id}/${cert.id}/${fileId}.${spec.ext}`;
   const sha256=digest(bytes);
-  const scan=await scanBuffer(bytes);
+  const scan=await scanCertificateBuffer(bytes);
   const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});
   if(uploadError)throw uploadError;
-  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:scan.status};
+  const metadata={id:fileId,certificateId:cert.id,organizationId:org.id,storagePath,originalName:safeName,mimeType:mime,sizeBytes:bytes.length,sha256,uploadedBy:q.user.id,scanStatus:"PENDING_SCAN"};
   const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert(metadata).select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").single();
   if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
-  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256,scanStatus:scan.status,scannerConfigured:scan.scannerConfigured});
-  const message=scan.status==="CLEAN"?"Document scanned by ClamAV and cleared for authorized access.":scan.status==="INFECTED"?"A malware signature was detected. The document is quarantined and cannot be opened.":"Document stored privately and quarantined until a successful malware scan is available.";
-  s.status(201).json({document:doc,message,scan:{status:scan.status,scannerConfigured:scan.scannerConfigured}});
+  let persistedScanStatus="PENDING_SCAN";
+  if(scan.status!=="PENDING_SCAN"&&SUPABASE_SERVER_KEY){
+    try{
+      const service=makeServiceClient();
+      const {error:promoteError}=await service.from("CertificateDocument").update({scanStatus:scan.status}).eq("id",doc.id).eq("scanStatus","PENDING_SCAN");
+      if(promoteError)throw promoteError;
+      persistedScanStatus=scan.status;
+    }catch(promoteError){console.error("Could not persist the ClamAV verdict; certificate remains quarantined:",promoteError.message);}
+  }
+  await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",doc.id,{certificateId:cert.certificateId,organizationId:org.id,sha256,scanStatus:persistedScanStatus,scannerResult:scan.status,scannerVerified:scan.scannerVerified,scannerVersion:scan.scannerVersion||null,scannerConfigured:scan.scannerConfigured});
+  const message=persistedScanStatus==="CLEAN"?"ClamAV identity was verified and the document returned CLEAN. It is now eligible for authorized access.":scan.status==="INFECTED"?"ClamAV detected a malware signature. The document remains quarantined.":scan.status==="CLEAN"?"ClamAV returned CLEAN, but the server-only scan-state key is unavailable or the verdict could not be saved. The document remains quarantined.":scan.status==="SCAN_FAILED"?"The scanner could not provide a verified clean verdict. The document remains quarantined.":"Document stored privately and quarantined until a verified ClamAV scan is available.";
+  s.status(201).json({document:{...doc,scanStatus:persistedScanStatus},message,scan:{status:scan.status,persistedStatus:persistedScanStatus,scannerConfigured:scan.scannerConfigured,scannerVerified:scan.scannerVerified,scannerVersion:scan.scannerVersion||null}});
 }));
 
 app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUATE"),run(async(q,s)=>{
@@ -715,7 +732,7 @@ async function start(){
   const chain=await connectChain();
   console.log("Supabase Auth and Data API configured.");
   console.log("Blockchain:",chain.enabled?"connected":"demo database ledger");
-  console.log("Certificate malware scanning:",process.env.CLAMAV_HOST?.trim()?"ClamAV host configured; upload verdicts are still required before access.":"ClamAV not configured; certificate uploads remain PENDING_SCAN.");
+  console.log("Certificate malware scanning:",process.env.CLAMAV_HOST?.trim()?"ClamAV endpoint configured; identity is verified on each scan and only server-persisted CLEAN verdicts release quarantine.":"ClamAV not configured; certificate uploads remain PENDING_SCAN.");
   app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
 }
 start().catch(e=>{console.error(e);process.exit(1);});
