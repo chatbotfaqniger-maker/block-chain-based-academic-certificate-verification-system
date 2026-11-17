@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [feature/verity-cinematic-showcase-guides]
+    branches: [main, feature/verity-cinematic-showcase-guides]
 
 permissions:
   contents: read
