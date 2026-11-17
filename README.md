@@ -4,11 +4,13 @@ A Docker-first academic credential issuance and verification prototype.
 
 ## Supabase setup
 
-Verity now uses Supabase Auth and the Supabase Data API. It does **not** need a PostgreSQL connection string, database password, Prisma setup, Supabase secret key, or service-role key.
+Verity uses Supabase Auth and the Supabase Data API. Core authentication and credential workflows do **not** need a PostgreSQL connection string, database password, Prisma setup, Supabase secret key, or service-role key.
 
-Configure only:
+Configure for the core application:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
+
+Optional certificate malware-scan verdict persistence and administrator rescans additionally require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Render environment variable. Never place that key in frontend configuration or committed source code.
 
 The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
 
@@ -31,7 +33,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Role-aware access (System Admin, Organization Admin, Student / Graduate)
 - Role-filtered User Guidelines with dedicated module walkthroughs, action references, permissions, warnings and troubleshooting
 - 90-second cinematic in-app VERITY product film using live dashboard totals and an interactive credential verification action
-- Assignment-authorized staff credential verification with an explicit `credentials:verify` permission and audit event; institution checks are issuer-scoped and verifier-organization checks are attributed to the assigned organization
+- Institution staff access scoped to their own approved institution, with only `certificates:read` and `documents:download` implemented; document downloads require both permissions and never grant issuance or revocation authority
 - Organization registration with System Admin approval
 - Organization-specific student / employee membership and registration codes
 - Student institution-link requests and organization approval workflow
@@ -71,15 +73,15 @@ Certificate-document uploads use an optional ClamAV daemon over its TCP INSTREAM
 - A timeout, connection error or unexpected daemon response sets `SCAN_FAILED`.
 - Only `CLEAN` certificate documents can be previewed or downloaded. Non-clean documents remain in the private storage bucket and are blocked by both API checks and Storage RLS.
 
-Configure `CLAMAV_HOST` to the private hostname of a reachable ClamAV daemon, and optionally `CLAMAV_PORT` (default `3310`) and `CLAMAV_TIMEOUT_MS` (default `60000`). Keep the daemon on a private network, update its signature definitions, and do not expose its TCP port to the public internet. The `/api/health` response reports whether a host is configured; it does not claim that the daemon is reachable or that a scan has passed.
+Configure `CLAMAV_HOST` to the private hostname of a reachable ClamAV daemon, and optionally `CLAMAV_PORT` (default `3310`) and `CLAMAV_TIMEOUT_MS` (default `60000`). To persist a scan verdict and enable administrator rescans, also set `SUPABASE_SERVICE_ROLE_KEY` only in the Render server environment. Keep the daemon on a private network, update its signature definitions, and do not expose its TCP port to the public internet. The `/api/health` response distinguishes a configured endpoint from a scanner verified during an actual scan.
 
-The current Render web service is on the Free plan and no ClamAV daemon has been provisioned. The fail-closed adapter and quarantine enforcement are implemented, but live malware scanning is **not active** until a private ClamAV service is provisioned, `CLAMAV_HOST` is configured, and a real upload receives a successful `CLEAN` verdict. Organization identity evidence is a separate upload workflow and is not covered by this certificate-document scanner integration.
+The current Render web service is on the Free plan and no ClamAV daemon has been provisioned. The fail-closed adapter and quarantine enforcement are implemented, but live malware scanning is **not active**: certificate uploads remain `PENDING_SCAN` until a private ClamAV service is provisioned, the server-only key is configured, and a real upload receives a verified `CLEAN` verdict that is successfully persisted. Organization identity evidence is a separate upload workflow and is not covered by this certificate-document scanner integration.
 
 ## Security notes
 
-- Never put Supabase secret or service-role keys in this project.
+- Never commit Supabase secret or service-role keys or expose them to browser code. If enabling certificate malware scanning, keep `SUPABASE_SERVICE_ROLE_KEY` only in the server's protected Render environment.
 - The publishable key is designed for client-facing use and is safe only with the included Row Level Security policies.
-- Keep email confirmation enabled for the designated administrator account.
+- Email-confirmation behavior is controlled in the Supabase Auth dashboard; Verity does not override that setting.
 - Never store student personal data on a public blockchain.
 - This prototype does not imply legal recognition, university adoption, or production readiness.
 
