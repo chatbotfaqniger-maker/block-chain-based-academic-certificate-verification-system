@@ -174,8 +174,17 @@ app.post("/api/organization/staff",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({email:z.string().email(),permissions:staffPermissionArray}).parse(q.body);
  const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization can add staff."});
  const {data:person,error:pe}=await q.supabase.from("User").select("id,email,role").ilike("email",b.email.trim()).maybeSingle();if(pe)throw pe;if(!person)return s.status(404).json({error:"This person must create a Verity account before you can add them."});if(person.id===q.user.id)return s.status(400).json({error:"The organization owner is already an administrator."});if(person.role==="ADMIN"||person.role==="EMPLOYER")return s.status(400).json({error:"This account cannot be assigned as organization staff."});
- const {data,error:ie}=await q.supabase.from("OrganizationStaff").upsert({id:crypto.randomUUID(),organizationId:org.id,userId:person.id,permissions:b.permissions,status:"ACTIVE",createdBy:q.user.id,updatedAt:new Date().toISOString()},{onConflict:"organizationId,userId"}).select().single();if(ie)throw ie;
- await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_ADDED","OrganizationStaff",data.id,{organizationId:org.id,permissions:b.permissions});s.status(201).json({staff:data});
+ const {data:existing,error:existingError}=await q.supabase.from("OrganizationStaff").select("id").eq("organizationId",org.id).eq("userId",person.id).maybeSingle();if(existingError)throw existingError;
+ let data,error;
+ if(existing){
+   const result=await q.supabase.from("OrganizationStaff").update({permissions:b.permissions,status:"ACTIVE",updatedAt:new Date().toISOString()}).eq("id",existing.id).eq("organizationId",org.id).select().single();
+   data=result.data;error=result.error;
+ }else{
+   const result=await q.supabase.from("OrganizationStaff").insert({id:crypto.randomUUID(),organizationId:org.id,userId:person.id,permissions:b.permissions,status:"ACTIVE",createdBy:q.user.id,updatedAt:new Date().toISOString()}).select().single();
+   data=result.data;error=result.error;
+ }
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,existing?"ORGANIZATION_STAFF_REACTIVATED":"ORGANIZATION_STAFF_ADDED","OrganizationStaff",data.id,{organizationId:org.id,permissions:b.permissions});s.status(existing?200:201).json({staff:data});
 }));
 app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({status:z.enum(["ACTIVE","SUSPENDED"]),permissions:staffPermissionArray.optional()}).parse(q.body);
