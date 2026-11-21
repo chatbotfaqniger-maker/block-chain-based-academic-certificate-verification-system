@@ -63,7 +63,7 @@ const bytes32 = value => {
 };
 
 export async function issueOnChain(certificateId, digest) {
-  if (!contract) return { mode: "SUPABASE_PRIMARY", txHash: null };
+  if (!contract) return { mode: "SUPABASE_LEDGER", txHash: null };
   const tx = await contract.issueCertificate(certificateKey(certificateId), bytes32(digest));
   const receipt = await tx.wait();
   if (receipt.status !== 1) throw new Error("The blockchain rejected the certificate registration.");
@@ -71,7 +71,7 @@ export async function issueOnChain(certificateId, digest) {
 }
 
 export async function revokeOnChain(certificateId, reason) {
-  if (!contract) return { mode: "DEMO_DATABASE_LEDGER", txHash: null };
+  if (!contract) return { mode: "SUPABASE_LEDGER", txHash: null };
   const tx = await contract.revokeCertificate(certificateKey(certificateId), reason);
   const receipt = await tx.wait();
   if (receipt.status !== 1) throw new Error("The blockchain rejected the revocation.");
