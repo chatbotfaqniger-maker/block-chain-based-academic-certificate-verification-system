@@ -11,11 +11,16 @@ const ABI = [
 
 let provider;
 let contract;
-let status = { enabled: false, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: "Blockchain credentials are not configured." };
+let status = { enabled: false, mode: "SUPABASE_PRIMARY", network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: "Blockchain is reserved for a future optional integration. Supabase is the active system of record." };
 
 export async function connectChain() {
   contract = undefined;
   provider = undefined;
+  const mode = String(process.env.VERITY_BLOCKCHAIN_MODE || "disabled").trim().toLowerCase();
+  if (mode !== "enabled") {
+    status = { enabled: false, mode: "SUPABASE_PRIMARY", network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: "Blockchain is not active yet. VERITY operates fully on Supabase; blockchain anchoring is a future optional enhancement." };
+    return status;
+  }
   const { CHAIN_RPC_URL: rpc, CHAIN_PRIVATE_KEY: key, CONTRACT_ADDRESS: address } = process.env;
   if (!rpc || !key || !address) {
     status = { enabled: false, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: "Add the Polygon Amoy RPC URL, project wallet private key and deployed contract address in Render environment settings." };
@@ -35,12 +40,12 @@ export async function connectChain() {
     const signer = await wallet.getAddress();
     const authorized = await contract.authorizedIssuers(signer);
     if (!authorized) throw new Error("The Render signing wallet is not an authorized issuer in the deployed contract.");
-    status = { enabled: true, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address, signer };
+    status = { enabled: true, mode: "BLOCKCHAIN_ENABLED", network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address, signer };
     return status;
   } catch (error) {
     contract = undefined;
     provider = undefined;
-    status = { enabled: false, network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: error.message };
+    status = { enabled: false, mode: "SUPABASE_PRIMARY", network: "Polygon Amoy", chainId: EXPECTED_CHAIN_ID, address: null, signer: null, reason: error.message };
     console.error("Blockchain connection failed:", error.message);
     return status;
   }
@@ -58,7 +63,7 @@ const bytes32 = value => {
 };
 
 export async function issueOnChain(certificateId, digest) {
-  if (!contract) return { mode: "DEMO_DATABASE_LEDGER", txHash: null };
+  if (!contract) return { mode: "SUPABASE_PRIMARY", txHash: null };
   const tx = await contract.issueCertificate(certificateKey(certificateId), bytes32(digest));
   const receipt = await tx.wait();
   if (receipt.status !== 1) throw new Error("The blockchain rejected the certificate registration.");
@@ -74,7 +79,7 @@ export async function revokeOnChain(certificateId, reason) {
 }
 
 export async function verifyOnChain(certificateId) {
-  if (!contract) return { enabled: false };
+  if (!contract) return { enabled: false, mode: "SUPABASE_PRIMARY" };
   try {
     const [digest, revoked, issuedAt, issuer] = await contract.verifyCertificate(certificateKey(certificateId));
     return { enabled: true, exists: true, digest: digest.slice(2).toLowerCase(), revoked, issuedAt: Number(issuedAt), issuer, chainId: EXPECTED_CHAIN_ID, contractAddress: contract.target };
