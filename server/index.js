@@ -110,6 +110,18 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
 
 app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
 
+app.get("/api/directory/organizations",run(async(q,s)=>{
+ const term=String(q.query.search||"").trim().slice(0,100);
+ const type=String(q.query.type||"ALL").toUpperCase();
+ if(!["ALL","INSTITUTION","EMPLOYER"].includes(type))return s.status(400).json({error:"Invalid organization type filter."});
+ const db=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):makeClient();
+ let query=db.from("Organization").select("name,type,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody,verifiedAt").eq("status","APPROVED").order("name",{ascending:true}).limit(200);
+ if(type!=="ALL")query=query.eq("type",type);
+ if(term)query=query.ilike("name","%"+term.replace(/[%,]/g," ")+"%");
+ const {data,error}=await query;if(error)throw error;
+ s.setHeader("Cache-Control","public, max-age=60, stale-while-revalidate=300");
+ s.json({organizations:(data||[]).map(o=>({name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"}))});
+}));
 app.post("/api/auth/register",run(async(q,s)=>{
   const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
   const client=makeClient();
