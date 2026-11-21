@@ -212,7 +212,7 @@ app.get("/api/admin/organizations/:id/evidence/:evidenceId",auth,roles("ADMIN"),
   const {data:file,error:fe}=await q.supabase.storage.from("verity-organization-evidence").download(e.storagePath);if(fe)throw fe;
   const evidenceBytes=Buffer.from(await file.arrayBuffer());
   if(!e.sha256||digest(evidenceBytes)!==e.sha256)return s.status(409).json({error:"Evidence integrity check failed. The stored file does not match its registered SHA-256 fingerprint."});
-  const {data:link,error:le}=await q.supabase.storage.from("verity-organization-evidence").createSignedUrl(e.storagePath,60,{download:e.originalName});if(le)throw le;
+  const {data:link,error:le}=await q.supabase.storage.from("verity-organization-evidence").createSignedUrl(e.storagePath,60);if(le)throw le;
  await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_REVIEWED","OrganizationEvidence",e.id,{organizationId:e.organizationId});
  s.json({url:link.signedUrl,expiresIn:60,originalName:e.originalName});
 }));
