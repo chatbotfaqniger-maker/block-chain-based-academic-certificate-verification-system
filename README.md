@@ -10,7 +10,7 @@ Configure for the core application:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 
-Optional certificate malware-scan verdict persistence and administrator rescans additionally require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Render environment variable. Never place that key in frontend configuration or committed source code.
+Certificate uploads do not require a scanner service or Supabase service-role key. The server uses the Supabase Publishable Key with the signed-in user's access token; never place secret or service-role keys in frontend configuration or committed source code.
 
 The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
 
@@ -57,31 +57,26 @@ The full user and operations manual is available here:
 
 **[VERITY Complete User and Operations Guide](docs/VERITY-COMPLETE-USER-AND-OPERATIONS-GUIDE.md)**
 
-It covers graduate onboarding and credential access, institution approval and issuance, employer verification and graduate consent, staff permissions, System Administrator workflows, the end-to-end credential lifecycle, security and privacy, blockchain and database-ledger modes, malware-scanning limitations, troubleshooting, deployment configuration and a production-readiness checklist.
+It covers graduate onboarding and credential access, institution approval and issuance, employer verification and graduate consent, staff permissions, System Administrator workflows, the end-to-end credential lifecycle, document security, troubleshooting, deployment configuration and a production-readiness checklist.
 
 ## Blockchain status
 
 The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY`, and `CONTRACT_ADDRESS` to enable on-chain operations. Without them, Verity clearly labels its mode as a demo database ledger; it does not claim that public-chain transactions are occurring.
 
-## Antivirus scanning
+## Document security
 
-Certificate-document uploads use an optional ClamAV daemon over its TCP INSTREAM protocol. The application fails closed:
+VERITY does **not** perform antivirus or malware scanning. Certificate and organization-evidence uploads are restricted to PDF, JPEG and PNG, checked against their file signatures, limited to 10 MB and stored in private Supabase Storage buckets. VERITY calculates a SHA-256 fingerprint at upload and compares the stored file against that fingerprint before preview or download. A mismatch or missing fingerprint blocks release.
 
-- A ClamAV `OK` verdict is the only result that sets `scanStatus=CLEAN`.
-- A ClamAV `FOUND` verdict sets `INFECTED`.
-- If no scanner host is configured, the document remains `PENDING_SCAN`.
-- A timeout, connection error or unexpected daemon response sets `SCAN_FAILED`.
-- Only `CLEAN` certificate documents can be previewed or downloaded. Non-clean documents remain in the private storage bucket and are blocked by both API checks and Storage RLS.
+Access remains restricted by authenticated role, institution ownership, staff permissions, organization approval and graduate consent. Employer access to an original certificate requires an approved, unexpired graduate grant. Employer downloads are generated as watermarked PDF copies. Signed preview links are short-lived.
 
-Configure `CLAMAV_HOST` to the private hostname of a reachable ClamAV daemon, and optionally `CLAMAV_PORT` (default `3310`) and `CLAMAV_TIMEOUT_MS` (default `60000`). To persist a scan verdict and enable administrator rescans, also set `SUPABASE_SERVICE_ROLE_KEY` only in the Render server environment. Keep the daemon on a private network, update its signature definitions, and do not expose its TCP port to the public internet. The `/api/health` response distinguishes a configured endpoint from a scanner verified during an actual scan.
-
-The current Render web service is on the Free plan and no ClamAV daemon has been provisioned. The fail-closed adapter and quarantine enforcement are implemented, but live malware scanning is **not active**: certificate uploads remain `PENDING_SCAN` until a private ClamAV service is provisioned, the server-only key is configured, and a real upload receives a verified `CLEAN` verdict that is successfully persisted. Organization identity evidence is a separate upload workflow and is not covered by this certificate-document scanner integration.
+**Required database update:** apply `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` in the Supabase SQL Editor before testing document previews and downloads. It removes the obsolete `CLEAN` scan-status predicates from the two certificate read policies while retaining private-bucket, tenant, staff and graduate-consent checks. The migration is additive to the current access-policy definitions; do not make the buckets public.
 
 ## Security notes
 
 - Never commit Supabase secret or service-role keys or expose them to browser code. If enabling certificate malware scanning, keep `SUPABASE_SERVICE_ROLE_KEY` only in the server's protected Render environment.
 - The publishable key is designed for client-facing use and is safe only with the included Row Level Security policies.
 - Email-confirmation behavior is controlled in the Supabase Auth dashboard; Verity does not override that setting.
+- VERITY does not scan uploaded files for malware. File-signature checks and SHA-256 integrity checks are not antivirus protection; accept uploads only from trusted sources and use endpoint protection on the systems handling them.
 - Never store student personal data on a public blockchain.
 - This prototype does not imply legal recognition, university adoption, or production readiness.
 
@@ -96,7 +91,7 @@ The current Render web service is on the Free plan and no ClamAV daemon has been
 7. Only approved organizations whose type is INSTITUTION can issue and revoke academic credentials. Employer-type organizations are verifiers and cannot issue certificates.
 8. Each credential receives a unique certificate ID, high-entropy verification key and QR verification URL. Institution admins must upload the official certificate document during registration.
 9. Approved employer-type verification organizations can search by certificate ID or verification key. Verity records the organization making each authenticated lookup.
-10. A verifier must request permission from the linked graduate before viewing the original certificate document. Graduate approval expires after 30 days. Original documents remain private and are only served after a CLEAN scan result.
+10. A verifier must request permission from the linked graduate before viewing the original certificate document. Graduate approval expires after 30 days. Original documents remain private and are released only while the approved consent is valid and the stored file passes its SHA-256 integrity check.
 11. Public QR / key verification displays limited credential information and does not automatically reveal the private original document.
 
 The database keeps organization profiles and memberships in separate tables and uses Row Level Security to scope records. The existing EMPLOYER database enum value represents the Organization Admin role; ADMIN remains reserved for the Verity platform administrator.
