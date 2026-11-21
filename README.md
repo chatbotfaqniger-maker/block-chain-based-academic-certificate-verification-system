@@ -73,7 +73,7 @@ Access remains restricted by authenticated role, institution ownership, staff pe
 
 ## Security notes
 
-- Never commit Supabase secret or service-role keys or expose them to browser code. If enabling certificate malware scanning, keep `SUPABASE_SERVICE_ROLE_KEY` only in the server's protected Render environment.
+- Never commit Supabase secret or service-role keys or expose them to browser code. VERITY document workflows use the signed-in user session and do not require a service-role key.
 - The publishable key is designed for client-facing use and is safe only with the included Row Level Security policies.
 - Email-confirmation behavior is controlled in the Supabase Auth dashboard; Verity does not override that setting.
 - VERITY does not scan uploaded files for malware. File-signature checks and SHA-256 integrity checks are not antivirus protection; accept uploads only from trusted sources and use endpoint protection on the systems handling them.
