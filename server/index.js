@@ -65,6 +65,12 @@ async function ensureStudentMembership(client, authUser, profile) {
  if(error) console.warn("Student institution-link request was not accepted:",error.message);
 }
 const run = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
+async function publicIssuerDetails(client, certificateId) {
+ const {data:cert,error:ce}=await client.from("Certificate").select("organizationId").eq("certificateId",certificateId).maybeSingle();if(ce)throw ce;if(!cert?.organizationId)return null;
+ const {data:o,error}=await client.from("Organization").select("name,type,status,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody,verifiedAt").eq("id",cert.organizationId).eq("status","APPROVED").maybeSingle();if(error)throw error;if(!o)return null;
+ return {name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"};
+}
+
 app.set("trust proxy",1);
 app.use(helmet({contentSecurityPolicy:false}));
 app.use(cors({origin:process.env.CORS_ORIGIN?.split(",")||true}));
@@ -436,7 +442,8 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   await audit(q.supabase,q.user.id,"INSTITUTION_CERTIFICATE_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
-  s.json({verified,status,message:verified?"This certificate matches the academic record issued by your institution.":status==="REVOKED"?"Your institution has revoked this certificate.":"The certificate record's integrity check did not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+  const issuer=await publicIssuerDetails(q.supabase,c.certificateId);
+  s.json({verified,status,issuer,message:verified?"This certificate matches the academic record issued by your institution.":status==="REVOKED"?"Your institution has revoked this certificate.":"The certificate record's integrity check did not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
 app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
@@ -455,7 +462,8 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   await audit(q.supabase,q.user.id,"INSTITUTION_CERTIFICATE_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
-  s.json({verified,status,message:verified?"This certificate matches the academic record issued by your institution.":status==="REVOKED"?"Your institution has revoked this certificate.":"The certificate record's integrity check did not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+  const issuer=await publicIssuerDetails(q.supabase,c.certificateId);
+  s.json({verified,status,issuer,message:verified?"This certificate matches the academic record issued by your institution.":status==="REVOKED"?"Your institution has revoked this certificate.":"The certificate record's integrity check did not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
 app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
@@ -470,7 +478,8 @@ app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
-  s.json({verified,status,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
+  const issuer=await publicIssuerDetails(q.supabase,c.certificateId);
+  s.json({verified,status,issuer,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Demo database ledger; on-chain verification is not active."}});
 }));
 
 app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,res)=>{
@@ -606,7 +615,8 @@ app.post("/api/verify",run(async(q,s)=>{
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
-  s.json({verified,status,message:verified?(chain.enabled?"Credential record and blockchain fingerprint match.":"Credential is registered in the issuing institution's Verity record; public-chain integrity checking is not active.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_FINGERPRINT_MATCH":"DATABASE_LEDGER_ONLY",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Demo database ledger; configure Polygon Amoy RPC, project signer and deployed contract for on-chain verification."}});
+  const issuer=await publicIssuerDetails((SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):client),c.certificateId);
+  s.json({verified,status,issuer,message:verified?(chain.enabled?"Credential record and blockchain fingerprint match.":"Credential is registered in the issuing institution's Verity record; public-chain integrity checking is not active.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_FINGERPRINT_MATCH":"DATABASE_LEDGER_ONLY",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Demo database ledger; configure Polygon Amoy RPC, project signer and deployed contract for on-chain verification."}});
 }));
 
 app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
