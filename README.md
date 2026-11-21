@@ -59,9 +59,15 @@ The full user and operations manual is available here:
 
 It covers graduate onboarding and credential access, institution approval and issuance, employer verification and graduate consent, staff permissions, System Administrator workflows, the end-to-end credential lifecycle, document security, troubleshooting, deployment configuration and a production-readiness checklist.
 
-## Blockchain status
+## Supabase-first, blockchain-ready architecture
 
-The Solidity contract is in `contracts/CertificateRegistry.sol`. Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY`, and `CONTRACT_ADDRESS` to enable on-chain operations. Without them, Verity clearly labels its mode as a demo database ledger; it does not claim that public-chain transactions are occurring.
+Supabase is VERITY's active system of record and the only required platform for normal operation today. Authentication, organization onboarding and approval, certificate issuance, graduate access, sharing permissions, public verification, document storage, and audit events continue to work without an RPC endpoint, wallet, gas, smart contract, or blockchain credentials.
+
+Blockchain is a planned, optional verification/anchoring layer. It must never be required for signup, login, certificate issuance, QR generation, graduate sharing, or Supabase-based verification. Existing certificates without a chain transaction remain fully verifiable from their Supabase records and SHA-256 integrity checks, even after a future blockchain integration is introduced. Do not publish student personal information or original certificate documents on a public chain.
+
+The Solidity contract and EVM adapter are retained for a future implementation. The adapter is disabled by default. The future activation work must add a non-blocking, retryable anchoring workflow, persist anchor status/transaction metadata, and verify chain anchors only for certificates that actually have one. A chain outage, missing gas, or unconfirmed transaction must not interrupt core VERITY workflows.
+
+To keep blockchain disabled (the current supported operating mode), leave `VERITY_BLOCKCHAIN_MODE=disabled`. Do not enable the future adapter in production until the asynchronous anchoring workflow, failure/retry handling, key custody, and backward-compatibility tests have been implemented and approved.
 
 ## Document security
 
