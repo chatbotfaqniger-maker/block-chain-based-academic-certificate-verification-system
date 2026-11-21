@@ -624,7 +624,7 @@ app.post("/api/verify",run(async(q,s)=>{
   const verified=c.status==="ACTIVE"&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
   const issuer=await publicIssuerDetails((SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):client),c.certificateId);
-  s.json({verified,status,issuer,message:verified?(chain.enabled?"Credential record and blockchain fingerprint match.":"Credential is registered in the issuing institution's Verity record; public-chain integrity checking is not active.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_FINGERPRINT_MATCH":"DATABASE_LEDGER_ONLY",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Demo database ledger; configure Polygon Amoy RPC, project signer and deployed contract for on-chain verification."}});
+  s.json({verified,status,issuer,message:verified?(chain.enabled?"Credential record and blockchain fingerprint match.":"Credential is registered in the issuing institution's Verity record; public-chain integrity checking is not active.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_AND_DATABASE_LEDGER_MATCH":ledgerOk?"SUPABASE_HASH_CHAIN_VALID":"DATABASE_LEDGER_INTEGRITY_FAILED",ledger:{valid:ledgerOk,eventCount:Number(ledger?.event_count||0),latestEvent:ledger?.latest_event||null,headHash:ledger?.head_hash||null},certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Supabase append-only certificate ledger with SHA-256 hash chaining. Polygon anchoring remains an optional future enhancement."}});
 }));
 
 app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
@@ -689,7 +689,8 @@ async function start(){
   if(!configured) throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required.");
   const chain=await connectChain();
   console.log("Supabase Auth and Data API configured.");
-  console.log("Blockchain:",chain.enabled?"connected":"demo database ledger");
+  console.log("Blockchain:",chain.enabled?"connected (optional Polygon anchor)":"disabled (optional future layer)");
+  console.log("Certificate ledger: Supabase append-only SHA-256 hash chain.");
   console.log("Document security: private storage, file-signature validation and SHA-256 integrity checks; antivirus scanning is disabled.");
   app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
 }
