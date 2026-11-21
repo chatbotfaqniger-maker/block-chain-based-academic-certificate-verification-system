@@ -35,6 +35,13 @@ const canonical = c => JSON.stringify({
   awardDate:new Date(c.awardDate).toISOString()
 });
 const safe = u => ({id:u.id,fullName:u.fullName,email:u.email,role:u.role,institution:u.institution});
+async function verifyCertificateChain(certificate) {
+  if (!certificate?.txHash || !certificate?.chainId || !certificate?.contractAddress) {
+    return { enabled: false, mode: "SUPABASE_PRIMARY", reason: "This credential is verified against its Supabase record; no blockchain anchor is attached." };
+  }
+  return verifyOnChain(certificate.certificateId);
+}
+
 async function ensureOrganization(client, authUser, profile) {
  if(profile.role!=="EMPLOYER") return null;
  const {data:found,error}=await client.from("Organization").select("*").eq("ownerId",profile.id).maybeSingle();
@@ -438,7 +445,7 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   if(error)throw error;
   if(!c){const result=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
   if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This certificate reference was not found in your institution's own issuance records."});
-  const recomputed=org.type==="INSTITUTION"?digest(canonical(c)):null,dbOk=org.type!=="INSTITUTION"||recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const recomputed=org.type==="INSTITUTION"?digest(canonical(c)):null,dbOk=org.type!=="INSTITUTION"||recomputed===c.digest,chain=await verifyCertificateChain(c);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
@@ -458,7 +465,7 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   if(error)throw error;
   if(!c){const result=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
   if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This certificate reference was not found in your institution's own issuance records."});
-  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyCertificateChain(c);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
@@ -475,7 +482,7 @@ app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data,error}=await q.supabase.rpc("lookup_verity_certificate_for_org",{p_certificate_id:b.certificateId.trim()});
   if(error)throw error;
   if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the Verity registry."});
-  const c=data,recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyOnChain(c.certificateId);
+  const c=data,recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyCertificateChain(c);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
@@ -612,7 +619,7 @@ app.post("/api/verify",run(async(q,s)=>{
   const {data,error}=await client.rpc("lookup_verity_certificate",{p_certificate_id:b.certificateId.trim(),p_verifier_name:b.verifierName||null,p_verifier_org:b.verifierOrg||null});
   if(error) throw error;
   if(!data?.found) return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID exists in the registry."});
-  const c=data,chain=await verifyOnChain(c.certificateId);
+  const c=data,chain=await verifyCertificateChain(c);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
@@ -641,7 +648,7 @@ app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
       if(!record?.found){
         verification={verified:false,status:"NOT_FOUND",message:"The live registry did not return this credential."};
       }else{
-        const chain=await verifyOnChain(record.certificateId);
+        const chain=await verifyCertificateChain(record);
         const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(record.digest||"").toLowerCase()&&!chain.revoked);
         const verified=record.status==="ACTIVE"&&chainOk;
         verification={verified,status:record.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH"};
