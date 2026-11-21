@@ -73,9 +73,10 @@ async function ensureStudentMembership(client, authUser, profile) {
 }
 const run = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 async function publicIssuerDetails(client, certificateId) {
- const lookupClient=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):client;
- const {data:cert,error:ce}=await lookupClient.from("Certificate").select("organizationId").eq("certificateId",certificateId).maybeSingle();if(ce)throw ce;if(!cert?.organizationId)return null;
- const {data:o,error}=await lookupClient.from("Organization").select("name,type,status,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody,verifiedAt").eq("id",cert.organizationId).eq("status","APPROVED").maybeSingle();if(error)throw error;if(!o)return null;
+ const {data,error}=await client.rpc("verity_public_certificate_issuer",{p_certificate_id:certificateId});
+ if(error)throw error;
+ const o=Array.isArray(data)?data[0]:data;
+ if(!o)return null;
  return {name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"};
 }
 
@@ -128,14 +129,13 @@ app.get("/api/directory/organizations",run(async(q,s)=>{
  const term=String(q.query.search||"").trim().slice(0,100);
  const type=String(q.query.type||"ALL").toUpperCase();
  if(!["ALL","INSTITUTION","EMPLOYER"].includes(type))return s.status(400).json({error:"Invalid organization type filter."});
- const db=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):makeClient();
- let query=db.from("Organization").select("name,type,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody,verifiedAt").eq("status","APPROVED").order("name",{ascending:true}).limit(200);
- if(type!=="ALL")query=query.eq("type",type);
- if(term)query=query.ilike("name","%"+term.replace(/[%,]/g," ")+"%");
- const {data,error}=await query;if(error)throw error;
+ const db=makeClient();
+ const {data,error}=await db.rpc("verity_public_organization_directory",{p_search:term||null,p_type:type});
+ if(error)throw error;
  s.setHeader("Cache-Control","public, max-age=60, stale-while-revalidate=300");
  s.json({organizations:(data||[]).map(o=>({name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"}))});
 }));
+
 app.post("/api/auth/register",run(async(q,s)=>{
   const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
   const client=makeClient();
