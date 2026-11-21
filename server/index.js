@@ -66,8 +66,9 @@ async function ensureStudentMembership(client, authUser, profile) {
 }
 const run = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 async function publicIssuerDetails(client, certificateId) {
- const {data:cert,error:ce}=await client.from("Certificate").select("organizationId").eq("certificateId",certificateId).maybeSingle();if(ce)throw ce;if(!cert?.organizationId)return null;
- const {data:o,error}=await client.from("Organization").select("name,type,status,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody,verifiedAt").eq("id",cert.organizationId).eq("status","APPROVED").maybeSingle();if(error)throw error;if(!o)return null;
+ const lookupClient=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):client;
+ const {data:cert,error:ce}=await lookupClient.from("Certificate").select("organizationId").eq("certificateId",certificateId).maybeSingle();if(ce)throw ce;if(!cert?.organizationId)return null;
+ const {data:o,error}=await lookupClient.from("Organization").select("name,type,status,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody,verifiedAt").eq("id",cert.organizationId).eq("status","APPROVED").maybeSingle();if(error)throw error;if(!o)return null;
  return {name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"};
 }
 
