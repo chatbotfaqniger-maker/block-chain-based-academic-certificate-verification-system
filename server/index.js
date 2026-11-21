@@ -377,7 +377,7 @@ app.get("/api/certificates/:id/documents",auth,roles("ADMIN","EMPLOYER","GRADUAT
   s.json({documents:data||[]});
 }));
 app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","GRADUATE"),run(async(q,s)=>{
-  const {data:doc,error}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,certificateId,organizationId,scanStatus").eq("id",q.params.id).maybeSingle();
+  const {data:doc,error}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,certificateId,organizationId,sha256,scanStatus").eq("id",q.params.id).maybeSingle();
   if(error)throw error;
   if(!doc)return s.status(404).json({error:"Document not found."});
   let staffDownload=false;
