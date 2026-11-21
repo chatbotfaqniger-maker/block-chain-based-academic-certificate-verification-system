@@ -208,7 +208,10 @@ app.get("/api/organization/evidence",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data,error}=await q.supabase.from("OrganizationEvidence").select("id,evidenceType,originalName,sizeBytes,sha256,scanStatus,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(error)throw error;s.json({evidence:data||[]});
 }));
 app.get("/api/admin/organizations/:id/evidence/:evidenceId",auth,roles("ADMIN"),run(async(q,s)=>{
- const {data:e,error}=await q.supabase.from("OrganizationEvidence").select("id,organizationId,storagePath,originalName,scanStatus").eq("id",q.params.evidenceId).eq("organizationId",q.params.id).maybeSingle();if(error)throw error;if(!e)return s.status(404).json({error:"Evidence not found."});
+ const {data:e,error}=await q.supabase.from("OrganizationEvidence").select("id,organizationId,storagePath,originalName,mimeType,sha256,scanStatus").eq("id",q.params.evidenceId).eq("organizationId",q.params.id).maybeSingle();if(error)throw error;if(!e)return s.status(404).json({error:"Evidence not found."});
+  const {data:file,error:fe}=await q.supabase.storage.from("verity-organization-evidence").download(e.storagePath);if(fe)throw fe;
+  const evidenceBytes=Buffer.from(await file.arrayBuffer());
+  if(!e.sha256||digest(evidenceBytes)!==e.sha256)return s.status(409).json({error:"Evidence integrity check failed. The stored file does not match its registered SHA-256 fingerprint."});
   const {data:link,error:le}=await q.supabase.storage.from("verity-organization-evidence").createSignedUrl(e.storagePath,60,{download:e.originalName});if(le)throw le;
  await audit(q.supabase,q.user.id,"ORGANIZATION_EVIDENCE_REVIEWED","OrganizationEvidence",e.id,{organizationId:e.organizationId});
  s.json({url:link.signedUrl,expiresIn:60,originalName:e.originalName});
@@ -657,7 +660,7 @@ async function start(){
   const chain=await connectChain();
   console.log("Supabase Auth and Data API configured.");
   console.log("Blockchain:",chain.enabled?"connected":"demo database ledger");
-  console.log("Certificate malware scanning:",process.env.CLAMAV_HOST?.trim()?"ClamAV endpoint configured; identity is verified on each scan and only server-persisted CLEAN verdicts release quarantine.":"ClamAV not configured; certificate uploads remain PENDING_SCAN.");
+  console.log("Document security: private storage, file-signature validation and SHA-256 integrity checks; antivirus scanning is disabled.");
   app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
 }
 start().catch(e=>{console.error(e);process.exit(1);});
