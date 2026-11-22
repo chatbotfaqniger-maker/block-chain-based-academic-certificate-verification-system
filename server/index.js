@@ -892,8 +892,12 @@ app.post("/api/issues/:id/messages",auth,run(async(q,s)=>{
  await audit(q.supabase,q.user.id,"ISSUE_MESSAGE_SENT","IssueReport",q.params.id,{messageId:data.id});
  const {data:issue}=await q.supabase.from("IssueReport").select("id,reporterId,assignedTo,subject").eq("id",q.params.id).maybeSingle();
  if(issue){
-  const recipients=q.user.role==="ADMIN"?[issue.reporterId]:[...new Set([...(issue.assignedTo?[issue.assignedTo]:[]),...(await q.supabase.from("User").select("id").eq("role","ADMIN")).data?.map(x=>x.id)||[]])];
-  await Promise.all(recipients.filter(id=>id&&id!==q.user.id).map(id=>createVerityNotification(id,{type:"SUPPORT_REPLY",category:"SUPPORT",title:"New support conversation reply",body:(issue.subject||"Support conversation")+" — "+(q.user.fullName||"A participant")+" sent a message.",url:"/issues",metadata:{issueId:q.params.id}})));
+  const payload={type:"SUPPORT_REPLY",category:"SUPPORT",title:"New support conversation reply",body:(issue.subject||"Support conversation")+" — "+(q.user.fullName||"A participant")+" sent a message.",url:"/issues",metadata:{issueId:q.params.id}};
+  if(q.user.role==="ADMIN"){if(issue.reporterId)await createVerityNotification(issue.reporterId,payload);}
+  else{
+   if(issue.assignedTo&&issue.assignedTo!==q.user.id)await createVerityNotification(issue.assignedTo,payload);
+   await notifyVerityAdmins(payload);
+  }
  }
  s.status(201).json({message:data});
 }));
