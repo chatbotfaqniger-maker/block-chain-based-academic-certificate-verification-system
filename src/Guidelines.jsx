@@ -35,7 +35,7 @@ const adminGuides = [
     ["Search credentials — filters the visible registry list.","QR — opens the credential’s QR/link sharing panel when available.","Preview file — opens a private in-app document preview.","Revoke — asks for a reason and submits a revocation request."],
     "ADMIN can inspect platform-wide records. Certificate issuance remains an approved institution responsibility. Revocation is subject to server-side ownership and permission checks.",
     ["Revocation changes the credential’s status and should not be used as a routine edit.","A QR or registry match does not by itself prove the presenter’s identity."],
-    ["If a record is missing, clear the search and check the exact certificate ID.","If Preview file is unavailable, the issuer may not have uploaded a document or the file may be quarantined."]),
+    ["If a record is missing, clear the search and check the exact certificate ID.","If Preview file is unavailable, the issuer may not have uploaded a document or the file may be missing or unavailable."]),
   g("activity","Audit Activity",Activity,"Review recorded actions for accountability and operational investigation.","Verity System Administrators.",
     ["Open Audit Activity to view the newest recorded events.","Read the action, actor, entity and timestamp together to understand the event.","Compare related events when investigating a workflow and record any follow-up outside the audit log."],
     ["Audit event row — identifies the action, actor, entity and date; this view is a review surface, not an editing tool."],
@@ -46,7 +46,7 @@ const adminGuides = [
     ["Open System Health and review the API/database and blockchain indicators.","Check whether an EVM RPC endpoint and contract are configured before describing a credential as on-chain.","Use the reported health details to decide whether the issue belongs to the application, database, RPC provider or contract configuration."],
     ["Health indicators — report the status exposed by the backend; they do not restart or repair services."],
     "ADMIN only. Infrastructure credentials and environment variables must be managed by authorized deployment operators, not entered into user-facing forms.",
-    ["The project can operate in demo database-ledger mode when blockchain settings are absent.","Never claim a public-chain transaction unless a transaction hash and network confirmation exist."],
+    ["The active Supabase PostgreSQL certificate ledger remains the system of record when optional blockchain settings are absent.","Never claim a public-chain transaction unless a transaction hash and network confirmation exist."],
     ["If blockchain is disabled, check CHAIN_RPC_URL, CHAIN_PRIVATE_KEY and CONTRACT_ADDRESS in the deployment environment.","If the API reports an error, inspect the hosting provider’s logs and service health."]),
   g("settings","Account Settings",Settings,"Update the display name shown in the administrator workspace.","Verity System Administrators.",
     ["Open Account Settings and review the current display name.","Edit the name and select Save changes.","Confirm the success message and updated name in the workspace."],
@@ -72,7 +72,7 @@ const institutionGuides = [
     ["If a student is missing, ask them to register and submit the correct code.","If approval is disabled, confirm the institution is APPROVED and you are signed in as its owner."]),
   g("staff","Staff",Users,"Assign limited, auditable access to existing Verity graduate accounts.","Approved academic institution owner.",
     ["Ask the staff member to create their own Verity graduate account first.","Open Staff and enter the exact email address used by that account.","Assign certificates:read for read-only access to this institution’s credential records.","Add documents:download only when the staff member needs to retrieve original certificate files; this permission requires certificates:read as well.","Select Add staff member and confirm the assignment appears as ACTIVE. Suspend access promptly when duties change or the staff member leaves."],
-    ["Staff email — identifies an existing Verity account.","certificates:read — grants read-only access to this institution’s certificate records.","documents:download — allows downloads for this institution after the file has a CLEAN scan verdict.","Add staff member — creates or updates the assignment; Suspend / Reactivate changes active access."],
+    ["Staff email — identifies an existing Verity account.","certificates:read — grants read-only access to this institution’s certificate records.","documents:download — allows downloads for this institution when the document passes file-signature and SHA-256 integrity checks.","Add staff member — creates or updates the assignment; Suspend / Reactivate changes active access."],
     "Only an approved academic institution owner can assign staff. The only implemented staff permissions are certificates:read and documents:download. Verifier-organization staff and verification permissions are not available yet. Staff cannot issue or revoke certificates or administer other staff.",
     ["Never share an owner account or grant permissions for convenience.","Only enable document download when required for the staff member’s work."],
     ["If an email is not found, ask the person to register using that exact email.","If a staff member cannot see a module, check their ACTIVE status and assigned permission set."]),
@@ -80,8 +80,8 @@ const institutionGuides = [
     ["Search for the graduate or certificate before creating another record.","Check the graduate name, student number, programme, qualification and award date against the institution’s authoritative record.","Open the record and inspect its status and available document/QR controls.","Use the record’s QR or verification link to share a credential reference with the graduate."],
     ["Search credentials — filters the visible list.","QR — opens the QR and verification-link panel.","Download — available to the graduate for their own linked document; staff downloads require the assigned permission and valid access.","Revoke — available only to an authorized issuer/owner and requires a reason."],
     "Approved institution owner can issue/revoke its own records. Staff with certificates:read can inspect assigned organization records; they do not inherit owner privileges.",
-    ["Do not create duplicate certificates to correct a record without following the institution’s correction/revocation process.","A document preview or download may be blocked if malware scanning has not returned CLEAN."],
-    ["If a certificate is absent, verify that it was issued by this institution and that the student link is correct.","If a file is blocked, check its scan status and upload a clean original through the approved workflow."]),
+    ["Do not create duplicate certificates to correct a record without following the institution’s correction/revocation process.","A document preview or download is blocked when the file is missing or its stored SHA-256 fingerprint is missing or does not match."],
+    ["If a certificate is absent, verify that it was issued by this institution and that the student link is correct.","If a file is blocked, check the upload details and SHA-256 integrity status; contact the issuer if the original needs to be uploaded again."]),
   g("issue","Issue Certificate",Plus,"Register an academic award and generate its Verity certificate reference and QR.","Approved academic institution owner only.",
     ["Confirm the graduate’s identity and award from official institutional records.","Complete every required field, including student number, faculty, department, programme and qualification.","Select the correct award date and check the spelling of every field.","Attach the exact official certificate document (PDF, JPG or PNG) when prompted.","Review the form and select Register institution certificate and generate QR.","Share the generated certificate ID or verification key securely with the graduate."],
     ["Form fields — become part of the credential record and integrity fingerprint.","Official certificate document — attaches the source document to the credential.","Register institution certificate and generate QR — creates the registry record, then generates the QR/link."],
@@ -109,7 +109,7 @@ const organizationGuides = [
     ["Preview original — opens a temporary in-app view of the approved original.","Download watermarked copy — downloads the permitted watermarked PDF.","Request status — shows PENDING, APPROVED or REJECTED."],
     "Organization must be APPROVED. Original document access requires graduate approval and expires after 30 days. Verifier-organization staff downloads are not implemented yet.",
     ["Never share, repurpose or retain a certificate beyond the approved purpose and applicable retention rules.","A public verification result does not grant access to the original certificate file."],
-    ["If preview/download is denied, check request status, expiry, staff permission and document scan status.","If the graduate is not linked to the certificate, ask them to link their account before sending another request."])
+    ["If preview/download is denied, check request status, expiry, staff permission and whether the stored document passes its SHA-256 integrity check.","If the graduate is not linked to the certificate, ask them to link their account before sending another request."])
 ];
 
 const graduateGuides = [
@@ -119,7 +119,7 @@ const graduateGuides = [
     ["QR — opens the QR and sharing panel.","Copy verification link — copies the public verification URL.","Copy key — copies the unique verification key.","Download — retrieves your linked original document when available and permitted."],
     "Sign in to the graduate account linked to the credential. A certificate must be linked to your account for private document access.",
     ["Share the verification link/key only with people or organizations you intend to verify the credential.","A public QR reveals limited credential information; it does not grant access to the private original document."],
-    ["If a credential is missing, ask the institution to issue it with the email linked to your Verity account.","If download is blocked, check whether a document exists and whether it passed the required malware scan."]),
+    ["If a credential is missing, ask the institution to issue it with the email linked to your Verity account.","If download is blocked, check whether a document exists and whether its SHA-256 integrity check succeeds."]),
   g("join","Join an Institution",Plus,"Request a secure link between your graduate account and your school or employer institution.","Graduate / student account.",
     ["Obtain the official registration code directly from your institution.","Enter the code exactly; the field converts letters to uppercase.","Enter your student or matriculation number where available.","Select Request institution link and wait for the institution administrator to review it.","Check Your institution links for the current request status."],
     ["Institution registration code — identifies the organization invitation.","Student / matriculation number — helps the institution match your record.","Request institution link — submits a membership request for approval."],
@@ -131,12 +131,12 @@ const graduateGuides = [
     ["Approve — grants the requesting organization time-limited access to the selected original document.","Reject — declines the access request.","Request status — shows whether consent is pending, approved or rejected."],
     "Only the graduate account linked to the certificate can approve or reject its access request.",
     ["Approval shares the private original document, not just the public verification result.","Do not approve requests simply because an organization claims urgency. Consent does not change the certificate’s registry status."],
-    ["If a request is not listed, ask the organization to confirm it submitted the request for the correct credential.","If access was approved but the organization cannot open the document, ask it to check the 30-day expiry and scan status."]),
+    ["If a request is not listed, ask the organization to confirm it submitted the request for the correct credential.","If access was approved but the organization cannot open the document, ask it to check the 30-day expiry and document integrity status."]),
   g("verify","Verify a Credential",ClipboardCheck,"Check the status of a credential reference using the Verity registry.","Graduate / student account.",
     ["Enter the certificate ID or verification key provided by the issuer.","Select Verify credential and wait for the registry result.","Read the result status and compare the displayed qualification and institution details.","Contact the issuing institution if the result is missing, revoked or inconsistent."],
     ["Certificate ID or verification key — accepts either supported reference.","Verify credential — requests a registry check and displays its result."],
     "Any signed-in graduate can check a public credential reference; the result is limited to the data the registry makes public.",
-    ["A successful registry check does not prove the identity of the person presenting the credential.","Do not treat demo database-ledger mode as public blockchain confirmation."],
+    ["A successful registry check does not prove the identity of the person presenting the credential.","Do not describe the Supabase database ledger as a public blockchain transaction."],
     ["If not found, re-enter the reference without spaces and confirm it with the issuer.","If details do not match, stop sharing the credential and contact the institution."])
 ];
 
@@ -145,14 +145,14 @@ const staffGuides = [
     ["Open Overview after signing in to confirm your workspace is available.","Use Organization Credentials to review records for the institution that assigned you.","Only certificates:read and documents:download are currently supported staff permissions.","If your assignment or institution is suspended, access is withdrawn."],
     ["Overview — provides a quick workspace orientation.","Organization Credentials — opens records available to your staff assignment."],
     "Staff access is limited to the approved academic institution that created the assignment. Verifier-organization staff workflows are not implemented yet.",
-    ["Never share your login or use another staff member’s credentials.","Do not treat the demo database ledger as a blockchain transaction."],
+    ["Never share your login or use another staff member’s credentials.","Do not describe the Supabase database ledger as a public blockchain transaction."],
     ["If Organization Credentials is missing, ask the owner to check your ACTIVE assignment and certificates:read permission.","If the institution is suspended, contact the Verity System Administrator."]),
-  g("certificates","Organization Credentials",FileCheck2,"Read certificate records and, where assigned, download clean original files for your institution.","Active staff member with certificates:read at an approved academic institution.",
-    ["Open Organization Credentials to view records scoped to the institution that assigned you.","Search by graduate name, certificate ID, institution or programme.","Review the credential status and details needed for your assigned task.","Open document details to check the file name and scan status. Download only when documents:download is also assigned and the scan status is CLEAN."],
-    ["Search credentials — filters records visible to your account.","QR — displays a shareable verification reference when available.","Document details — shows the uploaded file and its scan status.","Download — retrieves the original file only when documents:download is assigned and the document is CLEAN."],
+  g("certificates","Organization Credentials",FileCheck2,"Read certificate records and, where assigned, download original files for your institution.","Active staff member with certificates:read at an approved academic institution.",
+    ["Open Organization Credentials to view records scoped to the institution that assigned you.","Search by graduate name, certificate ID, institution or programme.","Review the credential status and details needed for your assigned task.","Open document details to check the file name and available integrity information. Download only when documents:download is also assigned and the server confirms SHA-256 integrity."],
+    ["Search credentials — filters records visible to your account.","QR — displays a shareable verification reference when available.","Document details — shows the uploaded file metadata and availability.","Download — retrieves the original file only when documents:download is assigned and server-side SHA-256 verification succeeds."],
     "Requires an ACTIVE staff assignment and certificates:read. Document downloads additionally require documents:download. Both permissions are limited to the same approved academic institution.",
-    ["Staff cannot issue, edit or revoke certificates, manage students, approve graduate access requests or administer staff.","A pending, failed or infected scan never permits document download."],
-    ["If no records appear, ask the owner to confirm your assignment and institution status.","If download is denied, ask the owner to verify documents:download and check that the file has a CLEAN scan verdict."])
+    ["Staff cannot issue, edit or revoke certificates, manage students, approve graduate access requests or administer staff.","Missing files or failed SHA-256 integrity verification never permit document download."],
+    ["If no records appear, ask the owner to confirm your assignment and institution status.","If download is denied, ask the owner to verify documents:download and confirm that the file passes server-side SHA-256 integrity verification."])
 ];;
 
 export default function RoleGuidelines({ user, organization, onOpen, data, certificates = [], auditEvents = null, onVerify, canDownload = false }) {

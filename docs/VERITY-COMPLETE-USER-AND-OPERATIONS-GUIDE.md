@@ -464,7 +464,7 @@ Certificate documents and organization identity evidence are stored in private S
 
 This integrity check detects a file changing after its fingerprint was recorded; it is not a malware detector and does not prove that an uploaded file is safe. Users should upload documents only from trusted sources and keep their own devices protected. Private storage, authenticated roles, institution scoping, staff permissions and graduate-controlled access grants continue to govern who can retrieve a document.
 
-**Production database step:** before testing certificate previews or downloads, apply `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` in the Supabase SQL Editor. The migration removes only the obsolete `scanStatus = 'CLEAN'` predicates from the two certificate read policies. It preserves the private bucket check, certificate-to-institution relationship, storage-path tenant checks, administrator and institution ownership checks, active staff permission check, approved employer check, and approved unexpired graduate grant. Do not make either bucket public.
+**Production database step:** ensure the migration `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` has been applied in the Supabase SQL Editor before relying on the current document-access policies. It removes obsolete antivirus-verdict predicates while preserving private-bucket enforcement, certificate-to-institution relationships, storage-path tenant checks, administrator and institution ownership checks, active staff permission checks, and approved, unexpired employer grants. This is a one-time policy migration, not an antivirus setup step. Never make either bucket public.
 
 ### 9.3 Blockchain and the database ledger
 
@@ -476,7 +476,7 @@ The chain integration requires deployment configuration for:
 - `CHAIN_PRIVATE_KEY`
 - `CONTRACT_ADDRESS`
 
-When those settings are absent, VERITY operates in **demo database-ledger mode**. The application must not describe this mode as a public blockchain transaction. A blockchain claim should be made only when the configured network and contract confirm the transaction and a transaction reference can be inspected.
+When those settings are absent, VERITY continues operating with its **active Supabase PostgreSQL certificate ledger**. This is the production database-backed system of record, not a demo or simulated in-memory ledger. It is not a public blockchain transaction. Describe a credential as blockchain-anchored only when the configured network and contract confirm the transaction and a transaction reference can be independently inspected.
 
 ### 9.4 Personal data
 
@@ -510,8 +510,8 @@ VERITY is a software system and does not by itself confer government recognition
 | Credential not found | Recheck the certificate ID/key for typing errors and ask the issuer to confirm the reference. Do not infer authenticity from a screenshot. |
 | Credential is revoked | Contact the issuing institution for clarification. Do not treat the record as active. |
 | Original document is unavailable | Check whether the graduate approved access, the 30-day consent is still valid and the stored file passes its SHA-256 integrity check. |
-| Upload remains blocked | The scanner may be unavailable or the file may be infected. A SCAN_FAILED result is fail-closed; contact the deployment operator. |
-| Blockchain shows disabled | The EVM RPC URL, private key or contract address may not be configured. The app may be in database-ledger mode. |
+| Upload remains blocked | Check that the file is PDF, JPEG or PNG, is no larger than 10 MB, and has a valid matching file signature. VERITY does not run antivirus scanning. Review the upload error and server logs without assuming a malware verdict. |
+| Blockchain shows disabled | The EVM RPC URL, private key or contract address may not be configured. The active Supabase PostgreSQL certificate ledger remains available without EVM blockchain configuration. |
 | Dashboard figures look old | Use Refresh now and confirm the API/database is available. |
 | Audit event is missing | Confirm the workflow completed successfully; not every page view is recorded. |
 | MP4 export fails | Check admin authorization, server logs, FFmpeg availability, writable temporary storage and live database/RPC dependencies. Confirm the generated file plays before distribution. |
@@ -531,7 +531,7 @@ The documented Supabase setup uses:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 
-The core application does not require a direct PostgreSQL connection string, Prisma setup, Supabase secret key or service-role key. Optional certificate-scan verdict persistence and administrator rescans require `SUPABASE_SERVICE_ROLE_KEY` as a server-only environment variable. Keep all environment values in the deployment platform's protected settings, never in committed source code or browser code.
+The core application does not require a direct PostgreSQL connection string, Prisma setup, Supabase secret key or service-role key for ordinary authenticated document uploads, previews or downloads. Do not configure scanner-specific environment variables. Keep any separately required server credentials in the deployment platform's protected settings, never in committed source code or browser code.
 
 ### 11.2 Optional blockchain configuration
 
@@ -539,7 +539,7 @@ Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY` and `CONTRACT_ADDRESS` only when 
 
 ### 11.3 Document security configuration
 
-No ClamAV host, antivirus service or service-role key is required for VERITY document uploads. Confirm the two storage buckets remain private, the server's Supabase URL and publishable key are configured, and the `20261121120000_remove_antivirus_scan_gates.sql` migration has been applied. The `/api/health` endpoint reports the configured private-storage and SHA-256 controls. Do not set public bucket access to work around a policy issue.
+VERITY has no antivirus scanner and requires no ClamAV host, antivirus service or scanner credentials. Confirm the two storage buckets remain private, the server's Supabase URL and publishable key are configured, and the `20261121120000_remove_antivirus_scan_gates.sql` policy migration has been applied. The `/api/health` endpoint reports private-storage and SHA-256 controls. File-signature validation and SHA-256 integrity checks are not malware detection. Do not set public bucket access to work around a policy issue.
 
 ### 11.4 Local development
 
