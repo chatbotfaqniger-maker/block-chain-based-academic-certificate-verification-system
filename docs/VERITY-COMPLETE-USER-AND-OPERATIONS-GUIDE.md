@@ -55,7 +55,7 @@ A graduate account uses the **GRADUATE** role. The platform administrator uses *
 4. Choose the appropriate account type:
    - **Graduate** for an individual receiving or managing credentials.
    - **Organization Admin** for an institution or verifier organization representative.
-5. If registering an organization, enter its organization name and select whether it is an **Institution** or **Employer / verifier**. Provide the requested registration details.
+5. If registering an organization, enter its organization name and select whether it is an **Institution** or **Employer / verifier**. Provide the requested registration details and, if available, the main public-facing city, state / region and country. Do not enter a street address in these public location fields.
 6. If registering as a graduate with an institution registration code, enter the code and your student number where requested.
 7. Submit the registration form.
 8. If email confirmation is enabled for the deployment, open the confirmation email and complete the confirmation step.
@@ -103,7 +103,18 @@ For an academic institution, provide the official identity information requested
 
 Submit clear, current evidence that belongs to the institution. Evidence is stored in a private storage area for human review.
 
-### 3.3 VERITY review
+### 3.3 Public organization directory and location details
+
+The **Registered organizations** area lets signed-in users discover approved institutions and verifier organizations that have chosen to appear publicly.
+
+- Search by organization name and filter by organization type.
+- Use the location filter to match the city, state / region or country supplied by an organization.
+- Directory cards show only the public legal identity fields and the organization-reported location. VERITY does not present these location entries as independently verified.
+- Only approved organizations with directory visibility enabled are listed. An organization can hide itself without losing its VERITY registration or affecting direct certificate verification.
+- An approved organization owner can update the public location fields from the Organization Identity area. Legal identity changes remain subject to a new VERITY review.
+- The directory does not publish street addresses or private contact details. Always use the certificate verification link or code to verify an individual credential; directory listing alone does not prove certificate validity.
+
+### 3.4 VERITY review
 
 A System Administrator reviews the organization details and evidence. The decision is a manual review; the current workflow does not claim automated verification against government or regulator databases.
 
@@ -115,7 +126,7 @@ Possible outcomes include:
 
 Do not repeatedly submit duplicate applications while a review is pending. If clarification is requested, provide the requested information through the official support or application process.
 
-### 3.4 What approval enables
+### 3.5 What approval enables
 
 - An approved **INSTITUTION** can manage its student memberships and issue/revoke its own academic credentials, subject to server-side permissions.
 - An approved **EMPLOYER** organization can use the verifier workflow. It cannot issue academic certificates.
