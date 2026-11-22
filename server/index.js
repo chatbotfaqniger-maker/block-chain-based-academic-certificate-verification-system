@@ -60,7 +60,7 @@ async function ensureOrganization(client, authUser, profile) {
      return data;
    }
  }
- const org={id:crypto.randomUUID(),name,type:m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION",ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null};
+ const org={id:crypto.randomUUID(),name,type:m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION",ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null,locationCity:m.locationCity||null,locationState:m.locationState||null,locationCountry:m.locationCountry||null};
  const {data,error:e}=await client.from("Organization").insert(org).select().single();
  if(e && e.code==="23505" && /organization_registration_number_unique/.test(e.message||"")) throw new Error("This registration number is already registered in Verity. Sign in with the original organization account or contact the System Administrator. No duplicate organization was created.");
  if(e) throw e;
@@ -77,7 +77,7 @@ async function publicIssuerDetails(client, certificateId) {
  if(error)throw error;
  const o=Array.isArray(data)?data[0]:data;
  if(!o)return null;
- return {name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"};
+ return {name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,locationCity:o.locationCity||null,locationState:o.locationState||null,locationCountry:o.locationCountry||null,verificationStatus:"VERITY_APPROVED"};
 }
 
 app.set("trust proxy",1);
@@ -129,21 +129,22 @@ app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_
 
 app.get("/api/directory/organizations",run(async(q,s)=>{
  const term=String(q.query.search||"").trim().slice(0,100);
+ const location=String(q.query.location||"").trim().slice(0,100);
  const type=String(q.query.type||"ALL").toUpperCase();
  if(!["ALL","INSTITUTION","EMPLOYER"].includes(type))return s.status(400).json({error:"Invalid organization type filter."});
  const db=makeClient();
- const {data,error}=await db.rpc("verity_public_organization_directory",{p_search:term||null,p_type:type});
+ const {data,error}=await db.rpc("verity_public_organization_directory",{p_search:term||null,p_type:type,p_location:location||null});
  if(error)throw error;
  s.setHeader("Cache-Control","public, max-age=60, stale-while-revalidate=300");
  s.json({organizations:(data||[]).map(o=>({name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"}))});
 }));
 
 app.post("/api/auth/register",run(async(q,s)=>{
-  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
+  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
   const client=makeClient();
   const {data,error}=await client.auth.signUp({
     email:b.email.trim().toLowerCase(),password:b.password,
-    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||""}}
+    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||""}}
   });
   if(error) {
     const duplicate=/already registered|already exists|user exists/i.test(error.message||"");
@@ -170,11 +171,11 @@ app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=
 app.get("/api/organization",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;s.json({organization:data});}));
 
 app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
- const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional()}).parse(q.body);
+ const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional()}).parse(q.body);
  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;
  if(!org)return s.status(404).json({error:"Organization not found."});
  if(org.status!=="PENDING")return s.status(403).json({error:"Organization identity details can only be edited while the application is pending."});
- const patch={registrationNumber:b.registrationNumber?.trim()||null,officialWebsite:b.officialWebsite?.trim()||null,officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||null,accreditationBody:b.accreditationBody?.trim()||null,updatedAt:new Date().toISOString()};
+ const patch={registrationNumber:b.registrationNumber?.trim()||null,officialWebsite:b.officialWebsite?.trim()||null,officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||null,accreditationBody:b.accreditationBody?.trim()||null,locationCity:b.locationCity?.trim()||null,locationState:b.locationState?.trim()||null,locationCountry:b.locationCountry?.trim()||null,updatedAt:new Date().toISOString()};
  if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.officialWebsite||!patch.accreditationBody))return s.status(400).json({error:"Institutions must provide a registration number, official website and accreditation body."});
  if(patch.officialWebsite&&!/^https?:\/\//i.test(patch.officialWebsite))return s.status(400).json({error:"Enter the official website with https:// or http://."});
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("*").single();if(error)throw error;
