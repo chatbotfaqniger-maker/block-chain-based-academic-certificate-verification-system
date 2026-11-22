@@ -774,6 +774,7 @@ app.delete("/api/push/subscribe",auth,run(async(q,s)=>{
  if(error)throw error;s.json({enabled:false});
 }));
 app.get("/api/admin/users",auth,roles("ADMIN"),run(async(q,s)=>{
+ if(!SUPABASE_SERVER_KEY)return s.status(503).json({error:"Admin directory requires SUPABASE_SERVICE_ROLE_KEY on the server."});
  const db=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):q.supabase;
  const {data,error}=await db.from("User").select("id,fullName,email,role").order("fullName").limit(1000);
  if(error)throw error;
@@ -796,6 +797,7 @@ app.post("/api/issues/:id/read",auth,run(async(q,s)=>{
  if(error)throw error;s.json({lastReadAt:now});
 }));
 app.post("/api/admin/broadcast-email",auth,roles("ADMIN"),run(async(q,s)=>{
+ if(!SUPABASE_SERVER_KEY)return s.status(503).json({error:"All-user broadcast requires SUPABASE_SERVICE_ROLE_KEY on the server."});
  const b=z.object({subject:z.string().trim().min(3).max(180),message:z.string().trim().min(10).max(12000)}).parse(q.body);
  const required=["SMTP_HOST","SMTP_PORT","SMTP_USER","SMTP_PASS","SMTP_FROM"];
  if(required.some(k=>!process.env[k]))return s.status(503).json({error:"Broadcast email is not configured yet. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM to the VERITY Render environment."});
