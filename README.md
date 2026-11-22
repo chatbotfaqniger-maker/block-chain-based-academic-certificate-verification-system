@@ -10,7 +10,7 @@ Configure for the core application:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 
-Certificate uploads do not require a scanner service or Supabase service-role key. The core web application uses the Supabase Publishable Key with the signed-in user's access token. The optional background student-import worker requires a server-only `SUPABASE_SERVICE_ROLE_KEY` and `ENABLE_STUDENT_IMPORT_WORKER=true`; never place secret or service-role keys in frontend configuration or committed source code.
+Certificate uploads do not require a scanner service or Supabase service-role key. The core web application uses the Supabase Publishable Key with the signed-in user's access token. The optional Postgres-backed student-import processor requires a server-only `SUPABASE_SERVICE_ROLE_KEY` and `ENABLE_STUDENT_IMPORT_WORKER=true`. It runs inside the existing Node web process in the current deployment design; a dedicated Render worker can be introduced when institutional volume justifies the additional hosting cost. Never place secret or service-role keys in frontend configuration or committed source code.
 
 The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
 
