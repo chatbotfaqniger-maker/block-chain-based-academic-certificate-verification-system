@@ -263,6 +263,12 @@ grant execute on function public.process_next_student_import_chunk() to service_
 -- Tighten direct Data API writes: authenticated owners can stage chunks and
 -- transition their own batch to QUEUED, but cannot forge processing counters.
 alter table public."StudentImportBatch"
+  add constraint "StudentImportBatch_total_rows_cap"
+    check ("totalRows" <= 50000),
+  add constraint "StudentImportBatch_total_chunks_cap"
+    check ("totalChunks" <= 500),
+  add constraint "StudentImportBatch_chunk_count_matches_rows"
+    check ("totalChunks" = ceil(("totalRows"-"rejectedRows")::numeric/100)::integer),
   add constraint "StudentImportBatch_rejected_lte_total"
     check ("rejectedRows" <= "totalRows"),
   add constraint "StudentImportBatch_processed_lte_total_chunks"
