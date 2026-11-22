@@ -893,7 +893,7 @@ app.post("/api/issues/:id/messages",auth,run(async(q,s)=>{
  const {data:issue}=await q.supabase.from("IssueReport").select("id,reporterId,assignedTo,subject").eq("id",q.params.id).maybeSingle();
  if(issue){
   const recipients=q.user.role==="ADMIN"?[issue.reporterId]:[...new Set([...(issue.assignedTo?[issue.assignedTo]:[]),...(await q.supabase.from("User").select("id").eq("role","ADMIN")).data?.map(x=>x.id)||[]])];
-  await sendVerityPush(recipients.filter(id=>id&&id!==q.user.id),{title:"VERITY · New support reply",body:(issue.subject||"Support conversation")+" — "+(q.user.fullName||"A participant")+" sent a message.",url:"/support"});
+  await Promise.all(recipients.filter(id=>id&&id!==q.user.id).map(id=>createVerityNotification(id,{type:"SUPPORT_REPLY",category:"SUPPORT",title:"New support conversation reply",body:(issue.subject||"Support conversation")+" — "+(q.user.fullName||"A participant")+" sent a message.",url:"/issues",metadata:{issueId:q.params.id}})));
  }
  s.status(201).json({message:data});
 }));
@@ -927,6 +927,7 @@ app.post("/api/issues",auth,run(async(q,s)=>{
   const {data,error}=await q.supabase.from("IssueReport").insert({id,ticketNumber,reporterId:q.user.id,organizationId,...b,status:"OPEN",createdAt:now,updatedAt:now}).select("id,ticketNumber,reporterId,organizationId,category,severity,subject,description,status,createdAt,updatedAt").single();
   if(error)throw error;
   await audit(q.supabase,q.user.id,"ISSUE_REPORT_CREATED","IssueReport",id,{ticketNumber,category:b.category,severity:b.severity,organizationId});
+  await notifyVerityAdmins({type:"SUPPORT_CREATED",category:"SUPPORT",title:"New support conversation",body:b.subject+" · "+ticketNumber,url:"/issues",metadata:{issueId:id,ticketNumber}});
   s.status(201).json({issue:data,message:"Your report has been submitted. Keep the ticket reference for follow-up."});
 }));
 app.patch("/api/issues/:id",auth,run(async(q,s)=>{
