@@ -240,8 +240,19 @@ The Bulk student import module is available to an approved academic institution 
 4. Optional columns are `email`, `classification` and `award_date` (YYYY-MM-DD).
 5. Save the file as CSV and upload it. The browser validates the file and shows a preview before submission.
 6. Correct missing required values, invalid email/date values and duplicate student numbers within the file.
-7. Start the import and monitor the progress. VERITY sends records in sequential batches of up to 100 rows.
-8. Review Import history for the number of records added, duplicate records skipped and rejected rows.
+7. Start the import. VERITY stages records in sequential batches of up to 100 rows and then submits the batch to its durable database queue.
+8. Once the batch shows **QUEUED**, the browser is no longer responsible for processing the records. The server worker processes queued chunks and updates the batch status and progress.
+9. Review Import history for inserted records, duplicates, rejected rows, failed chunks and processing progress.
+
+
+**Background worker configuration (administrator/deployment task)**
+
+- The queue is stored in Supabase Postgres. Each staged chunk is processed transactionally; a worker restart does not discard queued chunks.
+- To enable processing, first reconcile and apply the reviewed VERITY import migration, then configure the Render web service with the server-only `SUPABASE_SERVICE_ROLE_KEY` and `ENABLE_STUDENT_IMPORT_WORKER=true`.
+- Never put the service-role/secret key in Vite variables, browser code, public documentation values or Git.
+- If the worker is disabled, batches remain queued and the page will explicitly report that processing is not active. Do not tell users their records have been imported until the batch reaches **COMPLETED** or **PARTIAL**.
+- On the current single free web instance, the worker runs alongside the web process and resumes pending work after a restart/wake. For sustained high-volume institutional use, deploy a dedicated Render background worker and scale it independently.
+- If a chunk fails, VERITY records the failed chunk and error summary; an administrator should correct the source data or investigate the failure before starting a corrected batch.
 
 **Important safeguards**
 
