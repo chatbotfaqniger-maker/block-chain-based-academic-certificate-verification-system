@@ -38,8 +38,10 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Organization-reported city, state / region and country captured at signup or updated in the organization identity workspace
 - Public Global Institutions & Organizations directory with organization-type, name and location filters; only approved organizations that opt into public listing appear
 - Organization-specific student / employee membership and registration codes
-- Institution student identity console: private roster import from CSV (up to 10,000 rows), duplicate-safe matriculation matching, roster status view, institution-owner-controlled ICT officer assignment, and audited registration-dispute intake
-- Existing student institution-link requests and organization approval workflow remain in place while secure roster-backed account activation is completed
+- Institution student identity console: private CSV roster import (up to 10,000 rows), duplicate-safe matriculation matching, roster status, scoped ICT officer assignment, registration-dispute intake and one-time activation-token issuance
+- Student signup begins with matriculation number and approved institution selection; account creation is followed by single-use activation-token verification against the institution roster
+- Atomic roster claim prevents duplicate student ownership, marks the token used, activates institution membership and applies the official roster name to the student profile
+- ICT can export per-student activation tokens once, reissue an unused token for an eligible unclaimed record, and open an audited dispute for suspected account misclaims; active accounts are not silently transferred
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
