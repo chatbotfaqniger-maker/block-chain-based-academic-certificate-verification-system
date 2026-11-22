@@ -15,9 +15,13 @@ export function startStudentImportWorker({client,logger=console,pollIntervalMs=1
      if(error)throw error;
      failures=0;
      if(data?.processed){
-      logger.info?.("[VERITY import worker] processed batch chunk",{
-       batchId:data.batchId,chunkIndex:data.chunkIndex,inserted:data.inserted,duplicates:data.duplicates,status:data.status
-      });
+      if(data.failed){
+       logger.error?.("[VERITY import worker] chunk failed",{batchId:data.batchId,chunkIndex:data.chunkIndex,error:data.error});
+      }else{
+       logger.info?.("[VERITY import worker] processed batch chunk",{
+        batchId:data.batchId,chunkIndex:data.chunkIndex,inserted:data.inserted,duplicates:data.duplicates,status:data.status
+       });
+      }
       continue;
      }
      await sleep(pollIntervalMs);
