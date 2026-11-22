@@ -353,7 +353,7 @@ alter table public."StudentRoster"
   add constraint "StudentRoster_full_name_length"
     check (char_length(btrim("fullName")) between 2 and 160),
   add constraint "StudentRoster_email_valid"
-    check (email is null or (char_length(email)<=254 and email ~* '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$')),
+    check (email is null or (char_length(email)<=254 and email ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$')),
   add constraint "StudentRoster_faculty_length"
     check (char_length(btrim(faculty)) between 2 and 160),
   add constraint "StudentRoster_department_length"
