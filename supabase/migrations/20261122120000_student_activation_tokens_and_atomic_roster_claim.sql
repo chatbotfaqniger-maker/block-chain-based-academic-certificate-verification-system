@@ -89,9 +89,3 @@ end;
 $$;
 revoke all on function public.activate_verity_student_roster(text,text,text) from public;
 grant execute on function public.activate_verity_student_roster(text,text,text) to authenticated;
-
--- Additional recovery fields and two-person review functions are deployed by
--- institution_student_recovery_two_person_workflow and subsequent hardening migrations.
-alter table public."StudentRegistrationRecovery"
- add column if not exists "secondApprovedBy" text references public."User"("id"),
- add column if not exists "secondApprovedAt" timestamptz;
