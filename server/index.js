@@ -379,6 +379,7 @@ app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async
   let chain={mode:"SUPABASE_PRIMARY"};
   try{chain=await revokeOnChain(c.certificateId,b.reason);}catch(error){
     console.error("Optional blockchain revocation anchor failed after database revocation:",error);
+    chain={mode:"SUPABASE_PRIMARY",error:true};
   }
   await audit(q.supabase,q.user.id,"CERTIFICATE_REVOKED","Certificate",c.id,{reason:b.reason,mode:chain.mode||"SUPABASE_PRIMARY",blockchainAnchorPending:Boolean(chain.error),organizationId:c.organizationId||null});
   s.json({certificate:updated,chainMode:chain.mode||"SUPABASE_PRIMARY",blockchainAnchorPending:Boolean(chain.error)});
