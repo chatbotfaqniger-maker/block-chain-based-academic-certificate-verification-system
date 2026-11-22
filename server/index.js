@@ -254,7 +254,8 @@ app.post("/api/organization/students/import-batches/:id/chunks",auth,roles("EMPL
  const b=z.object({rows:z.array(studentRosterInput).min(1).max(100)}).parse(q.body);
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
  const {data:batch,error:be}=await q.supabase.from("StudentImportBatch").select("id,totalRows,insertedRows,duplicateRows,rejectedRows,status").eq("id",q.params.id).eq("organizationId",org.id).single();
- if(be)throw be;if(batch.status!=="PROCESSING")return s.status(409).json({error:"This import batch is no longer accepting records."});\n if(batch.insertedRows+batch.duplicateRows+b.rows.length>batch.totalRows-batch.rejectedRows)return s.status(400).json({error:"This chunk exceeds the number of valid rows declared for the import batch."});
+ if(be)throw be;if(batch.status!=="PROCESSING")return s.status(409).json({error:"This import batch is no longer accepting records."});
+ if(batch.insertedRows+batch.duplicateRows+b.rows.length>batch.totalRows-batch.rejectedRows)return s.status(400).json({error:"This chunk exceeds the number of valid rows declared for the import batch."});
  const now=new Date().toISOString();
  const records=b.rows.map(r=>({id:crypto.randomUUID(),organizationId:org.id,studentNumber:r.studentNumber.trim().toUpperCase(),fullName:r.fullName.trim(),email:r.email?.trim().toLowerCase()||null,faculty:r.faculty.trim(),department:r.department.trim(),programme:r.programme.trim(),qualification:r.qualification.trim(),classification:r.classification?.trim()||null,awardDate:r.awardDate||null,createdBy:q.user.id,createdAt:now,updatedAt:now}));
  const {data:inserted,error}=await q.supabase.from("StudentRoster").upsert(records,{onConflict:"organizationId,studentNumber",ignoreDuplicates:true}).select("id");
