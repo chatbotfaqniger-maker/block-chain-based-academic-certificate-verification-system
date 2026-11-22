@@ -283,6 +283,7 @@ create policy verity_student_import_owner_insert on public."StudentImportBatch"
   for insert to authenticated with check (
     "createdBy"=(select auth.uid())::text
     and status='UPLOADING'
+    and "totalRows">0 and "totalChunks">0
     and "insertedRows"=0 and "duplicateRows"=0
     and "processedChunks"=0 and "failedChunks"=0
     and "completedAt" is null
