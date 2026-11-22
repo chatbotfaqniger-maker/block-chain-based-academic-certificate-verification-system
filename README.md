@@ -36,6 +36,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Institution staff access scoped to their own approved institution, with only `certificates:read` and `documents:download` implemented; document downloads require both permissions and never grant issuance or revocation authority
 - Organization registration with System Admin approval
 - Organization-specific student / employee membership and registration codes
+- Institution bulk student roster import from CSV, with validation, duplicate prevention, 100-row chunk processing, import history and institution-scoped access
 - Student institution-link requests and organization approval workflow
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
