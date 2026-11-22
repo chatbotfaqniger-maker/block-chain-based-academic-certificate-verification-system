@@ -247,11 +247,11 @@ The Bulk student import module is available to an approved academic institution 
 
 **Background worker configuration (administrator/deployment task)**
 
-- The queue is stored in Supabase Postgres. Each staged chunk is processed transactionally; a worker restart does not discard queued chunks.
+- The queue is stored in Supabase Postgres. Each staged chunk is processed transactionally; a worker restart does not discard queued chunks. In the current deployment design, the processor runs as a controlled background loop inside the existing Node web process; it does not create a separate Render service.
 - To enable processing, first reconcile and apply the reviewed VERITY import migration, then configure the Render web service with the server-only `SUPABASE_SERVICE_ROLE_KEY` and `ENABLE_STUDENT_IMPORT_WORKER=true`.
 - Never put the service-role/secret key in Vite variables, browser code, public documentation values or Git.
 - If the worker is disabled, batches remain queued and the page will explicitly report that processing is not active. Do not tell users their records have been imported until the batch reaches **COMPLETED** or **PARTIAL**.
-- On the current single free web instance, the worker runs alongside the web process and resumes pending work after a restart/wake. For sustained high-volume institutional use, deploy a dedicated Render background worker and scale it independently.
+- On the current single free web instance, the processor runs alongside the web process and resumes pending work after a restart or service wake. It is not an independent always-on worker, so do not promise immediate completion while the free web service is asleep. For sustained high-volume institutional use, deploy a dedicated Render background worker and scale it independently; that may add hosting cost.
 - If a chunk fails, VERITY records the failed chunk and error summary; an administrator should correct the source data or investigate the failure before starting a corrected batch.
 
 **Important safeguards**
