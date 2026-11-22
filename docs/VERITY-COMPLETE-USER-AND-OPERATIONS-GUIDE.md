@@ -118,7 +118,14 @@ Students should not have to visit ICT for routine onboarding. A physical visit i
 
 For the current importer, prepare the roster in Excel or another spreadsheet application and save/export it as **CSV UTF-8** before uploading. Required headers are `student_number` and `full_name`; optional headers are `institutional_email`, `faculty`, `department`, `programme`, and `academic_session`. A sample, non-real-data template is available at [VERITY Student Roster Template](VERITY-STUDENT-ROSTER-TEMPLATE.csv). Direct .xlsx workbook upload is not yet supported.
 
-Implementation status (22 November 2026): The first roster-backed signup and single-use activation workflow is deployed with CSV roster import, public approved-institution selection, student matriculation-first signup, one-time hashed activation tokens, atomic roster claiming, ACTIVE membership creation, per-student token replacement for eligible unclaimed records, ICT assignment and dispute intake. Direct .xlsx import, two-person approval for active-account reassignment and full real-account end-to-end testing remain outstanding.
+Implementation status (22 November 2026): The first roster-backed signup and single-use activation workflow is deployed with CSV roster import, public approved-institution selection, student matriculation-first signup, one-time hashed activation tokens, atomic roster claiming, ACTIVE membership creation, per-student token replacement for eligible unclaimed records, scoped ICT assignment, and audited registration disputes. Two-person recovery is implemented: a first authorized officer records the review, a different authorized officer must approve completion, and release is blocked when the claimant has certificate records for that student identity so VERITY Admin can review credential ownership. The previous account is not deleted. Direct .xlsx import and full real-account end-to-end testing remain outstanding.
+
+
+### 2.4 In-app student onboarding walkthrough
+
+The **User Guidelines** module now includes a dedicated **Student registration & institution activation** walkthrough. It explains matriculation-first signup, choosing an approved institution, creating a personal password, signing in, entering the private single-use activation token, and contacting institution ICT when a record is missing or already claimed. The institution-side **Student identity & ICT** guide covers roster import, token generation and secure distribution, ICT permissions, and two-person dispute recovery.
+
+This is an in-app interactive written walkthrough. It does not mean the previously completed cinematic VERITY documentary MP4 has been re-edited or replaced; a separate narrated screen-recording/video segment would be a distinct media deliverable.
 
 ## 3. Organization onboarding and approval
 
