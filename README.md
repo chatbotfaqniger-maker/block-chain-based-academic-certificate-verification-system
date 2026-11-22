@@ -90,6 +90,12 @@ The current user-facing bulk workflow supports three methods:
 The branch also contains additive Supabase migration groundwork for a future durable, server-side bulk issuance queue. It defines tenant-scoped batch/item records, idempotency safeguards, worker-claim and finalize RPCs, and lease handling. **This groundwork is not yet connected to the application, the migration has not been applied to the hosted Supabase project, and no certificate-issuance worker is enabled.** The current browser-sequential workflow described above is the only implemented bulk issuance path. Do not enable the queue or apply its migration until isolated PostgreSQL migration tests, application integration, retry/reconciliation tests and the production migration-history review are complete.
 
 
+
+
+### Queue migration validation in CI
+
+The pull-request workflow runs the queue migration against an isolated PostgreSQL 16 service using a minimal Supabase-compatible schema fixture. It executes the migration and tests claim, successful completion, and expired-lease reconciliation. This is a migration/lifecycle integration test, not a full reproduction of the hosted Supabase schema or a substitute for reconciling the live migration history before release.
+
 ## Complete documentation
 
 The full user and operations manual is available here:
