@@ -247,8 +247,9 @@ An organization owner can assign limited access to existing VERITY accounts.
    - `documents:download` — retrieve that institution's original certificate files after the stored file passes its SHA-256 integrity check. This permission also requires `certificates:read`.
 
 Only these two staff permissions are implemented. Staff cannot perform verifier-organization lookups, issue or revoke certificates, approve graduate sharing requests, or administer staff accounts.
-5. Add the staff member and confirm that the assignment is active.
-6. Suspend or remove access when the person changes role or leaves.
+5. Add the staff member and confirm that the assignment is active. New assignments begin with read-only access; enable document downloads only when the role requires original files.
+6. Use **Edit permissions** to change an existing staff member's access. Removing certificate-read access also removes document-download access automatically.
+7. Suspend or reactivate an assignment when the person's role changes. Suspend access promptly when the person leaves.
 
 Staff access is restricted to the staff member's own approved academic institution. The database checks the active assignment, the graduate account role, the institution type and approval status, and the requested permission. Suspending the staff assignment or the institution withdraws access. Staff permissions do not grant authority to issue or revoke credentials, approve verifier access, or administer other staff.
 
