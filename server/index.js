@@ -136,7 +136,7 @@ app.get("/api/directory/organizations",run(async(q,s)=>{
  const {data,error}=await db.rpc("verity_public_organization_directory",{p_search:term||null,p_type:type,p_location:location||null});
  if(error)throw error;
  s.setHeader("Cache-Control","public, max-age=60, stale-while-revalidate=300");
- s.json({organizations:(data||[]).map(o=>({name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"}))});
+ s.json({organizations:(data||[]).map(o=>({name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,locationCity:o.locationCity||null,locationState:o.locationState||null,locationCountry:o.locationCountry||null,verificationStatus:"VERITY_APPROVED"}))});
 }));
 
 app.post("/api/auth/register",run(async(q,s)=>{
