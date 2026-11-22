@@ -3,7 +3,7 @@ import VerityShowcase from "./Showcase.jsx";
 import {
   BookOpen, ShieldCheck, ArrowRight, AlertTriangle, LockKeyhole,
   CheckCircle2, LayoutDashboard, Building2, FileCheck2, Activity,
-  Settings, GraduationCap, Users, Plus, Search, Share2, ClipboardCheck
+  Settings, GraduationCap, Users, Plus, Search, Share2, ClipboardCheck, FileSpreadsheet
 } from "lucide-react";
 
 const g = (page, title, icon, intro, audience, steps, actions, permissions, warnings, fixes) => ({
@@ -58,6 +58,13 @@ const adminGuides = [
 
 const institutionGuides = [
   workspaceOverview,
+  g("bulk-students","Bulk Student Import",FileSpreadsheet,"Import and manage large student cohorts without creating login accounts for every student.","Approved academic institution owner.",
+    ["Download the official VERITY student CSV template.","Export the student roster from your student information system and map the required fields: student number, full name, faculty, department, programme and qualification.","Add optional email, classification and award date values only when accurate.","Upload the CSV and review validation errors and duplicate matriculation numbers before starting the import.","Monitor the progress indicator and review the batch history for inserted, duplicate and rejected rows.","If an import is interrupted, re-upload the same file; existing institution/student-number pairs are skipped instead of duplicated."],
+    ["Download template — provides the supported CSV headers and an example row.","Choose student CSV file — reads a CSV locally and displays a preview before submission.","Import — submits valid records in sequential batches of up to 100 rows.","Import history — shows recent batch outcomes.","Student directory — searches the latest 100 roster records."],
+    "Only the approved institution owner can import student rosters. Student roster records are separate from Supabase Auth accounts and do not automatically issue certificates or grant access to private documents.",
+    ["Verify the source spreadsheet before upload and share student data only with authorized institutional staff.","Student numbers are unique within an institution. Existing numbers are skipped rather than overwritten.","Do not upload passwords, national identity numbers or unrelated sensitive data."],
+    ["If required columns are missing, download the template and correct the header names.","If a row is rejected, correct its missing or invalid values and re-upload the CSV.","If a batch is interrupted, check its status and re-upload the same file; duplicate student numbers will be skipped."]),
+
   g("identity","Identity",Building2,"Submit official institutional identity details and supporting evidence for review.","Institution administrator / organization owner for an academic institution.",
     ["Open Institution Identity and confirm the institution name and current application status.","Enter the official registration number, website, email domain and accreditation or supervising body where requested.","Upload the official registration or accreditation evidence using the evidence form.","Submit the evidence and wait for a Verity System Administrator to review it. Respond to any clarification request."],
     ["Evidence type — labels the kind of official document being submitted.","Choose file — selects the supporting evidence file.","Submit evidence — uploads the file to the private evidence area for manual review."],
