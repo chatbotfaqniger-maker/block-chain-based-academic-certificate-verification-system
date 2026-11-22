@@ -638,3 +638,16 @@ The Issue Resolution Centre is available from every signed-in workspace.
 
 ### Current capability boundary
 The first release provides ticket submission, tenant-scoped visibility, status tracking and audit history. It does not yet provide automated root-cause diagnosis, repair scripts, ticket attachments, comments, or automatic retry buttons. Infrastructure-level and privileged repairs remain System Administrator responsibilities. Never change the certificate ledger or audit history to resolve a user support ticket.
+
+
+### Direct support chat
+
+The Issue Resolution Centre includes a private conversation thread for each support report.
+- Organization and institution owners can open a conversation with VERITY Admin from their dashboard.
+- VERITY Admin can review conversations across the platform and reply from the Admin workspace.
+- Messages appear in chronological order and refresh automatically while the conversation is open.
+- Conversation access is restricted to the report's submitter, the owning organization and VERITY Admin.
+- Closed conversations are read-only. A new support request can be opened if further help is needed.
+- The inbox supports search and status filters. Status changes are audited.
+
+The current chat release uses periodic refresh for new messages; it is not advertised as a guaranteed instant-delivery or staffed 24/7 live-chat service.
