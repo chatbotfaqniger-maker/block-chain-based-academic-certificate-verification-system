@@ -77,12 +77,12 @@ function parseRosterCsv(source) {
   if(quoted){if(ch==='"'&&next==='"'){field+='"';i++;}else if(ch==='"')quoted=false;else field+=ch;}
   else if(ch==='"')quoted=true;
   else if(ch===","){row.push(field);field="";}
-  else if(ch==="\\n"){row.push(field);rows.push(row);row=[];field="";}
-  else if(ch!=="\\r")field+=ch;
+  else if(ch==="\n"){row.push(field);rows.push(row);row=[];field="";}
+  else if(ch!=="\r")field+=ch;
  }
  if(quoted)throw new Error("The CSV contains an unclosed quoted field.");
  if(field.length||row.length){row.push(field);rows.push(row);}
- const headers=(rows.shift()||[]).map(x=>String(x).trim().toLowerCase().replace(/[\\s-]+/g,"_"));
+ const headers=(rows.shift()||[]).map(x=>String(x).trim().toLowerCase().replace(/[\s-]+/g,"_"));
  const required=["student_number","full_name"];
  for(const key of required)if(!headers.includes(key))throw new Error("CSV must include student_number and full_name columns.");
  return rows.filter(r=>r.some(v=>String(v||"").trim())).map(values=>Object.fromEntries(headers.map((h,i)=>[h,String(values[i]||"").trim()])));
@@ -293,17 +293,17 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
  if(!Buffer.isBuffer(q.body)||!q.body.length)return s.status(400).json({error:"Upload a non-empty CSV roster file."});
  const fileName=String(q.headers["x-file-name"]||"student-roster.csv").normalize("NFKC").slice(0,180);
  if(!/\.csv$/i.test(fileName))return s.status(415).json({error:"The first roster-import release accepts CSV files. Excel workbook import will be added as a compatible format."});
- const rows=parseRosterCsv(q.body.toString("utf8").replace(/^\\uFEFF/,""));
+ const rows=parseRosterCsv(q.body.toString("utf8").replace(/^\uFEFF/,""));
  if(!rows.length)return s.status(400).json({error:"The CSV contains no student records."});
  if(rows.length>10000)return s.status(413).json({error:"A single import is limited to 10,000 student records."});
  const batchId=crypto.randomUUID(),seen=new Set(),valid=[],rejected=[];
  for(let i=0;i<rows.length;i++){
-  const r=rows[i],number=String(r.student_number||r.matric_number||"").trim(),name=String(r.full_name||r.student_name||"").trim(),normalized=number.toUpperCase().replace(/\\s+/g,"");
+  const r=rows[i],number=String(r.student_number||r.matric_number||"").trim(),name=String(r.full_name||r.student_name||"").trim(),normalized=number.toUpperCase().replace(/\s+/g,"");
   if(number.length<2||number.length>80||name.length<2||name.length>160||!normalized){rejected.push({row:i+2,reason:"Missing or invalid student_number/full_name"});continue;}
   if(seen.has(normalized)){rejected.push({row:i+2,reason:"Duplicate matriculation number in this file"});continue;}
   seen.add(normalized);
   const email=String(r.institutional_email||r.email||"").trim().toLowerCase();
-  if(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){rejected.push({row:i+2,reason:"Invalid institutional email"});continue;}
+  if(email&&!/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)){rejected.push({row:i+2,reason:"Invalid institutional email"});continue;}
   valid.push({id:crypto.randomUUID(),organizationId:org.id,studentNumber:number,normalizedStudentNumber:normalized,fullName:name,institutionalEmail:email||null,faculty:r.faculty||null,department:r.department||null,programme:r.programme||r.course||null,academicSession:r.academic_session||r.session||null,status:"ELIGIBLE",createdBy:q.user.id,importBatchId:batchId,updatedAt:new Date().toISOString()});
  }
  let inserted=0;
@@ -356,7 +356,7 @@ app.post("/api/institution/recoveries",auth,run(async(q,s)=>{
  const b=z.object({studentNumber:z.string().min(2).max(80),reason:z.string().trim().min(10).max(1000)}).parse(q.body);
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution owner or ICT recovery officer is required."});
- const normalized=b.studentNumber.trim().toUpperCase().replace(/\\s+/g,"");
+ const normalized=b.studentNumber.trim().toUpperCase().replace(/\s+/g,"");
  const {data:roster,error:re}=await q.supabase.from("StudentRoster").select("id,status").eq("organizationId",org.id).eq("normalizedStudentNumber",normalized).maybeSingle();if(re)throw re;
  if(!roster)return s.status(404).json({error:"No matching roster record was found. Check the number against official institution records."});
  const {data,error}=await q.supabase.from("StudentRegistrationRecovery").insert({id:crypto.randomUUID(),organizationId:org.id,rosterId:roster.id,reportedBy:q.user.id,reason:b.reason}).select().single();if(error)throw error;
