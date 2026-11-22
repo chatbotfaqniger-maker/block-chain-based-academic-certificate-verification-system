@@ -111,7 +111,7 @@ Institution registration codes do not expire by default. An institution may expl
 **Misclaim and recovery safeguards**
 - A student who believes another account has claimed their matriculation number should report it to the institution ICT office.
 - Authorized ICT staff check the official student record and open a registration-dispute case. The record is flagged for review.
-- An ACTIVE account is never silently detached or transferred. The current release supports dispute intake and blocks token reissue for claimed records; a complete two-person approval and active-account ownership-transfer workflow is still pending.
+- An ACTIVE account is never silently detached or transferred. ICT can record a first review and a different authorized officer must provide the second approval before a claimed record can be released. The system blocks this release if the claimant has certificate records for that institution and matriculation number; those cases are escalated to VERITY Admin for manual credential-history review. On successful two-person release, the old institution membership is rejected, the roster record returns to ELIGIBLE, and a fresh one-time activation token is issued. The old account itself is not deleted.
 - ICT must never request a student's password or ask them to share their session token. Use institution records and documented identity checks.
 
 Students should not have to visit ICT for routine onboarding. A physical visit is only an institution's fallback when its approved remote identity-checking and token-distribution channels cannot establish the student's identity.
