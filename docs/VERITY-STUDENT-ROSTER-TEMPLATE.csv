@@ -1,0 +1,3 @@
+student_number,full_name,institutional_email,faculty,department,programme,academic_session
+VERITY-DEMO-001,Sample Student One,student.one@example.edu,Computing,Computer Science,BSc Computer Science,2025/2026
+VERITY-DEMO-002,Sample Student Two,student.two@example.edu,Computing,Information Technology,BSc Information Technology,2025/2026
