@@ -242,9 +242,9 @@ An organization owner can assign limited access to existing VERITY accounts.
 1. Ask the staff member to create and verify their own account.
 2. Open **Staff**.
 3. Enter the exact email address used by the staff member's VERITY account.
-4. Select only the permissions required for their job:
-   - `certificates:read` — read certificate records belonging to the institution that assigned the staff member.
-   - `documents:download` — download that institution's original certificate documents after the stored file passes its SHA-256 integrity check. This permission also requires `certificates:read`.
+4. Select only the permissions required for their job. New assignments default to read-only:
+   - `certificates:read` — read certificate records and associated document details belonging to the institution that assigned the staff member. This does not expose the private file itself.
+   - `documents:download` — retrieve that institution's original certificate files after the stored file passes its SHA-256 integrity check. This permission also requires `certificates:read`.
 
 Only these two staff permissions are implemented. Staff cannot perform verifier-organization lookups, issue or revoke certificates, approve graduate sharing requests, or administer staff accounts.
 5. Add the staff member and confirm that the assignment is active.
