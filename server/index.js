@@ -329,7 +329,7 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
  for(let i=0;i<valid.length;i+=200){
   const chunk=valid.slice(i,i+200);
   const {data,error}=await q.supabase.from("StudentRoster").upsert(chunk,{onConflict:"organizationId,normalizedStudentNumber",ignoreDuplicates:true}).select("id");
-  if(error)throw error;
+  if(error){await q.supabase.from("StudentRoster").delete().eq("organizationId",org.id).eq("importBatchId",batchId);throw error;}
   inserted+=(data||[]).length;
  }
  const rejectedCount=rejected.length+(valid.length-inserted);
@@ -379,7 +379,7 @@ app.post("/api/institution/recoveries",auth,run(async(q,s)=>{
  const {data:roster,error:re}=await q.supabase.from("StudentRoster").select("id,status").eq("organizationId",org.id).eq("normalizedStudentNumber",normalized).maybeSingle();if(re)throw re;
  if(!roster)return s.status(404).json({error:"No matching roster record was found. Check the number against official institution records."});
  const {data,error}=await q.supabase.from("StudentRegistrationRecovery").insert({id:crypto.randomUUID(),organizationId:org.id,rosterId:roster.id,reportedBy:q.user.id,reason:b.reason}).select().single();if(error)throw error;
- await q.supabase.from("StudentRoster").update({status:"DISPUTED",updatedAt:new Date().toISOString()}).eq("id",roster.id).eq("organizationId",org.id);
+ const {error:flagError}=await q.supabase.from("StudentRoster").update({status:"DISPUTED",updatedAt:new Date().toISOString()}).eq("id",roster.id).eq("organizationId",org.id);if(flagError)throw flagError;
  await audit(q.supabase,q.user.id,"STUDENT_REGISTRATION_DISPUTE_OPENED","StudentRegistrationRecovery",data.id,{organizationId:org.id,rosterId:roster.id});
  s.status(201).json({recovery:data,message:"A registration dispute has been opened. The existing account has not been transferred or deleted."});
 }));
