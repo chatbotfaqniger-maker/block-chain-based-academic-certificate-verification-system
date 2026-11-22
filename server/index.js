@@ -729,20 +729,16 @@ app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
 
 
 app.get("/api/issues/:id/messages",auth,run(async(q,s)=>{
- const {data:messages,error}=await q.supabase.from("IssueMessage").select("id,issueId,authorId,body,createdAt").eq("issueId",q.params.id).order("createdAt",{ascending:true}).limit(300);
+ const {data:messages,error}=await q.supabase.from("IssueMessage").select("id,issueId,authorId,authorName,authorRole,body,createdAt").eq("issueId",q.params.id).order("createdAt",{ascending:true}).limit(300);
  if(error)throw error;
- const authorIds=[...new Set((messages||[]).map(m=>m.authorId))];
- const {data:authors,error:authorError}=authorIds.length?await q.supabase.from("User").select("id,fullName,role").in("id",authorIds):{data:[],error:null};
- if(authorError)throw authorError;
- s.json({messages:(messages||[]).map(m=>({...m,author:(authors||[]).find(a=>a.id===m.authorId)||{fullName:"VERITY user",role:"USER"}}))});
+ s.json({messages:messages||[]});
 }));
 app.post("/api/issues/:id/messages",auth,run(async(q,s)=>{
  const b=z.object({body:z.string().trim().min(1).max(5000)}).parse(q.body);
- const {data,error}=await q.supabase.from("IssueMessage").insert({id:crypto.randomUUID(),issueId:q.params.id,authorId:q.user.id,body:b.body,createdAt:new Date().toISOString()}).select("id,issueId,authorId,body,createdAt").single();
+ const {data,error}=await q.supabase.from("IssueMessage").insert({id:crypto.randomUUID(),issueId:q.params.id,authorId:q.user.id,authorName:q.user.fullName||"VERITY user",authorRole:q.user.role,body:b.body,createdAt:new Date().toISOString()}).select("id,issueId,authorId,authorName,authorRole,body,createdAt").single();
  if(error)throw error;
  await audit(q.supabase,q.user.id,"ISSUE_MESSAGE_SENT","IssueReport",q.params.id,{messageId:data.id});
- const {data:author}=await q.supabase.from("User").select("id,fullName,role").eq("id",q.user.id).maybeSingle();
- s.status(201).json({message:{...data,author:author||{fullName:"VERITY user",role:q.user.role}}});
+ s.status(201).json({message:data});
 }));
 app.get("/api/issues",auth,run(async(q,s)=>{
   const {data,error}=await q.supabase.from("IssueReport").select("id,ticketNumber,reporterId,organizationId,category,severity,subject,description,status,resolutionNotes,assignedTo,createdAt,updatedAt,resolvedAt").order("createdAt",{ascending:false}).limit(100);
