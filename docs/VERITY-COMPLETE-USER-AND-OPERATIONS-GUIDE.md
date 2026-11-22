@@ -224,6 +224,34 @@ While the application is pending, correct incomplete details if the interface al
 
 Never approve a membership based only on a matching name. Registration codes are invitations and should not be published openly.
 
+#### 5.2.1 Bulk student import and roster management
+
+The Bulk student import module is available to an approved academic institution owner. It supports controlled CSV imports for large cohorts without creating a Verity login account for every student.
+
+1. Open **Bulk student import** from the Institution workspace.
+2. Download the official VERITY CSV template.
+3. Export the relevant student records from the institution's student information system and populate the required columns:
+   - `student_number`
+   - `full_name`
+   - `faculty`
+   - `department`
+   - `programme`
+   - `qualification`
+4. Optional columns are `email`, `classification` and `award_date` (YYYY-MM-DD).
+5. Save the file as CSV and upload it. The browser validates the file and shows a preview before submission.
+6. Correct missing required values, invalid email/date values and duplicate student numbers within the file.
+7. Start the import and monitor the progress. VERITY sends records in sequential batches of up to 100 rows.
+8. Review Import history for the number of records added, duplicate records skipped and rejected rows.
+
+**Important safeguards**
+
+- The maximum CSV file size is 5 MB and one file may contain up to 50,000 data rows.
+- Student numbers are normalized and unique within the institution. Existing institution/student-number pairs are skipped; existing roster details are not silently overwritten.
+- If a connection is interrupted, upload the same corrected file again. Existing records are skipped rather than duplicated.
+- A roster entry is not a Verity authentication account, a certificate, or a grant to view a private certificate document.
+- Graduates create their own accounts and use the existing institution-link request and approval workflow.
+- The roster directory currently displays the latest 100 records; use the search field to filter those loaded records.
+
 ### 5.3 Assign staff permissions
 
 An organization owner can assign limited access to existing VERITY accounts.
