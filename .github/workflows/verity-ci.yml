@@ -2,7 +2,7 @@ name: VERITY build and test
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/institutional-bulk-student-management]
   push:
     branches: [main, feature/verity-cinematic-showcase-guides]
 
