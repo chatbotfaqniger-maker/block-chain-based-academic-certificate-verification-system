@@ -47,6 +47,7 @@ create table if not exists public."CertificateIssuanceItem" (
   "updatedAt" timestamptz not null default now(),
   "processedAt" timestamptz,
   constraint "CertificateIssuanceItem_batch_row_unique" unique ("batchId","rowNumber"),
+  constraint "CertificateIssuanceItem_batch_student_unique" unique ("batchId","studentNumber"),
   constraint "CertificateIssuanceItem_idempotency_unique" unique ("organizationId","idempotencyKey"),
   constraint "CertificateIssuanceItem_lease_consistent"
     check ((status='PROCESSING' and "leaseToken" is not null and "leasedAt" is not null)
@@ -250,3 +251,57 @@ $$;
 
 revoke all on function public.finish_certificate_issuance_item(text,text,text,text,text,text) from public,anon,authenticated;
 grant execute on function public.finish_certificate_issuance_item(text,text,text,text,text,text) to service_role;
+
+
+-- Keep item tenancy and batch membership consistent even if a privileged
+-- application path accidentally supplies a mismatched organization ID.
+create or replace function public.guard_certificate_issuance_item_tenant()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_org_id text;
+  v_batch_status text;
+begin
+  select b."organizationId",b.status
+    into v_org_id,v_batch_status
+    from public."CertificateIssuanceBatch" b
+    where b.id=new."batchId"
+    for key share;
+
+  if not found or v_org_id<>new."organizationId" then
+    raise exception 'Issuance item organization must match its batch';
+  end if;
+
+  if tg_op='INSERT' and (v_batch_status<>'UPLOADING' or new.status<>'STAGED'
+      or new.attempts<>0 or new."certificateId" is not null
+      or new."leaseToken" is not null or new."leasedAt" is not null) then
+    raise exception 'New issuance items must be staged in an uploading batch';
+  end if;
+
+  if tg_op='UPDATE' and (
+      new."batchId"<>old."batchId"
+      or new."organizationId"<>old."organizationId"
+      or new."rowNumber"<>old."rowNumber"
+      or new."studentNumber"<>old."studentNumber"
+      or new."idempotencyKey"<>old."idempotencyKey"
+      or new.payload<>old.payload
+      or new."documentStoragePath" is distinct from old."documentStoragePath"
+      or new."documentSha256" is distinct from old."documentSha256"
+  ) then
+    raise exception 'Staged issuance identity and payload are immutable';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists verity_guard_certificate_issuance_item_tenant
+  on public."CertificateIssuanceItem";
+create trigger verity_guard_certificate_issuance_item_tenant
+  before insert or update on public."CertificateIssuanceItem"
+  for each row execute function public.guard_certificate_issuance_item_tenant();
+
+revoke all on function public.guard_certificate_issuance_item_tenant() from public,anon,authenticated;
