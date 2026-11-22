@@ -12,6 +12,7 @@ import { z } from "zod";
 import { createVerityMarketingMp4 } from "./marketing-video.js";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
 import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "./staff-permissions.js";
+import { startStudentImportWorker } from "./student-import-worker.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -20,6 +21,8 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
+const importWorkerEnabled = process.env.ENABLE_STUDENT_IMPORT_WORKER === "true" && Boolean(SUPABASE_SERVER_KEY);
+let stopImportWorker = null;
 const makeClient = (accessToken) => {
   if (!configured) throw new Error("Supabase is not configured. Add the Project URL and Publishable Key.");
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -250,7 +253,7 @@ app.get("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(a
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
  const {data,error}=await q.supabase.from("StudentImportBatch").select("id,fileName,totalRows,totalChunks,processedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(20);
  if(error)throw error;
- s.json({batches:data||[],workerEnabled:Boolean(SUPABASE_SERVER_KEY)});
+ s.json({batches:data||[],workerEnabled:importWorkerEnabled});
 }));
 app.post("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({
@@ -792,6 +795,21 @@ async function start(){
   console.log("Blockchain:",chain.enabled?"connected (optional Polygon anchor)":"disabled (optional future layer)");
   console.log("Certificate ledger: Supabase append-only SHA-256 hash chain.");
   console.log("Document security: private storage, file-signature validation and SHA-256 integrity checks; antivirus scanning is disabled.");
-  app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
+  if(process.env.ENABLE_STUDENT_IMPORT_WORKER==="true"){
+    if(!SUPABASE_SERVER_KEY) throw new Error("ENABLE_STUDENT_IMPORT_WORKER requires SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY).");
+    const workerClient=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    stopImportWorker=startStudentImportWorker({client:workerClient});
+    console.log("Institutional student import worker: enabled (Postgres-backed, restart-safe queue).");
+  }else{
+    console.log("Institutional student import worker: disabled; enable it only after applying the queue migration.");
+  }
+  const server=app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
+  const shutdown=async signal=>{
+    console.log(`Received ${signal}; stopping student import worker and HTTP server.`);
+    const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref();
+    try{if(stopImportWorker)await stopImportWorker();}finally{server.close(()=>{clearTimeout(forceExit);process.exit(0);});}
+  };
+  process.once("SIGTERM",()=>shutdown("SIGTERM"));
+  process.once("SIGINT",()=>shutdown("SIGINT"));
 }
 start().catch(e=>{console.error(e);process.exit(1);});
