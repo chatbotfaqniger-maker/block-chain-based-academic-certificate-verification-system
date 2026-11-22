@@ -174,7 +174,14 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional()}).parse(q.body);
  const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;
  if(!org)return s.status(404).json({error:"Organization not found."});
- if(org.status!=="PENDING")return s.status(403).json({error:"Organization identity details can only be edited while the application is pending."});
+ if(org.status!=="PENDING"){
+   const submittedKeys=Object.keys(q.body||{});
+   if(org.status!=="APPROVED"||!submittedKeys.length||submittedKeys.some(k=>!["locationCity","locationState","locationCountry"].includes(k)))return s.status(403).json({error:"Approved organizations may update only their public location here. Legal identity changes require a new VERITY review."});
+   const locationPatch={locationCity:b.locationCity?.trim()||null,locationState:b.locationState?.trim()||null,locationCountry:b.locationCountry?.trim()||null,updatedAt:new Date().toISOString()};
+   const {data,error}=await q.supabase.from("Organization").update(locationPatch).eq("id",org.id).eq("ownerId",q.user.id).select("*").single();if(error)throw error;
+   await audit(q.supabase,q.user.id,"ORGANIZATION_PUBLIC_LOCATION_UPDATED","Organization",org.id,{locationCity:locationPatch.locationCity,locationState:locationPatch.locationState,locationCountry:locationPatch.locationCountry});
+   return s.json({organization:data,message:"Public location updated. The directory labels it as organization-reported."});
+ }
  const patch={registrationNumber:b.registrationNumber?.trim()||null,officialWebsite:b.officialWebsite?.trim()||null,officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||null,accreditationBody:b.accreditationBody?.trim()||null,locationCity:b.locationCity?.trim()||null,locationState:b.locationState?.trim()||null,locationCountry:b.locationCountry?.trim()||null,updatedAt:new Date().toISOString()};
  if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.officialWebsite||!patch.accreditationBody))return s.status(400).json({error:"Institutions must provide a registration number, official website and accreditation body."});
  if(patch.officialWebsite&&!/^https?:\/\//i.test(patch.officialWebsite))return s.status(400).json({error:"Enter the official website with https:// or http://."});
