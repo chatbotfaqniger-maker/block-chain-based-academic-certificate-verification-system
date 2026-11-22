@@ -38,6 +38,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Organization-specific student / employee membership and registration codes
 - Institution bulk student roster import from CSV, with validation, duplicate prevention, durable Postgres-backed chunk queue, background processing, import history, tenant-scoped full-roster search and pagination
 - Institution operational analytics for registered students, issued certificates and active credentials
+- Institution bulk certificate issuance using CSV + ZIP of PDFs, CSV + multiple PDFs, or CSV-only generation from the VERITY template; the existing individual issuance workflow remains available
 - Student institution-link requests and organization approval workflow
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
@@ -51,6 +52,42 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Audit events
 - Solidity certificate registry with optional EVM integration
 
+
+
+## Bulk certificate issuance
+
+Approved academic institutions can issue a cohort of certificates from the **Bulk certificate issuance** workspace. The existing one-at-a-time **Issue certificate** workflow remains available.
+
+The current user-facing bulk workflow supports three methods:
+
+1. **CSV + ZIP of PDFs** — upload a CSV roster and a ZIP archive containing the students' individual PDF certificates.
+2. **CSV + multiple PDFs** — upload the CSV roster and select the individual PDF files directly.
+3. **CSV only — generate certificates** — VERITY creates one standard PDF certificate per valid student row using its built-in template.
+
+### Input format and matching
+
+- Download and use the VERITY CSV template.
+- Required columns: `student_number`, `full_name`, `faculty`, `department`, `programme`, and `qualification`.
+- Optional columns: `email`, `classification`, and `award_date` in `YYYY-MM-DD` format.
+- Excel workbooks (`.xlsx`) are not parsed directly. Export the workbook as **CSV UTF-8** before uploading.
+- For uploaded certificate PDFs, each filename (without `.pdf`) must match the student's student number. Matching uses the normalized student number, not a guessed name match.
+- Missing or duplicate file matches must be resolved before the batch can proceed.
+
+### Current operational limits and safeguards
+
+- Up to 500 student records per browser batch; CSV maximum 5 MB.
+- ZIP maximum 250 MB, with up to 500 PDF entries and 250 MB total expanded PDF content; each PDF is limited to 10 MB.
+- Encrypted ZIPs, unsupported compression, invalid CRC checksums, symbolic links and non-PDF entries are rejected.
+- The institution reviews the batch and explicitly confirms before issuance.
+- The current issuance interface processes records sequentially in the browser. Keep the page open until processing finishes.
+- If a document upload fails after a certificate record has been created, resolve the document attachment against that certificate ID. Do not issue the same student again.
+- If the connection is interrupted and the outcome is uncertain, check the certificate registry before retrying. Do not create a duplicate certificate.
+- VERITY-generated PDFs are unsigned templates. The issuing institution remains responsible for the accuracy of award details and applying its authorized signature/seal.
+- File-signature validation and SHA-256 integrity checks are implemented; antivirus scanning is not.
+
+### Durable queue development status
+
+The branch also contains additive Supabase migration groundwork for a future durable, server-side bulk issuance queue. It defines tenant-scoped batch/item records, idempotency safeguards, worker-claim and finalize RPCs, and lease handling. **This groundwork is not yet connected to the application, the migration has not been applied to the hosted Supabase project, and no certificate-issuance worker is enabled.** The current browser-sequential workflow described above is the only implemented bulk issuance path. Do not enable the queue or apply its migration until isolated PostgreSQL migration tests, application integration, retry/reconciliation tests and the production migration-history review are complete.
 
 
 ## Complete documentation
