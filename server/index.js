@@ -304,7 +304,7 @@ app.post("/api/organization/registration-code/rotate",auth,roles("EMPLOYER"),run
 }));
 
 app.get("/api/student/registration-options",run(async(q,s)=>{
- const {data,error}=await makeClient().rpc("verity_public_organization_directory",{p_search:null,p_type:"INSTITUTION"});
+ const {data,error}=await makeClient().rpc("verity_student_signup_institutions");
  if(error)throw error;
  s.json({institutions:(Array.isArray(data)?data:[]).map(o=>({id:o.id,name:o.name,location:[o.locationCity,o.locationState,o.locationCountry].filter(Boolean).join(", ")})).sort((a,b)=>a.name.localeCompare(b.name))});
 }));
