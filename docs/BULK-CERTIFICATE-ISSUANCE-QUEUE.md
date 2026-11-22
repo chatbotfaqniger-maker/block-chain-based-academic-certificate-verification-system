@@ -35,3 +35,8 @@ The migration creates:
 ## Local validation
 
 The repository's normal CI validates JavaScript syntax, frontend build, automated tests, and Docker image construction. Those checks do not execute this SQL migration. A PostgreSQL migration test is a required gate before the queue can be considered operational.
+
+
+## PostgreSQL CI validation
+
+The pull-request workflow now starts an isolated PostgreSQL 16 service, creates a minimal Supabase-compatible fixture (`tests/fixtures/queue-migration-bootstrap.sql`), executes this migration, and runs queue lifecycle assertions (`tests/fixtures/queue-migration-lifecycle.sql`). The assertions cover a successful claim/finalize cycle and ensure an expired worker lease is moved to `NEEDS_REVIEW` rather than being automatically issued again. This validates SQL execution and these lifecycle paths against PostgreSQL; it does not reproduce the complete hosted Supabase schema, migration history, Auth, Storage, or production RLS environment.
