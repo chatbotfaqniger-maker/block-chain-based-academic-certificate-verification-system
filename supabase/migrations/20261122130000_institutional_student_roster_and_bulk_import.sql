@@ -78,6 +78,7 @@ grant select,insert,update on public."StudentImportBatch" to authenticated;
 alter table public."StudentImportBatch"
   add column if not exists "totalChunks" integer not null default 0 check ("totalChunks" >= 0),
   add column if not exists "processedChunks" integer not null default 0 check ("processedChunks" >= 0),
+  add column if not exists "failedChunks" integer not null default 0 check ("failedChunks" >= 0),
   add column if not exists "updatedAt" timestamptz not null default now();
 
 alter table public."StudentImportBatch"
@@ -148,8 +149,10 @@ declare
   v_processed integer := 0;
   v_inserted_total integer := 0;
   v_duplicate_total integer := 0;
+  v_failed_total integer := 0;
   v_rejected integer := 0;
   v_final_status text := 'PROCESSING';
+  v_error text;
 begin
   select c.* into v_chunk
   from public."StudentImportChunk" c
@@ -164,65 +167,92 @@ begin
   end if;
 
   update public."StudentImportChunk"
-    set status='PENDING', attempts=attempts+1
+    set attempts=attempts+1
     where id=v_chunk.id;
 
   v_total := jsonb_array_length(v_chunk.rows);
 
-  insert into public."StudentRoster" (
-    id,"organizationId","studentNumber","fullName",email,faculty,department,
-    programme,qualification,classification,"awardDate","createdBy","createdAt","updatedAt"
-  )
-  select
-    gen_random_uuid()::text,
-    v_chunk."organizationId",
-    upper(trim(x."studentNumber")),
-    trim(x."fullName"),
-    nullif(lower(trim(x.email)),''),
-    trim(x.faculty),
-    trim(x.department),
-    trim(x.programme),
-    trim(x.qualification),
-    nullif(trim(x.classification),''),
-    case when nullif(trim(x."awardDate"),'') is null then null
-      else trim(x."awardDate")::date end,
-    v_chunk."createdBy",
-    now(),
-    now()
-  from jsonb_to_recordset(v_chunk.rows) as x(
-    "studentNumber" text,"fullName" text,email text,faculty text,
-    department text,programme text,qualification text,classification text,"awardDate" text
-  )
-  on conflict ("organizationId","studentNumber") do nothing;
+  begin
+    insert into public."StudentRoster" (
+      id,"organizationId","studentNumber","fullName",email,faculty,department,
+      programme,qualification,classification,"awardDate","createdBy","createdAt","updatedAt"
+    )
+    select
+      gen_random_uuid()::text,
+      v_chunk."organizationId",
+      upper(trim(x."studentNumber")),
+      trim(x."fullName"),
+      nullif(lower(trim(x.email)),''),
+      trim(x.faculty),
+      trim(x.department),
+      trim(x.programme),
+      trim(x.qualification),
+      nullif(trim(x.classification),''),
+      case when nullif(trim(x."awardDate"),'') is null then null
+        else trim(x."awardDate")::date end,
+      v_chunk."createdBy",
+      now(),
+      now()
+    from jsonb_to_recordset(v_chunk.rows) as x(
+      "studentNumber" text,"fullName" text,email text,faculty text,
+      department text,programme text,qualification text,classification text,"awardDate" text
+    )
+    on conflict ("organizationId","studentNumber") do nothing;
 
-  get diagnostics v_inserted = row_count;
+    get diagnostics v_inserted = row_count;
 
-  update public."StudentImportChunk"
-    set status='COMPLETED', "processedAt"=now(), "errorMessage"=null
-    where id=v_chunk.id;
+    update public."StudentImportChunk"
+      set status='COMPLETED', "processedAt"=now(), "errorMessage"=null
+      where id=v_chunk.id;
 
-  update public."StudentImportBatch"
-    set "insertedRows"="insertedRows"+v_inserted,
-        "duplicateRows"="duplicateRows"+(v_total-v_inserted),
-        "processedChunks"="processedChunks"+1,
-        status=case
-          when "processedChunks"+1 >= "totalChunks" then
-            case when "rejectedRows">0 or "duplicateRows"+(v_total-v_inserted)>0
-              then 'PARTIAL' else 'COMPLETED' end
-          else 'PROCESSING'
-        end,
-        "completedAt"=case when "processedChunks"+1 >= "totalChunks" then now() else null end,
-        "updatedAt"=now()
-    where id=v_chunk."batchId"
-    returning "processedChunks","insertedRows","duplicateRows","rejectedRows",status
-      into v_processed,v_inserted_total,v_duplicate_total,v_rejected,v_final_status;
+    update public."StudentImportBatch"
+      set "insertedRows"="insertedRows"+v_inserted,
+          "duplicateRows"="duplicateRows"+(v_total-v_inserted),
+          "processedChunks"="processedChunks"+1,
+          status=case
+            when "processedChunks"+1 >= "totalChunks" then
+              case when "rejectedRows">0 or "failedChunks">0 or "duplicateRows"+(v_total-v_inserted)>0
+                then 'PARTIAL' else 'COMPLETED' end
+            else 'PROCESSING'
+          end,
+          "completedAt"=case when "processedChunks"+1 >= "totalChunks" then now() else null end,
+          "updatedAt"=now()
+      where id=v_chunk."batchId"
+      returning "processedChunks","insertedRows","duplicateRows","failedChunks","rejectedRows",status
+        into v_processed,v_inserted_total,v_duplicate_total,v_failed_total,v_rejected,v_final_status;
 
-  return jsonb_build_object(
-    'processed',true,'batchId',v_chunk."batchId",'chunkIndex',v_chunk."chunkIndex",
-    'inserted',v_inserted,'duplicates',v_total-v_inserted,
-    'processedChunks',v_processed,'insertedRows',v_inserted_total,
-    'duplicateRows',v_duplicate_total,'rejectedRows',v_rejected,'status',v_final_status
-  );
+    return jsonb_build_object(
+      'processed',true,'batchId',v_chunk."batchId",'chunkIndex',v_chunk."chunkIndex",
+      'inserted',v_inserted,'duplicates',v_total-v_inserted,
+      'processedChunks',v_processed,'insertedRows',v_inserted_total,
+      'duplicateRows',v_duplicate_total,'failedChunks',v_failed_total,
+      'rejectedRows',v_rejected,'status',v_final_status
+    );
+  exception when others then
+    v_error := left(SQLERRM,300);
+    update public."StudentImportChunk"
+      set status='FAILED',"processedAt"=now(),"errorMessage"=v_error
+      where id=v_chunk.id;
+    update public."StudentImportBatch"
+      set "failedChunks"="failedChunks"+1,
+          "processedChunks"="processedChunks"+1,
+          "errorSummary"="errorSummary" || jsonb_build_array(jsonb_build_object(
+            'chunkIndex',v_chunk."chunkIndex",'message','Chunk processing failed: '||v_error
+          )),
+          status=case when "processedChunks"+1 >= "totalChunks" then 'PARTIAL' else 'PROCESSING' end,
+          "completedAt"=case when "processedChunks"+1 >= "totalChunks" then now() else null end,
+          "updatedAt"=now()
+      where id=v_chunk."batchId"
+      returning "processedChunks","insertedRows","duplicateRows","failedChunks","rejectedRows",status
+        into v_processed,v_inserted_total,v_duplicate_total,v_failed_total,v_rejected,v_final_status;
+    return jsonb_build_object(
+      'processed',true,'failed',true,'batchId',v_chunk."batchId",
+      'chunkIndex',v_chunk."chunkIndex",'error',v_error,
+      'processedChunks',v_processed,'insertedRows',v_inserted_total,
+      'duplicateRows',v_duplicate_total,'failedChunks',v_failed_total,
+      'rejectedRows',v_rejected,'status',v_final_status
+    );
+  end;
 end;
 $$;
 
