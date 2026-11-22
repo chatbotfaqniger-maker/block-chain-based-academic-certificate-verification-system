@@ -18,7 +18,7 @@ create table if not exists public."CertificateIssuanceBatch" (
   "updatedAt" timestamptz not null default now(),
   "completedAt" timestamptz,
   constraint "CertificateIssuanceBatch_counts_valid"
-    check ("issuedItems" + "failedItems" + "processingItems" <= "totalItems")
+    check ("queuedItems" + "processingItems" + "issuedItems" + "failedItems" <= "totalItems")
 );
 create index if not exists "CertificateIssuanceBatch_org_created_idx"
   on public."CertificateIssuanceBatch" ("organizationId","createdAt" desc);
