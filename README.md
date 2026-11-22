@@ -41,7 +41,8 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Institution student identity console: private CSV roster import (up to 10,000 rows), duplicate-safe matriculation matching, roster status, scoped ICT officer assignment, registration-dispute intake and one-time activation-token issuance
 - Student signup begins with matriculation number and approved institution selection; account creation is followed by single-use activation-token verification against the institution roster
 - Atomic roster claim prevents duplicate student ownership, marks the token used, activates institution membership and applies the official roster name to the student profile
-- ICT can export per-student activation tokens once, reissue an unused token for an eligible unclaimed record, and open an audited dispute for suspected account misclaims; active accounts are not silently transferred
+- ICT can export per-student activation tokens once, reissue an unused token for an eligible unclaimed record, and open an audited dispute for suspected account misclaims; active-account release requires two different authorized officers, is blocked when the claimant has certificate records for that student identity, and preserves the old account and audit trail
+- The in-app User Guidelines include a step-by-step Student Registration & Institution Activation walkthrough for graduates and a Student Identity & ICT guide for institutions
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
