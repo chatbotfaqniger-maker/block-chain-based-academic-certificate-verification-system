@@ -200,7 +200,7 @@ app.post("/api/auth/register",run(async(q,s)=>{
    if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your institution and enter your matriculation number before creating a student account."});
    const {data:org,error:oe}=await makeClient().from("Organization").select("id,type,status,directoryVisible").eq("id",organizationId).maybeSingle();if(oe)throw oe;
    if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!org.directoryVisible)return s.status(400).json({error:"Choose an approved institution from the registration list."});
-   const normalized=studentNumber.toUpperCase().replace(/\\s+/g,"");
+   const normalized=studentNumber.toUpperCase().replace(/\s+/g,"");
    const {data:roster,error:re}=await makeClient().from("StudentRoster").select("id,status").eq("organizationId",org.id).eq("normalizedStudentNumber",normalized).maybeSingle();if(re)throw re;
    if(!roster||!["ELIGIBLE","CLAIM_PENDING"].includes(roster.status))return s.status(400).json({error:"Your student record could not be prepared for activation. Check the matriculation number with your institution ICT office."});
   }
@@ -321,7 +321,7 @@ app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
  const b=z.object({organizationId:z.string().min(1),studentNumber:z.string().trim().min(2).max(80),activationToken:z.string().trim().min(16).max(100)}).parse(q.body);
  const metadata=q.authUser.user_metadata||{};
  if(metadata.studentOrganizationId&&metadata.studentOrganizationId!==b.organizationId)return s.status(403).json({error:"This account's student registration is linked to a different institution. Contact VERITY support if this is incorrect."});
- if(metadata.studentNumber&&metadata.studentNumber.toUpperCase().replace(/\\s+/g,"")!==b.studentNumber.toUpperCase().replace(/\\s+/g,""))return s.status(403).json({error:"The matriculation number does not match the one supplied during account registration."});
+ if(metadata.studentNumber&&metadata.studentNumber.toUpperCase().replace(/\s+/g,"")!==b.studentNumber.toUpperCase().replace(/\s+/g,""))return s.status(403).json({error:"The matriculation number does not match the one supplied during account registration."});
  const tokenHash=crypto.createHash("sha256").update(b.activationToken).digest("hex");
  const {data,error}=await q.supabase.rpc("activate_verity_student_roster",{p_organization_id:b.organizationId,p_student_number:b.studentNumber,p_token_hash:tokenHash});
  if(error)return s.status(400).json({error:error.message||"Student activation could not be completed."});
@@ -344,7 +344,7 @@ app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
  }
  for(let i=0;i<output.length;i+=200){const chunk=output.slice(i,i+200).map(x=>x.row);const {error:ie}=await q.supabase.from("StudentActivationToken").upsert(chunk,{onConflict:"rosterId"});if(ie)throw ie;}
  const csvCell=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
- const csv=["student_number,full_name,activation_token",...output.map(x=>[x.studentNumber,x.fullName,x.activationToken].map(csvCell).join(","))].join("\\r\\n");
+ const csv=["student_number,full_name,activation_token",...output.map(x=>[x.studentNumber,x.fullName,x.activationToken].map(csvCell).join(","))].join("\r\n");
  await audit(q.supabase,q.user.id,"STUDENT_ACTIVATION_TOKENS_EXPORTED","Organization",org.id,{count:output.length});
  s.set("Content-Type","text/csv; charset=utf-8");s.set("Content-Disposition",'attachment; filename="verity-student-activation-tokens.csv"');
  s.send(csv);
