@@ -251,7 +251,7 @@ app.get("/api/organization/students",auth,roles("EMPLOYER"),run(async(q,s)=>{
 }));
 app.get("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
- const {data,error}=await q.supabase.from("StudentImportBatch").select("id,fileName,totalRows,totalChunks,processedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(20);
+ const {data,error}=await q.supabase.from("StudentImportBatch").select("id,fileName,totalRows,totalChunks,processedChunks,failedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(20);
  if(error)throw error;
  s.json({batches:data||[],workerEnabled:importWorkerEnabled});
 }));
