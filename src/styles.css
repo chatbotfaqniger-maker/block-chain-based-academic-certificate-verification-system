@@ -471,3 +471,5 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 
 .bulk-pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 2px 4px}.bulk-pagination small{color:#7e8c99;font-size:11px}.bulk-pagination>div{display:flex;gap:8px}.bulk-pagination .btn-outline{padding:8px 12px;border:1px solid #dce5e9;border-radius:8px;background:#fff;color:#36566b;font-size:11px}.bulk-pagination .btn-outline:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:520px){.bulk-pagination{align-items:flex-start;flex-direction:column}}
+
+.bulk-batch-error{grid-column:1/-1;color:#a14c43;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
