@@ -72,3 +72,159 @@ create policy verity_student_import_owner_update on public."StudentImportBatch" 
 );
 grant select,insert,update on public."StudentRoster" to authenticated;
 grant select,insert,update on public."StudentImportBatch" to authenticated;
+
+
+-- Durable, resumable import queue. Rows are staged in Postgres before processing.
+alter table public."StudentImportBatch"
+  add column if not exists "totalChunks" integer not null default 0 check ("totalChunks" >= 0),
+  add column if not exists "processedChunks" integer not null default 0 check ("processedChunks" >= 0),
+  add column if not exists "updatedAt" timestamptz not null default now();
+
+alter table public."StudentImportBatch"
+  drop constraint if exists "StudentImportBatch_status_check";
+alter table public."StudentImportBatch"
+  add constraint "StudentImportBatch_status_check"
+  check (status in ('UPLOADING','QUEUED','PROCESSING','COMPLETED','PARTIAL','FAILED'));
+
+create table if not exists public."StudentImportChunk" (
+  id text primary key,
+  "batchId" text not null references public."StudentImportBatch"(id) on delete cascade,
+  "organizationId" text not null references public."Organization"(id) on delete cascade,
+  "chunkIndex" integer not null check ("chunkIndex" >= 0),
+  rows jsonb not null check (jsonb_typeof(rows) = 'array' and jsonb_array_length(rows) between 1 and 100),
+  "contentHash" text not null check ("contentHash" ~ '^[a-f0-9]{64}$'),
+  "createdBy" text not null references public."User"(id),
+  status text not null default 'PENDING' check (status in ('PENDING','COMPLETED','FAILED')),
+  attempts integer not null default 0 check (attempts >= 0),
+  "errorMessage" text,
+  "createdAt" timestamptz not null default now(),
+  "processedAt" timestamptz,
+  constraint "StudentImportChunk_batch_index_unique" unique ("batchId","chunkIndex")
+);
+create index if not exists "StudentImportChunk_pending_idx"
+  on public."StudentImportChunk"("createdAt","batchId","chunkIndex") where status='PENDING';
+alter table public."StudentImportChunk" enable row level security;
+
+drop policy if exists verity_student_import_chunk_owner_read on public."StudentImportChunk";
+create policy verity_student_import_chunk_owner_read on public."StudentImportChunk"
+  for select to authenticated using (
+    exists(select 1 from public."Organization" o
+      where o.id="StudentImportChunk"."organizationId"
+        and o."ownerId"=(select auth.uid())::text and o.type='INSTITUTION')
+    or (select private.is_admin())
+  );
+drop policy if exists verity_student_import_chunk_owner_insert on public."StudentImportChunk";
+create policy verity_student_import_chunk_owner_insert on public."StudentImportChunk"
+  for insert to authenticated with check (
+    "createdBy"=(select auth.uid())::text
+    and exists(
+      select 1 from public."Organization" o
+      join public."StudentImportBatch" b on b."organizationId"=o.id
+      where o.id="StudentImportChunk"."organizationId"
+        and b.id="StudentImportChunk"."batchId"
+        and b."createdBy"=(select auth.uid())::text
+        and b.status='UPLOADING'
+        and o."ownerId"=(select auth.uid())::text
+        and o.type='INSTITUTION' and o.status='APPROVED'
+    )
+  );
+grant select,insert on public."StudentImportChunk" to authenticated;
+grant select,insert,update on public."StudentImportChunk" to service_role;
+grant select,update on public."StudentImportBatch" to service_role;
+grant select,insert,update on public."StudentRoster" to service_role;
+
+-- One database transaction claims and processes one chunk. If the worker dies,
+-- Postgres rolls the entire transaction back and the chunk remains pending.
+create or replace function public.process_next_student_import_chunk()
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_chunk public."StudentImportChunk"%rowtype;
+  v_inserted integer := 0;
+  v_total integer := 0;
+  v_processed integer := 0;
+  v_inserted_total integer := 0;
+  v_duplicate_total integer := 0;
+  v_rejected integer := 0;
+  v_final_status text := 'PROCESSING';
+begin
+  select c.* into v_chunk
+  from public."StudentImportChunk" c
+  join public."StudentImportBatch" b on b.id=c."batchId"
+  where c.status='PENDING' and b.status in ('QUEUED','PROCESSING')
+  order by c."createdAt", c."chunkIndex"
+  for update of c skip locked
+  limit 1;
+
+  if not found then
+    return jsonb_build_object('processed',false);
+  end if;
+
+  update public."StudentImportChunk"
+    set status='PENDING', attempts=attempts+1
+    where id=v_chunk.id;
+
+  v_total := jsonb_array_length(v_chunk.rows);
+
+  insert into public."StudentRoster" (
+    id,"organizationId","studentNumber","fullName",email,faculty,department,
+    programme,qualification,classification,"awardDate","createdBy","createdAt","updatedAt"
+  )
+  select
+    gen_random_uuid()::text,
+    v_chunk."organizationId",
+    upper(trim(x."studentNumber")),
+    trim(x."fullName"),
+    nullif(lower(trim(x.email)),''),
+    trim(x.faculty),
+    trim(x.department),
+    trim(x.programme),
+    trim(x.qualification),
+    nullif(trim(x.classification),''),
+    case when nullif(trim(x."awardDate"),'') is null then null
+      else trim(x."awardDate")::date end,
+    v_chunk."createdBy",
+    now(),
+    now()
+  from jsonb_to_recordset(v_chunk.rows) as x(
+    "studentNumber" text,"fullName" text,email text,faculty text,
+    department text,programme text,qualification text,classification text,"awardDate" text
+  )
+  on conflict ("organizationId","studentNumber") do nothing;
+
+  get diagnostics v_inserted = row_count;
+
+  update public."StudentImportChunk"
+    set status='COMPLETED', "processedAt"=now(), "errorMessage"=null
+    where id=v_chunk.id;
+
+  update public."StudentImportBatch"
+    set "insertedRows"="insertedRows"+v_inserted,
+        "duplicateRows"="duplicateRows"+(v_total-v_inserted),
+        "processedChunks"="processedChunks"+1,
+        status=case
+          when "processedChunks"+1 >= "totalChunks" then
+            case when "rejectedRows">0 or "duplicateRows"+(v_total-v_inserted)>0
+              then 'PARTIAL' else 'COMPLETED' end
+          else 'PROCESSING'
+        end,
+        "completedAt"=case when "processedChunks"+1 >= "totalChunks" then now() else null end,
+        "updatedAt"=now()
+    where id=v_chunk."batchId"
+    returning "processedChunks","insertedRows","duplicateRows","rejectedRows",status
+      into v_processed,v_inserted_total,v_duplicate_total,v_rejected,v_final_status;
+
+  return jsonb_build_object(
+    'processed',true,'batchId',v_chunk."batchId",'chunkIndex',v_chunk."chunkIndex",
+    'inserted',v_inserted,'duplicates',v_total-v_inserted,
+    'processedChunks',v_processed,'insertedRows',v_inserted_total,
+    'duplicateRows',v_duplicate_total,'rejectedRows',v_rejected,'status',v_final_status
+  );
+end;
+$$;
+
+revoke all on function public.process_next_student_import_chunk() from public, anon, authenticated;
+grant execute on function public.process_next_student_import_chunk() to service_role;
