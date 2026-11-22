@@ -107,8 +107,8 @@ VERITY will use a roster-backed student identity workflow for institution onboar
 - The matriculation number is an identifier, not proof of identity. A matching number alone must never activate or transfer a student account.
 - Only an approved academic institution can import and manage its private student roster. The roster is matched by institution and normalized matriculation number, with duplicate detection and import audit history.
 - The student enters the matriculation number first, then selects the institution. VERITY must not disclose another student's private details when a lookup fails or a record is already claimed.
-- Account activation requires a separately verified channel already held by the institution (for example, a pre-registered institutional email) or an ICT-assisted identity check. A claimant must not be allowed to replace the roster contact with an arbitrary email and thereby take over another student's record.
-- After successful verification, the student creates their own password and the institution membership is linked. Shared/default passwords and institution codes as passwords are prohibited.
+- Account activation requires a private, high-entropy, single-use token generated for the exact roster record by an authorized institution owner or ICT officer. The token is delivered to the matching student through an institution-approved channel; the student cannot replace the destination with an arbitrary contact to claim another person's record.
+- After account creation, the student submits the token. A database transaction locks the roster record, consumes the token, links the Graduate account, activates membership and applies the institution's official roster name. Shared/default passwords and institution codes as passwords are prohibited.
 - Records not found in the roster, inaccessible institutional contacts and disputed claims are routed to the institution's authorized ICT team.
 
 ### Institution invitation code policy
@@ -118,12 +118,12 @@ The institution's registration/invitation code does not expire by default. Expir
 - The institution owner can appoint and revoke multiple Institution ICT officers with scoped roster:manage and registration:recover privileges.
 - ICT can import and correct roster records, inspect claim status and relevant claim history, open disputes, and initiate controlled recovery after checking the student's identity against official institutional records.
 - If an activation has not completed, ICT may invalidate the outstanding activation attempt and reissue a fresh single-use activation challenge after verification.
-- If an account is already active, ICT must not silently detach, overwrite or transfer it. Reassignment requires a documented dispute, independent review/second-person approval, notification to affected parties where safe, and a preserved audit trail.
+- If an account is already active, ICT must not silently detach, overwrite or transfer it. A documented dispute requires a first review and a second approval by a different authorized officer. The system releases the old membership only when no certificate history exists for that claimant and institution; otherwise the case is escalated to VERITY Admin.
 - Recovery never reveals passwords or reusable authentication secrets. Tokens are random, single-use, stored as hashes, rate-limited and invalidated on replacement.
 - Student roster information, institutional contact details and claim history are private and available only to authorized institution owner/ICT staff and the relevant student through purpose-limited flows.
 
 ### Implementation status
-The database foundation migration is applied, and the first institution-owner/ICT roster console is deployed. It currently supports CSV import (up to 10,000 rows), duplicate-safe roster insertion, private roster search/listing, scoped ICT officer assignment, and registration-dispute case intake. Excel workbook import, roster-backed student self-registration, verified activation delivery, token reissue, two-person approval for active-account reassignment, and full end-to-end recovery remain in progress. Do not treat those unfinished workflows as operational.
+The database foundation, roster-first student signup, one-time hashed activation tokens, atomic student claim, token export/reissue, scoped ICT permissions, claimant visibility and two-person recovery review are implemented and deployed. CSV import supports up to 10,000 records. Direct .xlsx import and VERITY Admin review for disputed claims with certificate history remain outstanding. Full real-account end-to-end testing is still required.
 
 ## Organization and student onboarding
 
