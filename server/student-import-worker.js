@@ -1,4 +1,4 @@
-export function startStudentImportWorker({client,logger=console,pollIntervalMs=1500,maxBackoffMs=15000}={}){
+export function startStudentImportWorker({client,logger=console,pollIntervalMs=5000,maxBackoffMs=30000}={}){
  if(!client)throw new Error("A privileged Supabase server client is required for the student import worker.");
  let stopping=false,timer=null,wakeSleep=null,resolveDone;
  const done=new Promise(resolve=>{resolveDone=resolve;});
