@@ -1,7 +1,7 @@
 self.addEventListener("push",event=>{
  let data={title:"VERITY",body:"You have a new update.",url:"/"};
  try{if(event.data)data={...data,...event.data.json()};}catch{}
- event.waitUntil(self.registration.showNotification(data.title||"VERITY",{body:data.body||"You have a new update.",icon:"/verity-icon.png",badge:"/verity-icon.png",tag:"verity-update",data:{url:data.url||"/"}}));
+ event.waitUntil(self.registration.showNotification(data.title||"VERITY",{body:data.body||"You have a new update.",tag:"verity-update",data:{url:data.url||"/"}}));
 });
 self.addEventListener("notificationclick",event=>{
  event.notification.close();
