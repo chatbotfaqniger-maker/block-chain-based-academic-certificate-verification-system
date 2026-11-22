@@ -729,7 +729,7 @@ app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
 
 
 app.post("/api/issues/:id/attachments",auth,express.raw({type:"application/octet-stream",limit:"10mb"}),run(async(q,s)=>{
- const fileName=String(q.headers["x-file-name"]||"attachment").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"attachment";
+ const fileName=decodeURIComponent(String(q.headers["x-file-name"]||"attachment")).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"attachment";
  const mimeType=String(q.headers["x-file-type"]||"application/octet-stream").toLowerCase();
  const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","text/plain","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
  if(!allowed.has(mimeType))return s.status(415).json({error:"This file type is not supported. Upload an image, PDF, text, Word or Excel document."});
@@ -756,6 +756,7 @@ app.get("/api/issues/:id/messages",auth,run(async(q,s)=>{
 }));
 app.post("/api/issues/:id/messages",auth,run(async(q,s)=>{
  const b=z.object({body:z.string().trim().min(1).max(5000),attachments:z.array(z.object({path:z.string().min(1).max(500),fileName:z.string().min(1).max(120),size:z.number().int().positive().max(10485760),mimeType:z.string().max(120)})).max(5).default([])}).parse(q.body);
+ if(b.attachments.some(a=>!a.path.startsWith(q.params.id+"/"+q.user.id+"/")||a.path.split("/").length!==3))return s.status(400).json({error:"An attachment does not belong to this conversation and uploader."});
  const {data,error}=await q.supabase.from("IssueMessage").insert({id:crypto.randomUUID(),issueId:q.params.id,authorId:q.user.id,authorName:q.user.fullName||"VERITY user",authorRole:q.user.role,body:b.body,attachments:b.attachments,createdAt:new Date().toISOString()}).select("id,issueId,authorId,authorName,authorRole,body,createdAt").single();
  if(error)throw error;
  await audit(q.supabase,q.user.id,"ISSUE_MESSAGE_SENT","IssueReport",q.params.id,{messageId:data.id});
