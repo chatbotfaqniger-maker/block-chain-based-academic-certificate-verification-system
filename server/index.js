@@ -358,16 +358,30 @@ app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
 }));
 
 app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async(q,s)=>{
-  const b=z.object({reason:z.string().min(5).max(500)}).parse(q.body);
-  const {data:c,error}=await q.supabase.from("Certificate").select("id,certificateId,status,organizationId").eq("certificateId",q.params.id).maybeSingle();
+  const b=z.object({reason:z.string().trim().min(5).max(500)}).parse(q.body);
+  let query=q.supabase.from("Certificate").select("id,certificateId,status,organizationId").eq("certificateId",q.params.id);
+  if(q.user.role==="EMPLOYER"){
+    const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
+    if(orgError)throw orgError;
+    if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only the approved issuing institution can revoke its own certificates."});
+    query=query.eq("organizationId",org.id);
+  }
+  const {data:c,error}=await query.maybeSingle();
   if(error) throw error;
-  if(!c) return s.status(404).json({error:"Certificate not found."});
-  if(c.status==="REVOKED") return s.status(409).json({error:"Already revoked."});
-  const chain=await revokeOnChain(c.certificateId,b.reason);
-  const {data:updated,error:updateError}=await q.supabase.from("Certificate").update({status:"REVOKED",revokedAt:new Date().toISOString(),revokeReason:b.reason,updatedAt:new Date().toISOString()}).eq("id",c.id).select().single();
+  if(!c) return s.status(404).json({error:"Certificate not found in your institution's issuance records."});
+  if(c.status==="REVOKED") return s.status(409).json({error:"This certificate has already been revoked."});
+  const now=new Date().toISOString();
+  const {data:updated,error:updateError}=await q.supabase.from("Certificate").update({status:"REVOKED",revokedAt:now,revokeReason:b.reason,updatedAt:now}).eq("id",c.id).eq("status","ACTIVE").select().maybeSingle();
   if(updateError) throw updateError;
-  await audit(q.supabase,q.user.id,"CERTIFICATE_REVOKED","Certificate",c.id,{reason:b.reason,mode:chain.mode,organizationId:c.organizationId||null});
-  s.json({certificate:updated,chainMode:chain.mode});
+  if(!updated)return s.status(409).json({error:"The certificate status changed before revocation completed. Refresh and try again."});
+  // The PostgreSQL status trigger records the revocation in the append-only ledger
+  // in the same database transaction as this update.
+  let chain={mode:"SUPABASE_PRIMARY"};
+  try{chain=await revokeOnChain(c.certificateId,b.reason);}catch(error){
+    console.error("Optional blockchain revocation anchor failed after database revocation:",error);
+  }
+  await audit(q.supabase,q.user.id,"CERTIFICATE_REVOKED","Certificate",c.id,{reason:b.reason,mode:chain.mode||"SUPABASE_PRIMARY",blockchainAnchorPending:Boolean(chain.error),organizationId:c.organizationId||null});
+  s.json({certificate:updated,chainMode:chain.mode||"SUPABASE_PRIMARY",blockchainAnchorPending:Boolean(chain.error)});
 }));
 
 
