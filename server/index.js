@@ -146,7 +146,7 @@ async function notifyVerityAdmins(payload){
  await Promise.all((admins||[]).map(a=>createVerityNotification(a.id,payload)));
 }
 
-app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
+app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),notifications:{inAppConfigured:Boolean(SUPABASE_SERVER_KEY),browserPushConfigured:Boolean(SUPABASE_SERVER_KEY&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY),adminEmailConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASS&&process.env.SMTP_FROM)},documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
 
 app.get("/api/directory/organizations",run(async(q,s)=>{
  const term=String(q.query.search||"").trim().slice(0,100);
