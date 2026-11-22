@@ -5,12 +5,13 @@ values ('ci-institution','ci-user','INSTITUTION','APPROVED');
 
 insert into public."CertificateIssuanceBatch"
 (id,"organizationId","createdBy","fileName","method","totalItems","queuedItems",status)
-values ('ci-batch-issued','ci-institution','ci-user','batch.csv','CSV_GENERATED',1,1,'QUEUED');
+values ('ci-batch-issued','ci-institution','ci-user','batch.csv','CSV_GENERATED',1,0,'UPLOADING');
 insert into public."CertificateIssuanceItem"
 (id,"batchId","organizationId","rowNumber","studentNumber","idempotencyKey",payload,status)
 values ('ci-item-issued','ci-batch-issued','ci-institution',2,'STU-001',repeat('a',64),
 '{"studentName":"Test Student","studentNumber":"STU-001"}'::jsonb,'STAGED');
 update public."CertificateIssuanceItem" set status='QUEUED' where id='ci-item-issued';
+update public."CertificateIssuanceBatch" set status='QUEUED',"queuedItems"=1 where id='ci-batch-issued';
 
 do $$
 declare result jsonb;
@@ -29,12 +30,13 @@ end $$;
 
 insert into public."CertificateIssuanceBatch"
 (id,"organizationId","createdBy","fileName","method","totalItems","queuedItems",status)
-values ('ci-batch-expired','ci-institution','ci-user','expired.csv','CSV_GENERATED',1,1,'QUEUED');
+values ('ci-batch-expired','ci-institution','ci-user','expired.csv','CSV_GENERATED',1,0,'UPLOADING');
 insert into public."CertificateIssuanceItem"
 (id,"batchId","organizationId","rowNumber","studentNumber","idempotencyKey",payload,status)
 values ('ci-item-expired','ci-batch-expired','ci-institution',2,'STU-002',repeat('b',64),
 '{"studentName":"Second Student","studentNumber":"STU-002"}'::jsonb,'STAGED');
 update public."CertificateIssuanceItem" set status='QUEUED' where id='ci-item-expired';
+update public."CertificateIssuanceBatch" set status='QUEUED',"queuedItems"=1 where id='ci-batch-expired';
 
 do $$
 declare result jsonb; item_status text; batch_status text; failed integer;
