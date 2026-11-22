@@ -1,5 +1,5 @@
-import React,{useEffect,useState} from "react";
-import {AlertCircle,CheckCircle2,Clock3,LifeBuoy,RefreshCw,Send,ShieldCheck} from "lucide-react";
+import React,{useCallback,useEffect,useMemo,useState} from "react";
+import {AlertCircle,ArrowUpRight,CheckCircle2,Clock3,LifeBuoy,MessageCircle,RefreshCw,Search,Send,ShieldCheck,Paperclip,Headphones} from "lucide-react";
 
 const api=async(path,opts={})=>{
  const token=localStorage.getItem("verity_token");
@@ -8,56 +8,56 @@ const api=async(path,opts={})=>{
  if(!response.ok)throw new Error(data.error||"Request failed.");
  return data;
 };
-const date=value=>value?new Date(value).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"—";
+const date=value=>value?new Date(value).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
 const categories=[["ACCOUNT","Account and sign-in"],["CERTIFICATE","Certificate records"],["VERIFICATION","Credential verification"],["DOCUMENT_UPLOAD","Document upload"],["ACCESS","Permissions and access"],["DATA_CORRECTION","Data correction"],["PERFORMANCE","Slow or unavailable service"],["OTHER","Other"]];
-const statuses=["OPEN","IN_PROGRESS","WAITING_FOR_USER","RESOLVED","CLOSED"];
+const states=["OPEN","IN_PROGRESS","WAITING_FOR_USER","RESOLVED","CLOSED"];
 export default function IssueCentre({user,organization,notice}){
- const admin=user?.role==="ADMIN",institutionOwner=user?.role==="EMPLOYER"&&organization?.type==="INSTITUTION";
- const [issues,setIssues]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState("");
- const [form,setForm]=useState({category:"OTHER",severity:"NORMAL",subject:"",description:""});
- async function load(){
-  setLoading(true);setError("");
-  try{const result=await api("/issues");setIssues(result.issues||[]);}
-  catch(e){setError(e.message);}
-  finally{setLoading(false);}
- }
- useEffect(()=>{load();},[]);
- async function submit(e){
-  e.preventDefault();setBusy(true);setError("");
-  try{const result=await api("/issues",{method:"POST",body:JSON.stringify(form)});notice("Issue submitted. Reference: "+result.issue.ticketNumber);setForm({category:"OTHER",severity:"NORMAL",subject:"",description:""});await load();}
-  catch(e){setError(e.message);}
-  finally{setBusy(false);}
- }
- async function update(item,status){
-  setBusy(true);setError("");
-  try{await api("/issues/"+item.id,{method:"PATCH",body:JSON.stringify({status})});notice("Issue "+status.toLowerCase().replaceAll("_"," ") + ".");await load();}
-  catch(e){setError(e.message);}
-  finally{setBusy(false);}
- }
- const counts={open:issues.filter(x=>x.status==="OPEN").length,progress:issues.filter(x=>x.status==="IN_PROGRESS").length,resolved:issues.filter(x=>["RESOLVED","CLOSED"].includes(x.status)).length};
- return <div className="issue-centre">
-  <section className="panel issue-hero"><div className="issue-hero-icon"><LifeBuoy size={25}/></div><div><span className="eyebrow">VERITY SUPPORT & OPERATIONS</span><h3>Issue Resolution Centre</h3><p>Report a problem, follow its progress and receive a documented resolution. Verity only offers repair actions when the operation is safe and authorized.</p></div><button type="button" className="btn-outline" onClick={load} disabled={loading}><RefreshCw size={15}/> Refresh</button></section>
-  <div className="issue-stats"><div className="stat"><small>Open reports</small><strong>{counts.open}</strong></div><div className="stat"><small>In progress</small><strong>{counts.progress}</strong></div><div className="stat"><small>Resolved / closed</small><strong>{counts.resolved}</strong></div></div>
-  <section className="panel"><div className="panel-head"><div><h3>Report an issue</h3><p>Do not include passwords, private keys, full identity documents or other sensitive information.</p></div><AlertCircle size={21}/></div>
-   <form className="issue-form" onSubmit={submit}>
-    <label>Issue category<select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{categories.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
-    <label>Impact level<select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})}><option value="LOW">Low — minor inconvenience</option><option value="NORMAL">Normal — work can continue</option><option value="HIGH">High — important workflow blocked</option><option value="CRITICAL">Critical — major service unavailable</option></select></label>
-    <label className="issue-wide">Short title<input minLength={5} maxLength={140} value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="e.g. Certificate upload remains pending" required/></label>
-    <label className="issue-wide">What happened? Include the page, action and any visible error message.<textarea minLength={15} maxLength={4000} rows={4} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Describe what you expected, what happened instead, and when you noticed it…" required/></label>
-    {error&&<div className="error issue-wide">{error}</div>}
-    <div className="issue-wide issue-submit"><small>Reports are linked to your account{institutionOwner&&organization?.name?" and institution":""}.</small><button className="primary" disabled={busy}>{busy?"Submitting…":<><Send size={15}/> Submit issue report</>}</button></div>
-   </form>
+ const admin=user?.role==="ADMIN",organizationOwner=user?.role==="EMPLOYER"&&Boolean(organization?.id);
+ const [issues,setIssues]=useState([]),[selected,setSelected]=useState(null),[messages,setMessages]=useState([]),[draft,setDraft]=useState("");
+ const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[chatLoading,setChatLoading]=useState(false),[error,setError]=useState(""),[filter,setFilter]=useState("ALL"),[search,setSearch]=useState("");
+ const [form,setForm]=useState({category:"OTHER",severity:"NORMAL",subject:"",description:""}),[showForm,setShowForm]=useState(false);
+ const load=useCallback(async(silent=false)=>{if(!silent)setLoading(true);try{const result=await api("/issues");setIssues(result.issues||[]);setSelected(current=>current?(result.issues||[]).find(x=>x.id===current.id)||null:current);setError("");}catch(e){setError(e.message);}finally{if(!silent)setLoading(false);}},[]);
+ const loadMessages=useCallback(async(id,silent=false)=>{if(!id)return;if(!silent)setChatLoading(true);try{const result=await api("/issues/"+id+"/messages");setMessages(result.messages||[]);}catch(e){setError(e.message);}finally{if(!silent)setChatLoading(false);}},[]);
+ useEffect(()=>{load();},[load]);
+ useEffect(()=>{if(!selected?.id){setMessages([]);return;}loadMessages(selected.id);const timer=setInterval(()=>loadMessages(selected.id,true),5000);return()=>clearInterval(timer);},[selected?.id,loadMessages]);
+ useEffect(()=>{const timer=setInterval(()=>load(true),12000);return()=>clearInterval(timer);},[load]);
+ async function submit(e){e.preventDefault();setBusy(true);setError("");try{const r=await api("/issues",{method:"POST",body:JSON.stringify(form)});notice("Support conversation opened · "+r.issue.ticketNumber);setForm({category:"OTHER",severity:"NORMAL",subject:"",description:""});setShowForm(false);await load();setSelected(r.issue);}catch(e){setError(e.message);}finally{setBusy(false);}}
+ async function send(e){e.preventDefault();if(!draft.trim()||!selected)return;setBusy(true);setError("");try{await api("/issues/"+selected.id+"/messages",{method:"POST",body:JSON.stringify({body:draft.trim()})});setDraft("");await loadMessages(selected.id,true);await load(true);}catch(e){setError(e.message);}finally{setBusy(false);}}
+ async function updateStatus(status){if(!selected)return;setBusy(true);setError("");try{await api("/issues/"+selected.id,{method:"PATCH",body:JSON.stringify({status})});notice("Conversation status updated.");await load(true);}catch(e){setError(e.message);}finally{setBusy(false);}}
+ const counts=useMemo(()=>({open:issues.filter(x=>x.status==="OPEN").length,active:issues.filter(x=>["IN_PROGRESS","WAITING_FOR_USER"].includes(x.status)).length,closed:issues.filter(x=>["RESOLVED","CLOSED"].includes(x.status)).length}),[issues]);
+ const visible=issues.filter(x=>(filter==="ALL"||x.status===filter)&&((x.subject+" "+x.ticketNumber+" "+(x.organization?.name||"")).toLowerCase().includes(search.toLowerCase())));
+ return <div className="support-centre">
+  <section className="support-hero"><div className="support-hero-mark"><Headphones size={25}/></div><div className="support-hero-copy"><span className="eyebrow">VERITY · DIRECT SUPPORT</span><h2>Support & Communication Centre</h2><p>A direct, private support conversation between your organization and the VERITY Admin team.</p></div><button className="support-new-button" onClick={()=>setShowForm(v=>!v)}><MessageCircle size={16}/>{showForm?"Close form":"New conversation"}</button></section>
+  <div className="support-metrics"><div><small>Open conversations</small><strong>{counts.open}</strong></div><div><small>Being handled</small><strong>{counts.active}</strong></div><div><small>Resolved</small><strong>{counts.closed}</strong></div></div>
+  {showForm&&<section className="support-new panel"><div className="panel-head"><div><h3>Start a support conversation</h3><p>Describe the issue clearly. VERITY Admin will be able to reply in this private thread.</p></div><ShieldCheck size={20}/></div><form className="issue-form" onSubmit={submit}>
+   <label>Topic<select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{categories.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+   <label>Priority<select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})}><option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="CRITICAL">Critical</option></select></label>
+   <label className="issue-wide">Subject<input minLength={5} maxLength={140} required value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="What do you need help with?"/></label>
+   <label className="issue-wide">Message<textarea rows={4} minLength={15} maxLength={4000} required value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Explain what happened, the page or workflow involved, and any visible error. Do not include passwords or private keys."/></label>
+   <div className="issue-wide support-form-foot"><small>Your conversation is visible only to its authorized participants and VERITY Admin.</small><button className="primary" disabled={busy}>{busy?"Opening…":<><Send size={15}/> Open conversation</>}</button></div>
+  </form></section>}
+  {error&&<div className="error support-error">{error}<button onClick={()=>setError("")}>×</button></div>}
+  <section className="support-workspace">
+   <aside className="support-inbox">
+    <div className="support-inbox-head"><div><h3>{admin?"Admin support inbox":"Your support inbox"}</h3><small>{admin?"All organizations and institutions":"Private conversations with VERITY Admin"}</small></div><button className="icon-button" title="Refresh" onClick={()=>load()}><RefreshCw size={16}/></button></div>
+    <div className="support-search"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search conversations"/></div>
+    <div className="support-filters">{[["ALL","All"],["OPEN","Open"],["IN_PROGRESS","In progress"],["WAITING_FOR_USER","Awaiting reply"],["RESOLVED","Resolved"]].map(([v,l])=><button key={v} className={filter===v?"active":""} onClick={()=>setFilter(v)}>{l}</button>)}</div>
+    <div className="support-thread-list">{loading?<p className="muted support-empty">Loading conversations…</p>:visible.length?visible.map(item=><button key={item.id} className={"support-thread-preview "+(selected?.id===item.id?"selected":"")} onClick={()=>setSelected(item)}>
+      <div className="support-preview-top"><span className="support-ticket">{item.ticketNumber}</span><span className={"issue-status "+item.status.toLowerCase()}>{item.status.replaceAll("_"," ")}</span></div>
+      <b>{item.subject}</b><small>{item.organization?.name||"Individual user"} · {date(item.updatedAt)}</small><p>{item.description}</p>
+    </button>):<div className="support-empty"><MessageCircle size={22}/><b>No conversations found</b><small>Start a new conversation when you need help.</small></div>}</div>
+   </aside>
+   <main className="support-chat">
+    {selected?<><header className="support-chat-head"><div className="support-chat-avatar"><LifeBuoy size={19}/></div><div className="support-chat-title"><b>{selected.subject}</b><small>{selected.ticketNumber} · {selected.organization?.name||"Personal support"} · {selected.severity} priority</small></div><span className={"issue-status "+selected.status.toLowerCase()}>{selected.status.replaceAll("_"," ")}</span></header>
+     <div className="support-context"><AlertCircle size={15}/><span>{selected.description}</span></div>
+     <div className="support-messages">{chatLoading&&!messages.length?<p className="muted">Loading conversation…</p>:messages.length?messages.map(m=><div key={m.id} className={"support-message-row "+(m.authorId===user?.id?"mine":"")}>
+       <div className="support-message-avatar">{(m.author?.fullName||"V").split(" ").slice(0,2).map(x=>x[0]).join("").toUpperCase()}</div><div className="support-message-body"><div className="support-message-meta"><b>{m.authorId===user?.id?"You":m.author?.fullName||"VERITY Admin"}</b><span>{m.author?.role==="ADMIN"?"VERITY ADMIN":m.author?.role||"USER"} · {date(m.createdAt)}</span></div><div className="support-bubble">{m.body}</div></div>
+      </div>):<div className="support-empty"><MessageCircle size={25}/><b>Conversation started</b><small>Send a message to begin talking with VERITY Admin.</small></div>)}</div>
+     {selected.status!=="CLOSED"&&<form className="support-composer" onSubmit={send}><textarea rows={2} maxLength={5000} value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a message to VERITY Admin…" /><button disabled={busy||!draft.trim()} aria-label="Send message"><Send size={17}/></button><small>Messages are saved to the support conversation. Do not send passwords or private keys.</small></form>}
+     {(admin||organizationOwner)&&<div className="support-admin-tools"><span>Conversation status</span><select value={selected.status} disabled={busy} onChange={e=>updateStatus(e.target.value)}>{states.map(x=><option key={x} value={x}>{x.replaceAll("_"," ")}</option>)}</select>{admin&&<small>Admin controls · status changes are recorded in the audit history</small>}</div>}
+    </>:<div className="support-no-selection"><div><Headphones size={34}/></div><h3>Your direct line to VERITY Admin</h3><p>Select a conversation to view messages, or open a new one to get assistance from the VERITY team.</p><button className="primary" onClick={()=>setShowForm(true)}>Start a conversation <ArrowUpRight size={15}/></button></div>}
+   </main>
   </section>
-  <section className="panel"><div className="panel-head"><div><h3>{admin?"Platform issue queue":institutionOwner?"Institution issue queue":"My issue reports"}</h3><p>{admin?"Review platform-wide reports and record administrative resolutions.":institutionOwner?"Review reports associated with your institution and update their progress.":"Track your submitted reports and their latest status."}</p></div><span className="issue-count">{issues.length} report{issues.length===1?"":"s"}</span></div>
-   {loading?<p className="muted">Loading issue reports…</p>:issues.length?issues.map(item=><article className="issue-card" key={item.id}>
-    <div className="issue-card-top"><div><span className="eyebrow">{item.ticketNumber} · {item.category.replaceAll("_"," ")}</span><h4>{item.subject}</h4><small>Submitted {date(item.createdAt)} · {item.organization?.name||"Personal report"}</small></div><span className={"issue-status "+item.status.toLowerCase()}>{item.status.replaceAll("_"," ")}</span></div>
-    <p className="issue-description">{item.description}</p>
-    <div className="issue-meta"><span>Impact: <b>{item.severity}</b></span><span>Updated: {date(item.updatedAt)}</span></div>
-    {(admin||institutionOwner)&&!["CLOSED","RESOLVED"].includes(item.status)&&<div className="issue-actions">
-      <div className="actions">{statuses.filter(status=>status!==item.status&&status!=="OPEN").map(status=><button type="button" key={status} className={status==="RESOLVED"?"btn-approve":"btn-outline"} disabled={busy} onClick={()=>update(item,status)}>{status.replaceAll("_"," ")}</button>)}</div>
-    </div>}
-   </article>):<div className="issue-empty"><ShieldCheck size={25}/><b>No issue reports yet</b><p>When you submit a report, its reference and status will appear here.</p></div>}
-  </section>
-  <p className="issue-footnote"><Clock3 size={14}/> Automatic repair is not assumed. VERITY records confirmed actions and escalates privileged or infrastructure-level work to the System Administrator.</p>
+  <p className="support-footnote"><Clock3 size={14}/> Replies refresh automatically. This is a private support channel, not a public organization directory or certificate verification record.</p>
  </div>;
 }
