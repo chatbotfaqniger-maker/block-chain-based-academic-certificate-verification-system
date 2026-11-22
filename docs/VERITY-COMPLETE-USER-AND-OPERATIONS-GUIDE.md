@@ -511,7 +511,7 @@ VERITY is a software system and does not by itself confer government recognition
 | Credential is revoked | Contact the issuing institution for clarification. Do not treat the record as active. |
 | Original document is unavailable | Check whether the graduate approved access, the 30-day consent is still valid and the stored file passes its SHA-256 integrity check. |
 | Upload remains blocked | Check that the file is PDF, JPEG or PNG, is no larger than 10 MB, and has a valid matching file signature. VERITY does not run antivirus scanning. Review the upload error and server logs without assuming a malware verdict. |
-| Blockchain shows disabled | The EVM RPC URL, private key or contract address may not be configured. The app may be in database-ledger mode. |
+| Blockchain shows disabled | The EVM RPC URL, private key or contract address may not be configured. The active Supabase PostgreSQL certificate ledger remains available without EVM blockchain configuration. |
 | Dashboard figures look old | Use Refresh now and confirm the API/database is available. |
 | Audit event is missing | Confirm the workflow completed successfully; not every page view is recorded. |
 | MP4 export fails | Check admin authorization, server logs, FFmpeg availability, writable temporary storage and live database/RPC dependencies. Confirm the generated file plays before distribution. |
