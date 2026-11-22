@@ -134,7 +134,7 @@ app.get("/api/directory/organizations",run(async(q,s)=>{
  const db=makeClient();
  const {data,error}=await db.rpc("verity_public_organization_directory",{p_search:term||null,p_type:type});
  if(error)throw error;
- s.setHeader("Cache-Control","no-store");
+ s.setHeader("Cache-Control","public, max-age=60, stale-while-revalidate=300");
  s.json({organizations:(data||[]).map(o=>({name:o.name,type:o.type,registrationNumber:o.registrationNumber||null,officialWebsite:o.officialWebsite||null,officialEmailDomain:o.officialEmailDomain||null,accreditationBody:o.accreditationBody||null,verifiedAt:o.verifiedAt||null,verificationStatus:"VERITY_APPROVED"}))});
 }));
 
@@ -168,18 +168,6 @@ app.patch("/api/admin/profile",auth,roles("ADMIN"),run(async(q,s)=>{const b=z.ob
 app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const b=z.object({registrationCode:z.string().min(6),studentNumber:z.string().optional()}).parse(q.body);const {data,error}=await q.supabase.rpc("request_verity_membership",{p_registration_code:b.registrationCode.trim().toUpperCase(),p_student_number:b.studentNumber||null});if(error)return s.status(400).json({error:error.message});s.status(201).json({membership:data});}));
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
 app.get("/api/organization",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;s.json({organization:data});}));
-
-app.patch("/api/organization/directory-visibility",auth,roles("EMPLOYER"),run(async(q,s)=>{
- const b=z.object({visible:z.boolean()}).strict().parse(q.body);
- const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
- if(orgError)throw orgError;
- if(!org)return s.status(404).json({error:"Organization not found."});
- if(org.status!=="APPROVED")return s.status(403).json({error:"Directory visibility can only be changed after organization approval."});
- const {data,error}=await q.supabase.rpc("set_verity_organization_directory_visibility",{p_visible:b.visible});
- if(error)throw error;
- await audit(q.supabase,q.user.id,"ORGANIZATION_DIRECTORY_VISIBILITY_CHANGED","Organization",org.id,{directoryVisible:b.visible});
- s.json({directoryVisible:data});
-}));
 
 app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional()}).parse(q.body);
@@ -290,7 +278,7 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
 
 app.get("/api/dashboard",auth,run(async(q,s)=>{
   const admin=q.user.role==="ADMIN", graduate=q.user.role==="GRADUATE";
-  const {data:ownedOrg,error:orgError}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode,directoryVisible").eq("ownerId",q.user.id).maybeSingle():{data:null,error:null};
+  const {data:ownedOrg,error:orgError}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode").eq("ownerId",q.user.id).maybeSingle():{data:null,error:null};
   if(orgError)throw orgError;
   const base=()=>q.supabase.from("Certificate").select("id",{count:"exact",head:true});
   const scoped=()=>graduate?base().eq("graduateId",q.user.id):q.user.role==="EMPLOYER"?base().eq("organizationId",ownedOrg?.id||""):base();
