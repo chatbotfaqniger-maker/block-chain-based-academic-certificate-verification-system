@@ -217,7 +217,7 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
 const studentRosterInput=z.object({
  studentNumber:z.string().trim().min(1).max(80),
  fullName:z.string().trim().min(2).max(160),
- email:z.string().trim().email().or(z.literal("")).optional(),
+ email:z.string().trim().max(254).email().or(z.literal("")).optional(),
  faculty:z.string().trim().min(2).max(160),
  department:z.string().trim().min(2).max(160),
  programme:z.string().trim().min(2).max(180),
