@@ -750,7 +750,7 @@ app.post("/api/issues",auth,run(async(q,s)=>{
   s.status(201).json({issue:data,message:"Your report has been submitted. Keep the ticket reference for follow-up."});
 }));
 app.patch("/api/issues/:id",auth,run(async(q,s)=>{
-  const b=z.object({status:z.enum(["IN_PROGRESS","WAITING_FOR_USER","RESOLVED","CLOSED"]),resolutionNotes:z.string().trim().max(2000).optional()}).parse(q.body);
+  const b=z.object({status:z.enum(["IN_PROGRESS","WAITING_FOR_USER","RESOLVED","CLOSED"])}).parse(q.body);
   const isAdmin=q.user.role==="ADMIN";
   let org=null;
   if(!isAdmin){
@@ -759,12 +759,11 @@ app.patch("/api/issues/:id",auth,run(async(q,s)=>{
     if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can manage reports associated with that institution."});
   }
   const patch={status:b.status,updatedAt:new Date().toISOString()};
-  if(isAdmin&&b.resolutionNotes!==undefined)patch.resolutionNotes=b.resolutionNotes||null;
   if(b.status==="RESOLVED"||b.status==="CLOSED")patch.resolvedAt=new Date().toISOString();
   if(b.status==="IN_PROGRESS"||b.status==="WAITING_FOR_USER")patch.resolvedAt=null;
   let query=q.supabase.from("IssueReport").update(patch).eq("id",q.params.id);
   if(!isAdmin)query=query.eq("organizationId",org.id);
-  const {data,error}=await query.select("id,ticketNumber,status,resolutionNotes,updatedAt,resolvedAt").maybeSingle();
+  const {data,error}=await query.select("id,ticketNumber,status,updatedAt,resolvedAt").maybeSingle();
   if(error)throw error;if(!data)return s.status(404).json({error:"Issue report not found in your permitted workspace."});
   await audit(q.supabase,q.user.id,"ISSUE_REPORT_"+b.status,"IssueReport",data.id,{ticketNumber:data.ticketNumber,organizationId:org?.id||null});
   s.json({issue:data});
