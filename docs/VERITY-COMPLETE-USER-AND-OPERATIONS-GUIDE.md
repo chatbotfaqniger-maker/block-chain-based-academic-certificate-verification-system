@@ -601,3 +601,16 @@ A successful frontend build, automated test suite or Docker image build is usefu
 ---
 
 **Documentation status:** This guide describes the currently documented product behavior and known deployment caveats. Update it whenever a screen, permission, API workflow, database policy, environment variable or deployment dependency changes. Verify behavior in a running environment before treating a documented workflow as production-tested.
+
+
+## Certificate lifecycle consistency
+
+VERITY uses Supabase as the authoritative certificate system of record. Certificate issuance inserts the credential into the database; a PostgreSQL trigger appends the `ISSUED` event to the hash-chained `CertificateLedger` in the same database transaction. A status change to `REVOKED` similarly appends a `REVOKED` event in the same transaction as the status update.
+
+Optional Polygon Amoy anchoring is a secondary integration. When enabled, a blockchain transaction is attempted after the authoritative Supabase issuance or revocation has committed. If the optional chain operation fails, the Supabase credential and database ledger remain authoritative; the API reports that the blockchain anchor is pending rather than pretending that the blockchain transaction succeeded. Do not describe a Supabase ledger event as an on-chain transaction.
+
+Only the approved issuing institution may revoke its own credentials. Platform administrators may perform platform-level revocation. Verification organizations cannot issue or revoke credentials belonging to institutions.
+
+A verifier's private-document access is separate from public credential verification. An approved verification organization requests access; the linked graduate approves or rejects it; an approval expires after 30 days. The verifier must still pass organization scope and document integrity checks to view or download the original file. Public verification does not reveal the private original document.
+
+The Admin audit timeline records application actions such as issuance, revocation, access requests and consent decisions. The append-only certificate ledger is a separate integrity history for certificate issuance and revocation. These two records serve different purposes and must not be described as interchangeable.
