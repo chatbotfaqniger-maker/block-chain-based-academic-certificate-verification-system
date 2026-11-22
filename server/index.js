@@ -303,7 +303,7 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
   if(seen.has(normalized)){rejected.push({row:i+2,reason:"Duplicate matriculation number in this file"});continue;}
   seen.add(normalized);
   const email=String(r.institutional_email||r.email||"").trim().toLowerCase();
-  if(email&&!/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)){rejected.push({row:i+2,reason:"Invalid institutional email"});continue;}
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){rejected.push({row:i+2,reason:"Invalid institutional email"});continue;}
   valid.push({id:crypto.randomUUID(),organizationId:org.id,studentNumber:number,normalizedStudentNumber:normalized,fullName:name,institutionalEmail:email||null,faculty:r.faculty||null,department:r.department||null,programme:r.programme||r.course||null,academicSession:r.academic_session||r.session||null,status:"ELIGIBLE",createdBy:q.user.id,importBatchId:batchId,updatedAt:new Date().toISOString()});
  }
  let inserted=0;
