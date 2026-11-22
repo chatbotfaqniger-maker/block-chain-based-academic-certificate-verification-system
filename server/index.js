@@ -728,14 +728,35 @@ app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
 
 
 
+app.post("/api/issues/:id/attachments",auth,express.raw({type:"application/octet-stream",limit:"10mb"}),run(async(q,s)=>{
+ const fileName=String(q.headers["x-file-name"]||"attachment").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"attachment";
+ const mimeType=String(q.headers["x-file-type"]||"application/octet-stream").toLowerCase();
+ const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","text/plain","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+ if(!allowed.has(mimeType))return s.status(415).json({error:"This file type is not supported. Upload an image, PDF, text, Word or Excel document."});
+ if(!Buffer.isBuffer(q.body)||!q.body.length)return s.status(400).json({error:"Choose a file before uploading."});
+ const {data:issue,error:issueError}=await q.supabase.from("IssueReport").select("id,status").eq("id",q.params.id).maybeSingle();
+ if(issueError)throw issueError;
+ if(!issue||issue.status==="CLOSED")return s.status(404).json({error:"This conversation is unavailable or closed."});
+ const id=crypto.randomUUID(),objectPath=q.params.id+"/"+q.user.id+"/"+id+"-"+fileName;
+ const {data,error}=await q.supabase.storage.from("verity-support-attachments").upload(objectPath,q.body,{contentType:mimeType,upsert:false});
+ if(error)throw error;
+ s.status(201).json({attachment:{path:data.path,fileName,size:q.body.length,mimeType}});
+}));
+app.get("/api/issues/:id/attachments",auth,run(async(q,s)=>{
+ const objectPath=String(q.query.path||"");
+ if(!objectPath.startsWith(q.params.id+"/")||objectPath.split("/").length!==3)return s.status(400).json({error:"Invalid attachment reference."});
+ const {data,error}=await q.supabase.storage.from("verity-support-attachments").createSignedUrl(objectPath,300);
+ if(error)throw error;
+ s.json({url:data.signedUrl,expiresIn:300});
+}));
 app.get("/api/issues/:id/messages",auth,run(async(q,s)=>{
- const {data:messages,error}=await q.supabase.from("IssueMessage").select("id,issueId,authorId,authorName,authorRole,body,createdAt").eq("issueId",q.params.id).order("createdAt",{ascending:true}).limit(300);
+ const {data:messages,error}=await q.supabase.from("IssueMessage").select("id,issueId,authorId,authorName,authorRole,body,attachments,createdAt").eq("issueId",q.params.id).order("createdAt",{ascending:true}).limit(300);
  if(error)throw error;
  s.json({messages:messages||[]});
 }));
 app.post("/api/issues/:id/messages",auth,run(async(q,s)=>{
- const b=z.object({body:z.string().trim().min(1).max(5000)}).parse(q.body);
- const {data,error}=await q.supabase.from("IssueMessage").insert({id:crypto.randomUUID(),issueId:q.params.id,authorId:q.user.id,authorName:q.user.fullName||"VERITY user",authorRole:q.user.role,body:b.body,createdAt:new Date().toISOString()}).select("id,issueId,authorId,authorName,authorRole,body,createdAt").single();
+ const b=z.object({body:z.string().trim().min(1).max(5000),attachments:z.array(z.object({path:z.string().min(1).max(500),fileName:z.string().min(1).max(120),size:z.number().int().positive().max(10485760),mimeType:z.string().max(120)})).max(5).default([])}).parse(q.body);
+ const {data,error}=await q.supabase.from("IssueMessage").insert({id:crypto.randomUUID(),issueId:q.params.id,authorId:q.user.id,authorName:q.user.fullName||"VERITY user",authorRole:q.user.role,body:b.body,attachments:b.attachments,createdAt:new Date().toISOString()}).select("id,issueId,authorId,authorName,authorRole,body,createdAt").single();
  if(error)throw error;
  await audit(q.supabase,q.user.id,"ISSUE_MESSAGE_SENT","IssueReport",q.params.id,{messageId:data.id});
  s.status(201).json({message:data});
