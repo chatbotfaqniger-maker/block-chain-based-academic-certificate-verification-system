@@ -803,9 +803,15 @@ async function start(){
   }
   const server=app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
   const shutdown=async signal=>{
-    console.log(`Received ${signal}; stopping student import worker and HTTP server.`);
+    console.log(`Received ${signal}; stopping HTTP intake and student import worker.`);
     const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref();
-    try{if(stopImportWorker)await stopImportWorker();}finally{server.close(()=>{clearTimeout(forceExit);process.exit(0);});}
+    try{
+      await new Promise(resolve=>server.close(resolve));
+      if(stopImportWorker)await stopImportWorker();
+    }finally{
+      clearTimeout(forceExit);
+      process.exit(0);
+    }
   };
   process.once("SIGTERM",()=>shutdown("SIGTERM"));
   process.once("SIGINT",()=>shutdown("SIGINT"));
