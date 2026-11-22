@@ -95,6 +95,33 @@ Access remains restricted by authenticated role, institution ownership, staff pe
 - Never store student personal data on a public blockchain.
 - This prototype does not imply legal recognition, university adoption, or production readiness.
 
+## Student Identity & Registration Management (locked product requirement)
+
+VERITY will use a roster-backed student identity workflow for institution onboarding at scale. This is a core product requirement, not an optional convenience feature.
+
+### Approved registration policy
+- Students should normally self-register remotely; routine physical visits to institution ICT are not required.
+- The matriculation number is an identifier, not proof of identity. A matching number alone must never activate or transfer a student account.
+- Only an approved academic institution can import and manage its private student roster. The roster is matched by institution and normalized matriculation number, with duplicate detection and import audit history.
+- The student enters the matriculation number first, then selects the institution. VERITY must not disclose another student's private details when a lookup fails or a record is already claimed.
+- Account activation requires a separately verified channel already held by the institution (for example, a pre-registered institutional email) or an ICT-assisted identity check. A claimant must not be allowed to replace the roster contact with an arbitrary email and thereby take over another student's record.
+- After successful verification, the student creates their own password and the institution membership is linked. Shared/default passwords and institution codes as passwords are prohibited.
+- Records not found in the roster, inaccessible institutional contacts and disputed claims are routed to the institution's authorized ICT team.
+
+### Institution invitation code policy
+The institution's registration/invitation code does not expire by default. Expiry is disabled unless the institution explicitly enables it and chooses an expiry. The code is an onboarding reference only; it is never a password or proof that a person owns a matriculation number. Rotating the code must not detach existing students.
+
+### Institution ICT privilege and identity recovery
+- The institution owner can appoint and revoke multiple Institution ICT officers with scoped roster:manage and registration:recover privileges.
+- ICT can import and correct roster records, inspect claim status and relevant claim history, open disputes, and initiate controlled recovery after checking the student's identity against official institutional records.
+- If an activation has not completed, ICT may invalidate the outstanding activation attempt and reissue a fresh single-use activation challenge after verification.
+- If an account is already active, ICT must not silently detach, overwrite or transfer it. Reassignment requires a documented dispute, independent review/second-person approval, notification to affected parties where safe, and a preserved audit trail.
+- Recovery never reveals passwords or reusable authentication secrets. Tokens are random, single-use, stored as hashes, rate-limited and invalidated on replacement.
+- Student roster information, institutional contact details and claim history are private and available only to authorized institution owner/ICT staff and the relevant student through purpose-limited flows.
+
+### Implementation status
+The database foundation migration is being introduced for institution ICT assignments, private student roster records, import history, recovery cases and institution-controlled invitation-code expiry. The complete roster import, secure activation, student signup UI, ICT dashboard and recovery workflow must not be described as finished until their API, interface and end-to-end security tests are complete.
+
 ## Organization and student onboarding
 
 1. A university, school, college, or employer registers using **Organization Admin** and may provide its public-facing city, state / region and country (no street address is requested).
