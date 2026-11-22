@@ -136,7 +136,7 @@ const graduateGuides = [
     ["Enter the certificate ID or verification key provided by the issuer.","Select Verify credential and wait for the registry result.","Read the result status and compare the displayed qualification and institution details.","Contact the issuing institution if the result is missing, revoked or inconsistent."],
     ["Certificate ID or verification key — accepts either supported reference.","Verify credential — requests a registry check and displays its result."],
     "Any signed-in graduate can check a public credential reference; the result is limited to the data the registry makes public.",
-    ["A successful registry check does not prove the identity of the person presenting the credential.","Do not treat demo database-ledger mode as public blockchain confirmation."],
+    ["A successful registry check does not prove the identity of the person presenting the credential.","Do not describe the Supabase database ledger as a public blockchain transaction."],
     ["If not found, re-enter the reference without spaces and confirm it with the issuer.","If details do not match, stop sharing the credential and contact the institution."])
 ];
 
