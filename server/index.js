@@ -430,8 +430,8 @@ app.patch("/api/institution/ict/:id",auth,run(async(q,s)=>{
 app.get("/api/institution/recoveries",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution owner or ICT recovery officer is required."});
- const {data,error}=await q.supabase.from("StudentRegistrationRecovery").select("id,rosterId,reportedBy,reviewedBy,secondApprovedBy,secondApprovedAt,reason,status,resolutionNotes,createdAt,resolvedAt,StudentRoster:rosterId(studentNumber,fullName,status,claimedUserId,claimedAt)").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(200);if(error)throw error;const ids=[...new Set((data||[]).map(x=>x.StudentRoster?.claimedUserId).filter(Boolean))];const {data:claimants,error:ce}=ids.length?await q.supabase.from("User").select("id,fullName,email").in("id",ids):{data:[],error:null};if(ce)throw ce;
- s.json({recoveries:(data||[]).map(x=>({...x,claimedBy:(claimants||[]).find(u=>u.id===x.StudentRoster?.claimedUserId)||null}))});
+ const {data,error}=await q.supabase.rpc("list_verity_student_recovery_cases",{p_organization_id:org.id});if(error)throw error;
+ s.json({recoveries:Array.isArray(data)?data:[]});
 }));
 app.post("/api/institution/recoveries",auth,run(async(q,s)=>{
  const b=z.object({studentNumber:z.string().min(2).max(80),reason:z.string().trim().min(10).max(1000)}).parse(q.body);
