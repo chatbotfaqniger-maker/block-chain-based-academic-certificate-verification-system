@@ -210,6 +210,72 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data,error:e}=await q.supabase.from("OrganizationStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(e)throw e;
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
 }));
+
+const studentRosterInput=z.object({
+ studentNumber:z.string().trim().min(1).max(80),
+ fullName:z.string().trim().min(2).max(160),
+ email:z.string().trim().email().or(z.literal("")).optional(),
+ faculty:z.string().trim().min(2).max(160),
+ department:z.string().trim().min(2).max(160),
+ programme:z.string().trim().min(2).max(180),
+ qualification:z.string().trim().min(2).max(180),
+ classification:z.string().trim().max(100).optional().default(""),
+ awardDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional()
+});
+async function institutionOwner(client,userId,{approved=false}={}) {
+ const {data:org,error}=await client.from("Organization").select("id,name,type,status").eq("ownerId",userId).maybeSingle();
+ if(error)throw error;
+ if(!org||org.type!=="INSTITUTION")return {error:"An academic institution owner account is required."};
+ if(approved&&org.status!=="APPROVED")return {error:"Your institution must be approved before importing student records."};
+ return {org};
+}
+app.get("/api/organization/students",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
+ const limit=Math.min(200,Math.max(1,Number(q.query.limit)||100)),offset=Math.max(0,Number(q.query.offset)||0);
+ const term=String(q.query.search||"").trim().slice(0,100);
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,linkedUserId,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ if(term)query=query.or("fullName.ilike.%"+term+"%,studentNumber.ilike.%"+term+"%,department.ilike.%"+term+"%,programme.ilike.%"+term+"%");
+ const {data,error,count}=await query;if(error)throw error;
+ s.json({students:data||[],total:count||0,limit,offset});
+}));
+app.get("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
+ const {data,error}=await q.supabase.from("StudentImportBatch").select("id,fileName,totalRows,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,completedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(20);
+ if(error)throw error;s.json({batches:data||[]});
+}));
+app.post("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({fileName:z.string().trim().min(1).max(180),totalRows:z.number().int().min(0).max(50000),rejectedRows:z.number().int().min(0).max(50000).default(0),errorSummary:z.array(z.object({rowNumber:z.number().int().nonnegative(),message:z.string().max(300)})).max(50).default([])}).parse(q.body);
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
+ const id=crypto.randomUUID(),fileName=b.fileName.replace(/[\\/\\\\]/g,"_").slice(0,180);
+ const {data,error}=await q.supabase.from("StudentImportBatch").insert({id,organizationId:org.id,fileName,totalRows:b.totalRows,rejectedRows:b.rejectedRows,errorSummary:b.errorSummary,createdBy:q.user.id}).select().single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"STUDENT_IMPORT_STARTED","StudentImportBatch",id,{organizationId:org.id,totalRows:b.totalRows,rejectedRows:b.rejectedRows});
+ s.status(201).json({batch:data});
+}));
+app.post("/api/organization/students/import-batches/:id/chunks",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({rows:z.array(studentRosterInput).min(1).max(100)}).parse(q.body);
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
+ const {data:batch,error:be}=await q.supabase.from("StudentImportBatch").select("id,insertedRows,duplicateRows,status").eq("id",q.params.id).eq("organizationId",org.id).single();
+ if(be)throw be;if(batch.status!=="PROCESSING")return s.status(409).json({error:"This import batch is no longer accepting records."});
+ const now=new Date().toISOString();
+ const records=b.rows.map(r=>({id:crypto.randomUUID(),organizationId:org.id,studentNumber:r.studentNumber.trim().toUpperCase(),fullName:r.fullName.trim(),email:r.email?.trim().toLowerCase()||null,faculty:r.faculty.trim(),department:r.department.trim(),programme:r.programme.trim(),qualification:r.qualification.trim(),classification:r.classification?.trim()||null,awardDate:r.awardDate||null,createdBy:q.user.id,createdAt:now,updatedAt:now}));
+ const {data:inserted,error}=await q.supabase.from("StudentRoster").upsert(records,{onConflict:"organizationId,studentNumber",ignoreDuplicates:true}).select("id");
+ if(error)throw error;
+ const insertedCount=(inserted||[]).length,duplicateCount=records.length-insertedCount;
+ const {error:updateError}=await q.supabase.from("StudentImportBatch").update({insertedRows:batch.insertedRows+insertedCount,duplicateRows:batch.duplicateRows+duplicateCount}).eq("id",batch.id).eq("organizationId",org.id).eq("status","PROCESSING");
+ if(updateError)throw updateError;
+ s.json({inserted:insertedCount,duplicates:duplicateCount,processed:records.length});
+}));
+app.post("/api/organization/students/import-batches/:id/complete",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({status:z.enum(["COMPLETED","PARTIAL","FAILED"])}).parse(q.body);
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
+ const {data:batch,error:be}=await q.supabase.from("StudentImportBatch").select("id,insertedRows,duplicateRows,rejectedRows").eq("id",q.params.id).eq("organizationId",org.id).single();if(be)throw be;
+ const status=b.status==="COMPLETED"&&(batch.duplicateRows||batch.rejectedRows)?"PARTIAL":b.status;
+ const {data,error}=await q.supabase.from("StudentImportBatch").update({status,completedAt:new Date().toISOString()}).eq("id",batch.id).eq("organizationId",org.id).select().single();if(error)throw error;
+ await audit(q.supabase,q.user.id,"STUDENT_IMPORT_COMPLETED","StudentImportBatch",batch.id,{organizationId:org.id,status,insertedRows:batch.insertedRows,duplicateRows:batch.duplicateRows,rejectedRows:batch.rejectedRows});
+ s.json({batch:data});
+}));
+
 app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
 app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved first."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
 app.post("/api/organization/evidence",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
