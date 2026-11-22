@@ -22,7 +22,9 @@
     "helmet": "^8.0.0",
     "qrcode": "^1.5.4",
     "zod": "^3.24.1",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "web-push": "^3.6.7",
+    "nodemailer": "^6.10.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
