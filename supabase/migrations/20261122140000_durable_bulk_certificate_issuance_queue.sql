@@ -107,17 +107,33 @@ begin
     raise exception 'Invalid worker lease token';
   end if;
 
-  update public."CertificateIssuanceItem"
-    set status=case when "certificateId" is null then 'QUEUED' else 'NEEDS_REVIEW' end,
-        "leaseToken"=null,
-        "leasedAt"=null,
-        "nextAttemptAt"=now(),
-        "errorCode"=case when "certificateId" is null then "errorCode" else 'LEASE_EXPIRED_AFTER_ISSUE' end,
-        "errorMessage"=case when "certificateId" is null then "errorMessage"
-          else 'A worker lease expired after a certificate was recorded. Reconcile the registry before retrying.' end,
+  -- Never automatically requeue an expired issuance lease. The worker may
+  -- have inserted a certificate immediately before crashing, but not yet saved
+  -- its ID to this queue row. Reconciliation is safer than duplicate issuance.
+  with expired as (
+    update public."CertificateIssuanceItem"
+      set status='NEEDS_REVIEW',
+          "leaseToken"=null,
+          "leasedAt"=null,
+          "errorCode"='LEASE_EXPIRED_REQUIRES_RECONCILIATION',
+          "errorMessage"='Worker lease expired. Check the certificate registry and audit log before any retry.',
+          "processedAt"=now(),
+          "updatedAt"=now()
+      where status='PROCESSING'
+        and "leasedAt" < now() - interval '10 minutes'
+      returning "batchId"
+  ), expired_counts as (
+    select "batchId",count(*)::integer as amount
+      from expired group by "batchId"
+  )
+  update public."CertificateIssuanceBatch" b
+    set "processingItems"=greatest(0,b."processingItems"-e.amount),
+        "failedItems"=least(b."totalItems",b."failedItems"+e.amount),
+        status=case when b."queuedItems"=0 and b."processingItems"<=e.amount then 'PARTIAL' else b.status end,
+        "completedAt"=case when b."queuedItems"=0 and b."processingItems"<=e.amount then now() else null end,
         "updatedAt"=now()
-    where status='PROCESSING'
-      and "leasedAt" < now() - interval '10 minutes';
+    from expired_counts e
+    where b.id=e."batchId";
 
   select i.* into v_item
     from public."CertificateIssuanceItem" i
