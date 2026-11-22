@@ -662,3 +662,8 @@ The Issue Resolution Centre includes a private conversation thread for each supp
 - The inbox supports search and status filters. Status changes are audited.
 
 The current chat release uses periodic refresh for new messages; it is not advertised as a guaranteed instant-delivery or staffed 24/7 live-chat service.
+
+
+## Browser notifications and platform announcements
+
+Users and administrators can opt in to browser notifications from Support & Communication Centre. The browser must support Push API, the site must be served over HTTPS, and the user must grant notification permission. Notifications are sent for new support replies. Users can revoke permission from browser/site settings. VERITY administrators can assign a conversation to a registered administrator, review unread-message counts, and send a platform-wide email announcement from the Admin workspace. Broadcasts are sent to registered profile email addresses and are recorded in audit activity. Email sending requires an SMTP sender configured by the platform operator. Background push requires VAPID keys and a server-only Supabase service key. Until those secrets are configured and tested, the relevant delivery channel is not active; the interface must not be interpreted as proof of delivery.
