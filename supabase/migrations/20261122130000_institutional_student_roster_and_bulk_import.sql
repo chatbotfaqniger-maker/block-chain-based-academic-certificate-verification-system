@@ -343,3 +343,31 @@ grant update(status,"updatedAt","completedAt") on public."StudentImportBatch" to
 
 revoke all on public."StudentImportChunk" from public,anon,authenticated;
 grant select,insert on public."StudentImportChunk" to authenticated;
+
+
+-- Enforce the same field bounds at the database boundary, including chunks
+-- staged through the Data API rather than through the application endpoint.
+alter table public."StudentRoster"
+  add constraint "StudentRoster_student_number_length"
+    check (char_length(btrim("studentNumber")) between 1 and 80),
+  add constraint "StudentRoster_full_name_length"
+    check (char_length(btrim("fullName")) between 2 and 160),
+  add constraint "StudentRoster_email_valid"
+    check (email is null or (char_length(email)<=254 and email ~* '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$')),
+  add constraint "StudentRoster_faculty_length"
+    check (char_length(btrim(faculty)) between 2 and 160),
+  add constraint "StudentRoster_department_length"
+    check (char_length(btrim(department)) between 2 and 160),
+  add constraint "StudentRoster_programme_length"
+    check (char_length(btrim(programme)) between 2 and 180),
+  add constraint "StudentRoster_qualification_length"
+    check (char_length(btrim(qualification)) between 2 and 180),
+  add constraint "StudentRoster_classification_length"
+    check (classification is null or char_length(btrim(classification))<=100);
+
+alter table public."StudentImportBatch"
+  add constraint "StudentImportBatch_file_name_length"
+    check (char_length(btrim("fileName")) between 1 and 180),
+  add constraint "StudentImportBatch_error_summary_shape"
+    check (case when jsonb_typeof("errorSummary")='array'
+      then jsonb_array_length("errorSummary")<=50 else false end);
