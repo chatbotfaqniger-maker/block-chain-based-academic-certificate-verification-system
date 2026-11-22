@@ -129,7 +129,7 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
 app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
 
 app.get("/api/directory/organizations",run(async(q,s)=>{
- const term=String(q.query.search||"").trim().slice(0,100);
+ const term=String(q.query.search||"").trim().slice(0,100).replace(/[^\p{L}\p{N}\s\-\/]/gu,"").trim();
  const type=String(q.query.type||"ALL").toUpperCase();
  if(!["ALL","INSTITUTION","EMPLOYER"].includes(type))return s.status(400).json({error:"Invalid organization type filter."});
  const db=makeClient();
