@@ -56,9 +56,9 @@ For local development without Docker, run `npm install` and `npm run dev`.
 
 ## Issue Resolution Centre
 
-Every signed-in role can submit an issue report and track its ticket reference and status. Institution owners can review reports associated with their institution; VERITY System Administrators can review platform-wide reports. Updates are restricted to workflow status fields and are recorded in the audit history. The first implementation provides reporting and triage; it does not claim automatic diagnosis or automatic repair. Destructive or privileged repairs remain restricted to authorized platform operations.
+Every signed-in role can submit an issue report and track its ticket reference and status. Institution owners can review reports associated with their institution; VERITY System Administrators can review platform-wide reports. Updates are restricted to workflow status fields and are recorded in the audit history. The support centre now provides private threaded conversations between users/organization owners and VERITY Admin, ticket references, status tracking and audit history. It does not claim automatic diagnosis or automatic repair. Destructive or privileged repairs remain restricted to authorized platform operations.
 
-The applied database schema and Row Level Security policies are documented in [VERITY Issue Resolution Centre SQL](docs/VERITY-ISSUE-RESOLUTION-CENTRE.sql).
+The applied database schema and Row Level Security policies are documented in [Issue Resolution SQL](docs/VERITY-ISSUE-RESOLUTION-CENTRE.sql) and [Support Chat SQL](docs/VERITY-SUPPORT-CHAT-SQL.sql).
 
 ## Complete documentation
 
