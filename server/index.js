@@ -596,6 +596,9 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
   if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  const {data:credential,error:credentialError}=await q.supabase.from("Certificate").select("id,status").eq("id",grant.certificateId).maybeSingle();
+  if(credentialError)throw credentialError;
+  if(!credential||credential.status!=="ACTIVE")return s.status(410).json({error:"This certificate is no longer active. Shared document access has been stopped."});
   const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,sha256,scanStatus").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(de)throw de;
   if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
@@ -616,6 +619,9 @@ app.get("/api/organization/access-requests/:id/document/download",auth,roles("EM
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
   if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  const {data:credential,error:credentialError}=await q.supabase.from("Certificate").select("id,status").eq("id",grant.certificateId).maybeSingle();
+  if(credentialError)throw credentialError;
+  if(!credential||credential.status!=="ACTIVE")return s.status(410).json({error:"This certificate is no longer active. Shared document access has been stopped."});
   const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,sha256,scanStatus").eq("certificateId",grant.certificateId).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(de)throw de;
   if(!doc)return s.status(404).json({error:"The institution has not uploaded an original certificate document yet."});
