@@ -7,6 +7,17 @@ This guide explains the current application workflows. Screen labels may vary sl
 
 ---
 
+## Support & Chat Centre — sharing files
+
+1. Open **Support & Chat Centre** from your workspace.
+2. Select an existing conversation or start a new one.
+3. In the message composer, select the paperclip icon and choose up to five files.
+4. Supported file types are JPEG, PNG, WebP, PDF, plain text, Word and Excel documents. Each file can be up to 10 MB.
+5. Add a message if needed, then select Send. The files are uploaded to VERITY's private Supabase Storage bucket and attached to that conversation.
+6. Select an attachment in the conversation to open its temporary secure link. Links expire after five minutes; open the attachment again from the chat if needed.
+
+**Privacy and safety:** Only the conversation's authorized participants and VERITY Admin can access its attachments. Do not upload passwords, access tokens, private keys, payment card details or unrelated sensitive personal information. Closed conversations do not accept new uploads. File uploads are restricted by file type and size; antivirus scanning is not enabled, so users should only upload files they trust.
+
 ## 1. Understand VERITY
 
 VERITY connects three main participants:
