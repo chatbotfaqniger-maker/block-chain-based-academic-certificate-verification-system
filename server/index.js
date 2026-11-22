@@ -361,12 +361,9 @@ app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
 app.get("/api/institution/roster",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
- const term=String(q.query.search||"").trim();
- let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,academicSession,status,claimedUserId,claimedAt,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(500);
- if(term)query=query.or("studentNumber.ilike.%"+term.replace(/[,%()]/g,"")+"%,fullName.ilike.%"+term.replace(/[,%()]/g,"")+"%");
- const {data,error}=await query;if(error)throw error;
- const claimedIds=[...new Set((data||[]).map(r=>r.claimedUserId).filter(Boolean))];const {data:claimants,error:ce}=claimedIds.length?await q.supabase.from("User").select("id,fullName,email").in("id",claimedIds):{data:[],error:null};if(ce)throw ce;const counts=(data||[]).reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{});
- s.json({organization:{id:org.id,name:org.name,registrationCode:org.registrationCode,registrationCodeExpiryEnabled:org.registrationCodeExpiryEnabled,registrationCodeExpiresAt:org.registrationCodeExpiresAt},students:(data||[]).map(r=>({...r,claimedBy:(claimants||[]).find(u=>u.id===r.claimedUserId)||null})),counts});
+ const term=String(q.query.search||"").trim().slice(0,120);
+ const {data,error}=await q.supabase.rpc("list_verity_student_roster",{p_organization_id:org.id,p_search:term||null});if(error)throw error;
+ s.json(data||{organization:null,students:[],counts:{}});
 }));
 app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","text/plain","application/vnd.ms-excel"],limit:"5mb"}),run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
