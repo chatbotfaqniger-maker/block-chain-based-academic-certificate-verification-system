@@ -781,9 +781,11 @@ app.get("/api/admin/users",auth,roles("ADMIN"),run(async(q,s)=>{
  s.json({users:data||[]});
 }));
 app.patch("/api/issues/:id/assignment",auth,roles("ADMIN"),run(async(q,s)=>{
+ if(!SUPABASE_SERVER_KEY)return s.status(503).json({error:"Admin assignment requires SUPABASE_SERVICE_ROLE_KEY on the server."});
+ const adminDb=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
  const b=z.object({assignedTo:z.string().nullable()}).parse(q.body);
  if(b.assignedTo){
-  const {data:admin,error}=await q.supabase.from("User").select("id,fullName,role").eq("id",b.assignedTo).maybeSingle();
+  const {data:admin,error}=await adminDb.from("User").select("id,fullName,role").eq("id",b.assignedTo).maybeSingle();
   if(error)throw error;if(!admin||admin.role!=="ADMIN")return s.status(400).json({error:"Choose a registered VERITY administrator."});
  }
  const {data,error}=await q.supabase.from("IssueReport").update({assignedTo:b.assignedTo,updatedAt:new Date().toISOString()}).eq("id",q.params.id).select("id,assignedTo,updatedAt").maybeSingle();
