@@ -174,6 +174,7 @@ app.post("/api/auth/register",run(async(q,s)=>{
   if(Array.isArray(data.user?.identities)&&data.user.identities.length===0) return s.status(409).json({error:"An account using this email already exists. Please sign in instead of creating another account."});
   if(!data.session) return s.status(201).json({pendingEmailConfirmation:true,message:"Your account request was accepted. Check your email if confirmation is enabled, then sign in."});
   const profile=await profileFor(client,data.user); const organization=await ensureOrganization(client,data.user,profile); await ensureStudentMembership(client,data.user,profile);
+  if(organization)await notifyVerityAdmins({type:"ORGANIZATION_REGISTERED",category:"PLATFORM",title:"New organization registration",body:organization.name+" submitted a registration for review.",url:"/organizations",metadata:{organizationId:organization.id}});
   s.status(201).json({token:data.session.access_token,user:safe(profile),organization});
 }));
 
@@ -303,6 +304,8 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  const patch={status:b.status,updatedAt:new Date().toISOString(),verificationNotes:b.verificationNotes||null,verifiedAt:b.status==="APPROVED"?new Date().toISOString():null,verifiedBy:b.status==="APPROVED"?q.user.id:null};
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",q.params.id).select().single();if(error)throw error;
  await audit(q.supabase,q.user.id,"ORGANIZATION_"+b.status,"Organization",data.id,{organizationId:data.id,verificationNotes:b.verificationNotes||null});
+ const {data:owner}=await q.supabase.from("Organization").select("ownerId,name").eq("id",data.id).maybeSingle();
+ if(owner?.ownerId)await createVerityNotification(owner.ownerId,{type:"ORGANIZATION_STATUS",category:"ACCOUNT",title:b.status==="APPROVED"?"Organization approved":"Organization status updated",body:b.status==="APPROVED"?data.name+" has been approved on VERITY.":"The status of "+data.name+" has changed to "+b.status+".",url:"/identity",metadata:{organizationId:data.id,status:b.status}});
  s.json({organization:data});
 }));
 
@@ -373,6 +376,8 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
     chain={mode:"SUPABASE_LEDGER"};
   }
   await audit(q.supabase,q.user.id,"CERTIFICATE_ISSUED","Certificate",certificate.id,{certificateId,mode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending,organizationId:organization?.id||null});
+  if(graduateId)await createVerityNotification(graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A new certificate is available",body:"A certificate from "+clean.institution+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId}});
+  await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Certificate issued",body:certificateId+" was issued by "+(organization?.name||clean.institution)+".",url:"/certificates",metadata:{certificateId}});
   s.status(201).json({certificate,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
 }));
 
@@ -418,6 +423,9 @@ app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async
     chain={mode:"SUPABASE_PRIMARY",error:true};
   }
   await audit(q.supabase,q.user.id,"CERTIFICATE_REVOKED","Certificate",c.id,{reason:b.reason,mode:chain.mode||"SUPABASE_PRIMARY",blockchainAnchorPending:Boolean(chain.error),organizationId:c.organizationId||null});
+  const {data:graduate}=await q.supabase.from("Certificate").select("graduateId").eq("id",c.id).maybeSingle();
+  if(graduate?.graduateId)await createVerityNotification(graduate.graduateId,{type:"CERTIFICATE_REVOKED",category:"CERTIFICATE",title:"Your certificate was revoked",body:"Certificate "+c.certificateId+" is no longer active. "+b.reason,url:"/certificates",metadata:{certificateId:c.certificateId}});
+  await notifyVerityAdmins({type:"CERTIFICATE_REVOKED",category:"PLATFORM",title:"Certificate revoked",body:c.certificateId+" was revoked.",url:"/certificates",metadata:{certificateId:c.certificateId}});
   s.json({certificate:updated,chainMode:chain.mode||"SUPABASE_PRIMARY",blockchainAnchorPending:Boolean(chain.error)});
 }));
 
@@ -577,6 +585,8 @@ app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,
   const {data:grant,error}=await q.supabase.from("CertificateAccessGrant").insert({id:crypto.randomUUID(),certificateId:cert.id,graduateId:cert.graduateId,organizationId:org.id,requestedBy:q.user.id,purpose:b.purpose||"Employment or academic credential verification",status:"PENDING"}).select().single();
   if(error)throw error;
   await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_REQUESTED","CertificateAccessGrant",grant.id,{certificateId:cert.certificateId,organizationId:org.id});
+  await createVerityNotification(cert.graduateId,{type:"ACCESS_REQUESTED",category:"ACCESS",title:"Certificate access requested",body:org.name+" requested permission to view your original certificate.",url:"/access",metadata:{grantId:grant.id,certificateId:cert.certificateId}});
+  await notifyVerityAdmins({type:"ACCESS_REQUESTED",category:"PLATFORM",title:"New certificate access request",body:org.name+" requested access to a graduate certificate.",url:"/access",metadata:{grantId:grant.id}});
   s.status(201).json({grant,message:"The graduate must approve access before the original document can be viewed."});
 }));
 
@@ -607,6 +617,8 @@ app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q
   const {data,error}=await q.supabase.from("CertificateAccessGrant").update(patch).eq("id",q.params.id).eq("graduateId",q.user.id).eq("status","PENDING").select().single();
   if(error)throw error;
   await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_"+b.status,"CertificateAccessGrant",data.id,{organizationId:data.organizationId,expiresAt:data.expiresAt});
+  const {data:org}=await q.supabase.from("Organization").select("ownerId,name").eq("id",data.organizationId).maybeSingle();
+  if(org?.ownerId)await createVerityNotification(org.ownerId,{type:"ACCESS_DECISION",category:"ACCESS",title:b.status==="APPROVED"?"Certificate access approved":"Certificate access declined",body:"Your request to access a graduate certificate was "+b.status.toLowerCase()+".",url:"/access",metadata:{grantId:data.id,status:b.status,expiresAt:data.expiresAt}});
   s.json({grant:data});
 }));
 
