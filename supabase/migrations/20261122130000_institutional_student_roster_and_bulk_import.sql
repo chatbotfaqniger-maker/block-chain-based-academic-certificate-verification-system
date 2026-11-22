@@ -258,3 +258,77 @@ $$;
 
 revoke all on function public.process_next_student_import_chunk() from public, anon, authenticated;
 grant execute on function public.process_next_student_import_chunk() to service_role;
+
+
+-- Tighten direct Data API writes: authenticated owners can stage chunks and
+-- transition their own batch to QUEUED, but cannot forge processing counters.
+alter table public."StudentImportBatch"
+  add constraint "StudentImportBatch_rejected_lte_total"
+    check ("rejectedRows" <= "totalRows"),
+  add constraint "StudentImportBatch_processed_lte_total_chunks"
+    check ("processedChunks" <= "totalChunks"),
+  add constraint "StudentImportBatch_failed_lte_processed"
+    check ("failedChunks" <= "processedChunks"),
+  add constraint "StudentImportBatch_result_rows_lte_valid"
+    check ("insertedRows" + "duplicateRows" <= "totalRows" - "rejectedRows");
+
+drop policy if exists verity_student_import_owner_insert on public."StudentImportBatch";
+create policy verity_student_import_owner_insert on public."StudentImportBatch"
+  for insert to authenticated with check (
+    "createdBy"=(select auth.uid())::text
+    and status='UPLOADING'
+    and "insertedRows"=0 and "duplicateRows"=0
+    and "processedChunks"=0 and "failedChunks"=0
+    and "completedAt" is null
+    and exists(select 1 from public."Organization" o
+      where o.id="StudentImportBatch"."organizationId"
+        and o."ownerId"=(select auth.uid())::text
+        and o.type='INSTITUTION' and o.status='APPROVED')
+  );
+
+drop policy if exists verity_student_import_owner_update on public."StudentImportBatch";
+create policy verity_student_import_owner_update on public."StudentImportBatch"
+  for update to authenticated using (
+    status='UPLOADING'
+    and exists(select 1 from public."Organization" o
+      where o.id="StudentImportBatch"."organizationId"
+        and o."ownerId"=(select auth.uid())::text
+        and o.type='INSTITUTION' and o.status='APPROVED')
+  ) with check (
+    status in ('QUEUED','PARTIAL')
+    and (("status"='QUEUED' and "totalChunks">0)
+      or ("status"='PARTIAL' and "totalChunks"=0))
+    and exists(select 1 from public."Organization" o
+      where o.id="StudentImportBatch"."organizationId"
+        and o."ownerId"=(select auth.uid())::text
+        and o.type='INSTITUTION' and o.status='APPROVED')
+  );
+
+drop policy if exists verity_student_import_chunk_owner_insert on public."StudentImportChunk";
+create policy verity_student_import_chunk_owner_insert on public."StudentImportChunk"
+  for insert to authenticated with check (
+    "createdBy"=(select auth.uid())::text
+    and status='PENDING' and attempts=0
+    and "errorMessage" is null and "processedAt" is null
+    and exists(
+      select 1 from public."Organization" o
+      join public."StudentImportBatch" b on b."organizationId"=o.id
+      where o.id="StudentImportChunk"."organizationId"
+        and b.id="StudentImportChunk"."batchId"
+        and b."createdBy"=(select auth.uid())::text
+        and b.status='UPLOADING'
+        and "StudentImportChunk"."chunkIndex" < b."totalChunks"
+        and jsonb_array_length("StudentImportChunk".rows)
+          = least(100, b."totalRows"-b."rejectedRows"-("StudentImportChunk"."chunkIndex"*100))
+        and o."ownerId"=(select auth.uid())::text
+        and o.type='INSTITUTION' and o.status='APPROVED'
+    )
+  );
+
+drop policy if exists verity_student_roster_owner_insert on public."StudentRoster";
+drop policy if exists verity_student_roster_owner_update on public."StudentRoster";
+revoke insert,update on public."StudentRoster" from authenticated;
+grant select on public."StudentRoster" to authenticated;
+
+revoke update on public."StudentImportBatch" from authenticated;
+grant update(status,"updatedAt","completedAt") on public."StudentImportBatch" to authenticated;
