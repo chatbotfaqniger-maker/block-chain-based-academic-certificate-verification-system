@@ -760,6 +760,7 @@ async function sendVerityPush(userIds,payload){
   await Promise.all((rows||[]).map(async row=>{try{await webpush.sendNotification(row.subscription,JSON.stringify(payload));}catch(err){if(err.statusCode===404||err.statusCode===410)await adminDb.from("PushSubscription").delete().eq("id",row.id);}}));
  }catch(err){console.error("VERITY push delivery:",err.message);}
 }
+app.get("/api/push/config",auth,(_q,s)=>s.json({publicKey:process.env.VAPID_PUBLIC_KEY||null}));
 app.post("/api/push/subscribe",auth,run(async(q,s)=>{
  const b=z.object({subscription:z.object({endpoint:z.string().url(),keys:z.object({p256dh:z.string(),auth:z.string()})})}).parse(q.body);
  const {error}=await q.supabase.from("PushSubscription").upsert({userId:q.user.id,endpoint:b.subscription.endpoint,subscription:b.subscription,updatedAt:new Date().toISOString()},{onConflict:"userId,endpoint"});
@@ -839,7 +840,17 @@ app.get("/api/issues",auth,run(async(q,s)=>{
   const orgIds=[...new Set((data||[]).map(x=>x.organizationId).filter(Boolean))];
   const {data:orgs,error:orgError}=orgIds.length?await q.supabase.from("Organization").select("id,name,type").in("id",orgIds):{data:[],error:null};
   if(orgError)throw orgError;
-  s.json({issues:(data||[]).map(x=>({...x,organization:(orgs||[]).find(o=>o.id===x.organizationId)||null}))});
+  const issueIds=(data||[]).map(x=>x.id);
+  const [{data:reads,error:readError},{data:messages,error:messageError},{data:admins,error:adminError}]=await Promise.all([
+   issueIds.length?q.supabase.from("IssueReadState").select("issueId,lastReadAt").eq("userId",q.user.id).in("issueId",issueIds):Promise.resolve({data:[],error:null}),
+   issueIds.length?q.supabase.from("IssueMessage").select("issueId,authorId,createdAt").in("issueId",issueIds).neq("authorId",q.user.id).order("createdAt",{ascending:false}).limit(1000):Promise.resolve({data:[],error:null}),
+   q.user.role==="ADMIN"?q.supabase.from("User").select("id,fullName,role").eq("role","ADMIN"):Promise.resolve({data:[],error:null})
+  ]);
+  if(readError)throw readError;if(messageError)throw messageError;if(adminError)throw adminError;
+  const readMap=new Map((reads||[]).map(x=>[x.issueId,x.lastReadAt]));
+  const unreadMap=new Map();
+  for(const m of messages||[])if(!readMap.has(m.issueId)||new Date(m.createdAt)>new Date(readMap.get(m.issueId)))unreadMap.set(m.issueId,(unreadMap.get(m.issueId)||0)+1);
+  s.json({issues:(data||[]).map(x=>({...x,organization:(orgs||[]).find(o=>o.id===x.organizationId)||null,assignedAdmin:(admins||[]).find(a=>a.id===x.assignedTo)||null,unreadCount:unreadMap.get(x.id)||0}))});
 }));
 app.post("/api/issues",auth,run(async(q,s)=>{
   const b=z.object({category:z.enum(["ACCOUNT","CERTIFICATE","VERIFICATION","DOCUMENT_UPLOAD","ACCESS","DATA_CORRECTION","PERFORMANCE","OTHER"]),severity:z.enum(["LOW","NORMAL","HIGH","CRITICAL"]).default("NORMAL"),subject:z.string().trim().min(5).max(140),description:z.string().trim().min(15).max(4000)}).parse(q.body);
