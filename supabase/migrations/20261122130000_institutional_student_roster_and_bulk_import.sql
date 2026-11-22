@@ -12,7 +12,6 @@ create table if not exists public."StudentRoster" (
  qualification text not null,
  classification text,
  "awardDate" date,
- "linkedUserId" text references public."User"(id) on delete set null,
  status text not null default 'ACTIVE' check(status in ('ACTIVE','ARCHIVED')),
  "createdBy" text not null references public."User"(id),
  "createdAt" timestamptz not null default now(),
