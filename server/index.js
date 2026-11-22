@@ -194,11 +194,20 @@ app.get("/api/directory/organizations",run(async(q,s)=>{
 }));
 
 app.post("/api/auth/register",run(async(q,s)=>{
-  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional()}).parse(q.body); const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."}); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
+  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional(),studentOrganizationId:z.string().optional()}).parse(q.body); const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."}); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
+  if(b.role==="GRADUATE"){
+   const studentNumber=String(b.studentNumber||"").trim(),organizationId=String(b.studentOrganizationId||"").trim();
+   if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your institution and enter your matriculation number before creating a student account."});
+   const {data:org,error:oe}=await makeClient().from("Organization").select("id,type,status,directoryVisible").eq("id",organizationId).maybeSingle();if(oe)throw oe;
+   if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!org.directoryVisible)return s.status(400).json({error:"Choose an approved institution from the registration list."});
+   const normalized=studentNumber.toUpperCase().replace(/\\s+/g,"");
+   const {data:roster,error:re}=await makeClient().from("StudentRoster").select("id,status").eq("organizationId",org.id).eq("normalizedStudentNumber",normalized).maybeSingle();if(re)throw re;
+   if(!roster||!["ELIGIBLE","CLAIM_PENDING"].includes(roster.status))return s.status(400).json({error:"Your student record could not be prepared for activation. Check the matriculation number with your institution ICT office."});
+  }
   const client=makeClient();
   const {data,error}=await client.auth.signUp({
     email:b.email.trim().toLowerCase(),password:b.password,
-    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||""}}
+    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||"",studentOrganizationId:b.studentOrganizationId?.trim()||""}}
   });
   if(error) {
     const duplicate=/already registered|already exists|user exists/i.test(error.message||"");
@@ -219,7 +228,7 @@ app.post("/api/auth/login",run(async(q,s)=>{
   const profile=await profileFor(client,data.user); const organization=await ensureOrganization(client,data.user,profile); await ensureStudentMembership(client,data.user,profile);
   s.json({token:data.session.access_token,user:safe(profile),organization});
 }));
-app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];const {data:institutionICT,error:ictError}=q.user.role==="GRADUATE"?await q.supabase.from("InstitutionICTStaff").select("id,organizationId,permissions,status").eq("userId",q.user.id).eq("status","ACTIVE"): {data:[],error:null};if(ictError)throw ictError;s.json({user:{...safe(q.user),organizationStaff,institutionICT:institutionICT||[]},organization});}));
+app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];const {data:institutionICT,error:ictError}=q.user.role==="GRADUATE"?await q.supabase.from("InstitutionICTStaff").select("id,organizationId,permissions,status").eq("userId",q.user.id).eq("status","ACTIVE"): {data:[],error:null};if(ictError)throw ictError;const studentRegistration=q.user.role==="GRADUATE"?{organizationId:q.authUser.user_metadata?.studentOrganizationId||null,studentNumber:q.authUser.user_metadata?.studentNumber||null}:null;s.json({user:{...safe(q.user),organizationStaff,institutionICT:institutionICT||[],studentRegistration},organization});}));
 app.patch("/api/admin/profile",auth,roles("ADMIN"),run(async(q,s)=>{const b=z.object({fullName:z.string().trim().min(2).max(100)}).parse(q.body);const {data,error}=await q.supabase.from("User").update({fullName:b.fullName}).eq("id",q.user.id).select("id,fullName,email,role,institution").single();if(error)throw error;await audit(q.supabase,q.user.id,"ADMIN_PROFILE_NAME_UPDATED","User",q.user.id,{fullName:b.fullName});s.json({user:safe(data),message:"Administrator display name updated."});}));
 app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const b=z.object({registrationCode:z.string().min(6),studentNumber:z.string().optional()}).parse(q.body);const {data,error}=await q.supabase.rpc("request_verity_membership",{p_registration_code:b.registrationCode.trim().toUpperCase(),p_student_number:b.studentNumber||null});if(error)return s.status(400).json({error:error.message});s.status(201).json({membership:data});}));
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
@@ -295,6 +304,62 @@ app.post("/api/organization/registration-code/rotate",auth,roles("EMPLOYER"),run
  const {data,error:saveError}=await q.supabase.from("Organization").update({registrationCode:code,updatedAt:new Date().toISOString()}).eq("id",org.id).eq("ownerId",q.user.id).select("registrationCode").single();if(saveError)throw saveError;
  await audit(q.supabase,q.user.id,"INSTITUTION_REGISTRATION_CODE_ROTATED","Organization",org.id,{});
  s.json({registrationCode:save.registrationCode,message:"A new invitation code is active. Existing student memberships are unchanged."});
+}));
+
+app.get("/api/student/registration-options",run(async(q,s)=>{
+ const {data,error}=await makeClient().from("Organization").select("id,name,locationCity,locationState,locationCountry").eq("type","INSTITUTION").eq("status","APPROVED").eq("directoryVisible",true).order("name").limit(500);
+ if(error)throw error;
+ s.json({institutions:(data||[]).map(o=>({id:o.id,name:o.name,location:[o.locationCity,o.locationState,o.locationCountry].filter(Boolean).join(", ")}))});
+}));
+app.get("/api/student/registration-context",auth,roles("GRADUATE"),run(async(q,s)=>{
+ const metadata=q.authUser.user_metadata||{},organizationId=metadata.studentOrganizationId||null,studentNumber=metadata.studentNumber||null;
+ let institution=null;
+ if(organizationId){const {data,error}=await q.supabase.from("Organization").select("id,name,type,status").eq("id",organizationId).maybeSingle();if(error)throw error;if(data?.type==="INSTITUTION"&&data.status==="APPROVED")institution={id:data.id,name:data.name};}
+ s.json({institution,studentNumber,needsActivation:!q.user.id?false:true});
+}));
+app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
+ const b=z.object({organizationId:z.string().min(1),studentNumber:z.string().trim().min(2).max(80),activationToken:z.string().trim().min(16).max(100)}).parse(q.body);
+ const metadata=q.authUser.user_metadata||{};
+ if(metadata.studentOrganizationId&&metadata.studentOrganizationId!==b.organizationId)return s.status(403).json({error:"This account's student registration is linked to a different institution. Contact VERITY support if this is incorrect."});
+ if(metadata.studentNumber&&metadata.studentNumber.toUpperCase().replace(/\\s+/g,"")!==b.studentNumber.toUpperCase().replace(/\\s+/g,""))return s.status(403).json({error:"The matriculation number does not match the one supplied during account registration."});
+ const tokenHash=crypto.createHash("sha256").update(b.activationToken).digest("hex");
+ const {data,error}=await q.supabase.rpc("activate_verity_student_roster",{p_organization_id:b.organizationId,p_student_number:b.studentNumber,p_token_hash:tokenHash});
+ if(error)return s.status(400).json({error:error.message||"Student activation could not be completed."});
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_ACTIVATED","StudentRoster",b.organizationId,{institutionId:b.organizationId});
+ s.json({activation:data,message:"Your student record is now securely linked to the institution."});
+}));
+app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ const {data:students,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName").eq("organizationId",org.id).eq("status","ELIGIBLE").is("claimedUserId",null).order("studentNumber").limit(10000);if(error)throw error;
+ const {data:existing,error:te}=await q.supabase.from("StudentActivationToken").select("rosterId,usedAt,revokedAt").eq("organizationId",org.id);if(te)throw te;
+ const tokenByRoster=new Map((existing||[]).map(t=>[t.rosterId,t]));
+ const output=[];
+ for(const student of students||[]){
+  const previous=tokenByRoster.get(student.id);
+  if(previous&&(!previous.revokedAt||previous.usedAt))continue;
+  const raw=crypto.randomBytes(24).toString("base64url");
+  const row={id:crypto.randomUUID(),organizationId:org.id,rosterId:student.id,tokenHash:crypto.createHash("sha256").update(raw).digest("hex"),tokenLastFour:raw.slice(-4),issuedBy:q.user.id,createdAt:new Date().toISOString(),expiresAt:null,usedAt:null,usedBy:null,revokedAt:null};
+  output.push({studentNumber:student.studentNumber,fullName:student.fullName,activationToken:raw,row});
+ }
+ for(let i=0;i<output.length;i+=200){const chunk=output.slice(i,i+200).map(x=>x.row);const {error:ie}=await q.supabase.from("StudentActivationToken").upsert(chunk,{onConflict:"rosterId"});if(ie)throw ie;}
+ const csvCell=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+ const csv=["student_number,full_name,activation_token",...output.map(x=>[x.studentNumber,x.fullName,x.activationToken].map(csvCell).join(","))].join("\\r\\n");
+ await audit(q.supabase,q.user.id,"STUDENT_ACTIVATION_TOKENS_EXPORTED","Organization",org.id,{count:output.length});
+ s.set("Content-Type","text/csv; charset=utf-8");s.set("Content-Disposition",'attachment; filename="verity-student-activation-tokens.csv"');
+ s.send(csv);
+}));
+app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ const {data:student,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName,status,claimedUserId").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();if(error)throw error;
+ if(!student)return s.status(404).json({error:"Student roster record not found."});
+ if(student.status!=="ELIGIBLE"||student.claimedUserId)return s.status(409).json({error:"A new activation token cannot be issued for an already claimed, disputed or blocked student record. Use the identity-recovery review process."});
+ const raw=crypto.randomBytes(24).toString("base64url"),now=new Date().toISOString();
+ const row={id:crypto.randomUUID(),organizationId:org.id,rosterId:student.id,tokenHash:crypto.createHash("sha256").update(raw).digest("hex"),tokenLastFour:raw.slice(-4),issuedBy:q.user.id,createdAt:now,expiresAt:null,usedAt:null,usedBy:null,revokedAt:null};
+ const {error:saveError}=await q.supabase.from("StudentActivationToken").upsert(row,{onConflict:"rosterId"});if(saveError)throw saveError;
+ await audit(q.supabase,q.user.id,"STUDENT_ACTIVATION_TOKEN_REISSUED","StudentRoster",student.id,{organizationId:org.id});
+ s.json({studentNumber:student.studentNumber,fullName:student.fullName,activationToken:raw,message:"A fresh single-use activation token has been issued. Any previous token for this student is now invalid."});
 }));
 app.get("/api/institution/roster",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
