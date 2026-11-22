@@ -769,7 +769,7 @@ app.patch("/api/issues/:id",auth,run(async(q,s)=>{
   if(!isAdmin){
     const {data,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
     if(error)throw error;org=data;
-    if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can manage reports associated with that institution."});
+    if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved organization or institution owner can manage reports associated with that organization."});
   }
   const patch={status:b.status,updatedAt:new Date().toISOString()};
   if(b.status==="RESOLVED"||b.status==="CLOSED")patch.resolvedAt=new Date().toISOString();
