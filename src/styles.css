@@ -472,7 +472,7 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 .directory-card-actions>button:hover{background:#edf6f6;border-color:#b7d4d3}
 .directory-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;padding:38px 18px;color:#60758a}
 .directory-empty>svg{color:#638a9b}.directory-empty>b{font-size:15px;color:#29465b}.directory-empty p{max-width:520px;margin:0;font-size:13px}.directory-empty small{max-width:560px;color:#8493a2;line-height:1.6}
-.directory-card-actions{align-items:flex-start;flex-direction:column}.directory-profile-modal{padding:18px}.directory-profile-head h3{font-size:19px}}
+
 
 .directory-result-count{margin-left:auto;color:#64748b;font-size:12px;font-weight:700;align-self:center}
 .directory-profile-details{border-top:1px solid #edf1f4;padding-top:13px;margin-top:14px}
