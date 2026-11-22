@@ -4,6 +4,8 @@ create table if not exists public."IssueMessage" (
  "id" text primary key,
  "issueId" text not null references public."IssueReport"("id") on delete cascade,
  "authorId" text not null references public."User"("id") on delete restrict,
+ "authorName" text,
+ "authorRole" text,
  "body" text not null check (char_length(trim("body")) between 1 and 5000),
  "createdAt" timestamptz not null default now()
 );
@@ -24,3 +26,5 @@ create policy "Issue participants can send messages" on public."IssueMessage" fo
  ))
 );
 grant select,insert on public."IssueMessage" to authenticated;
+
+-- Author display snapshots are populated by the authenticated server route.
