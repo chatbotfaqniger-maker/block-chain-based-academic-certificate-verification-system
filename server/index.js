@@ -726,6 +726,49 @@ app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
   s.send(video);
 }));
 
+
+app.get("/api/issues",auth,run(async(q,s)=>{
+  const {data,error}=await q.supabase.from("IssueReport").select("id,ticketNumber,reporterId,organizationId,category,severity,subject,description,status,resolutionNotes,assignedTo,createdAt,updatedAt,resolvedAt").order("createdAt",{ascending:false}).limit(100);
+  if(error)throw error;
+  const orgIds=[...new Set((data||[]).map(x=>x.organizationId).filter(Boolean))];
+  const {data:orgs,error:orgError}=orgIds.length?await q.supabase.from("Organization").select("id,name,type").in("id",orgIds):{data:[],error:null};
+  if(orgError)throw orgError;
+  s.json({issues:(data||[]).map(x=>({...x,organization:(orgs||[]).find(o=>o.id===x.organizationId)||null}))});
+}));
+app.post("/api/issues",auth,run(async(q,s)=>{
+  const b=z.object({category:z.enum(["ACCOUNT","CERTIFICATE","VERIFICATION","DOCUMENT_UPLOAD","ACCESS","DATA_CORRECTION","PERFORMANCE","OTHER"]),severity:z.enum(["LOW","NORMAL","HIGH","CRITICAL"]).default("NORMAL"),subject:z.string().trim().min(5).max(140),description:z.string().trim().min(15).max(4000)}).parse(q.body);
+  let organizationId=null;
+  if(q.user.role==="EMPLOYER"){
+    const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();
+    if(error)throw error;
+    if(org)organizationId=org.id;
+  }
+  const id=crypto.randomUUID(),ticketNumber="VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),now=new Date().toISOString();
+  const {data,error}=await q.supabase.from("IssueReport").insert({id,ticketNumber,reporterId:q.user.id,organizationId,...b,status:"OPEN",createdAt:now,updatedAt:now}).select("id,ticketNumber,reporterId,organizationId,category,severity,subject,description,status,createdAt,updatedAt").single();
+  if(error)throw error;
+  await audit(q.supabase,q.user.id,"ISSUE_REPORT_CREATED","IssueReport",id,{ticketNumber,category:b.category,severity:b.severity,organizationId});
+  s.status(201).json({issue:data,message:"Your report has been submitted. Keep the ticket reference for follow-up."});
+}));
+app.patch("/api/issues/:id",auth,run(async(q,s)=>{
+  const b=z.object({status:z.enum(["IN_PROGRESS","WAITING_FOR_USER","RESOLVED","CLOSED"]),resolutionNotes:z.string().trim().max(2000).optional()}).parse(q.body);
+  const isAdmin=q.user.role==="ADMIN";
+  let org=null;
+  if(!isAdmin){
+    const {data,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
+    if(error)throw error;org=data;
+    if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can manage reports associated with that institution."});
+  }
+  const patch={status:b.status,updatedAt:new Date().toISOString()};
+  if(isAdmin&&b.resolutionNotes!==undefined)patch.resolutionNotes=b.resolutionNotes||null;
+  if(b.status==="RESOLVED"||b.status==="CLOSED")patch.resolvedAt=new Date().toISOString();
+  if(b.status==="IN_PROGRESS"||b.status==="WAITING_FOR_USER")patch.resolvedAt=null;
+  let query=q.supabase.from("IssueReport").update(patch).eq("id",q.params.id);
+  if(!isAdmin)query=query.eq("organizationId",org.id);
+  const {data,error}=await query.select("id,ticketNumber,status,resolutionNotes,updatedAt,resolvedAt").maybeSingle();
+  if(error)throw error;if(!data)return s.status(404).json({error:"Issue report not found in your permitted workspace."});
+  await audit(q.supabase,q.user.id,"ISSUE_REPORT_"+b.status,"IssueReport",data.id,{ticketNumber:data.ticketNumber,organizationId:org?.id||null});
+  s.json({issue:data});
+}));
 app.get("/api/audit",auth,roles("ADMIN"),run(async(q,s)=>{
   const {data,error}=await q.supabase.from("AuditEvent").select("id,action,entity,entityId,metadata,createdAt,actor:User!AuditEvent_actorId_fkey(fullName,email)").order("createdAt",{ascending:false}).limit(100);
   if(error) throw error;
