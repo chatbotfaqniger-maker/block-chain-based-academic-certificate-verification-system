@@ -232,7 +232,7 @@ async function institutionOwner(client,userId,{approved=false}={}) {
 app.get("/api/organization/students",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
  const limit=Math.min(200,Math.max(1,Number(q.query.limit)||100)),offset=Math.max(0,Number(q.query.offset)||0);
- let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,linkedUserId,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
  const {data,error,count}=await query;if(error)throw error;
  s.json({students:data||[],total:count||0,limit,offset});
 }));
