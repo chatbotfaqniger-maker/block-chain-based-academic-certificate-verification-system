@@ -532,6 +532,35 @@ VERITY is a software system and does not by itself confer government recognition
 
 ---
 
+## 9.5 Bulk certificate issuance
+
+Approved academic institution owners can open **Bulk certificate issuance** and choose one of three bulk methods. The existing single-certificate **Issue Certificate** page remains available.
+
+1. **CSV + ZIP of PDFs:** Export the student spreadsheet as CSV UTF-8, then upload a ZIP archive containing the students' individual PDF certificates. A ZIP is a compressed collection of files; it is not an Excel workbook.
+2. **CSV + multiple PDFs:** Upload the CSV and select individual PDF certificate files without creating a ZIP.
+3. **Generate from template:** Upload the CSV and let VERITY generate one standard PDF certificate per valid student record. The institution must apply its authorized signature/seal before treating the generated file as its official original.
+
+### CSV fields and file matching
+
+Use the downloadable VERITY template. Required columns are student_number, full_name, faculty, department, programme and qualification. Optional columns are email, classification and award_date (YYYY-MM-DD). If starting from an Excel .xlsx workbook, use Save As / Export and choose CSV UTF-8 first.
+
+For existing PDF certificates, the PDF filename (without .pdf) must match the student's matriculation/student number, for example 2021-CS-001.pdf. Matching is based on the normalized student number, not a student's name. Missing or duplicate matches block the batch from issuance.
+
+### Limits and security
+
+- Maximum 500 student records per browser batch.
+- CSV file maximum 5 MB.
+- ZIP archive maximum 250 MB, 500 PDF files, and 250 MB total expanded PDF content.
+- Individual PDF maximum 10 MB.
+- Encrypted ZIP files, unsupported compression, invalid CRC checksums, non-PDF entries and symbolic links are rejected.
+- The institution owner must review the records and explicitly confirm issuance.
+- VERITY submits each certificate through the existing certificate issuance endpoint, then uploads the corresponding document to private storage. The standard issuer approval, verification-key, SHA-256 fingerprint and audit controls remain in force.
+- This release processes records sequentially in the browser. Keep the page open until the run completes. A durable server-side queue for very large cohorts is a future scaling improvement.
+- If a connection is interrupted, search the certificate registry before restarting. A certificate may have been created even if the browser did not receive the response. Never create a duplicate to resolve an uncertain outcome.
+- If a document upload fails after certificate creation, the certificate record already exists. Resolve the document attachment against that certificate ID; do not issue the same student again.
+- VERITY validates file type/signature and SHA-256 integrity but does not perform antivirus scanning.
+- A generated template is not automatically signed, sealed, accredited or independently validated. The institution remains responsible for authorization and award accuracy.
+
 ## 10. Troubleshooting
 
 | Problem | What to check / do |
