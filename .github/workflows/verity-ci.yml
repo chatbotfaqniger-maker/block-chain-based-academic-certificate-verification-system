@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Check server syntax
-        run: node --check server/index.js && node --check server/staff-permissions.js
+        run: node --check server/index.js && node --check server/staff-permissions.js && node --check server/student-import-worker.js
       - name: Build frontend
         run: npm run build
       - name: Run automated tests
