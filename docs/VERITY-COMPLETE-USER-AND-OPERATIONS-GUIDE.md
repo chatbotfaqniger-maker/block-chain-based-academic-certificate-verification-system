@@ -256,7 +256,7 @@ The Bulk student import module is available to an approved academic institution 
 
 **Important safeguards**
 
-- The maximum CSV file size is 5 MB and one file may contain up to 50,000 data rows.
+- The maximum CSV file size is 20 MB and one file may contain up to 50,000 data rows.
 - Student numbers are normalized and unique within the institution. Existing institution/student-number pairs are skipped; existing roster details are not silently overwritten.
 - If a connection is interrupted, upload the same corrected file again. Existing records are skipped rather than duplicated.
 - A roster entry is not a Verity authentication account, a certificate, or a grant to view a private certificate document.
