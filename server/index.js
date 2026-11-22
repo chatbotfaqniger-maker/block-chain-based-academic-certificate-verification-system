@@ -125,6 +125,27 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
   if(error) throw error;
 }
 
+
+async function createVerityNotification(userId,{type,category="ACCOUNT",title,body,url="/",metadata={}}){
+ if(!userId||!SUPABASE_SERVER_KEY)return;
+ const db=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+ try{
+  const {data:pref}=await db.from("NotificationPreference").select("inAppEnabled,pushEnabled").eq("userId",userId).eq("category",category).maybeSingle();
+  if(pref?.inAppEnabled!==false){
+   const {error}=await db.from("Notification").insert({id:crypto.randomUUID(),userId,type,category,title,body,url,metadata,createdAt:new Date().toISOString()});
+   if(error)throw error;
+  }
+  if(pref?.pushEnabled!==false)await sendVerityPush([userId],{title:"VERITY · "+title,body,url});
+ }catch(error){console.error("VERITY notification event failed:",error.message);}
+}
+async function notifyVerityAdmins(payload){
+ if(!SUPABASE_SERVER_KEY)return;
+ const db=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+ const {data:admins,error}=await db.from("User").select("id").eq("role","ADMIN");
+ if(error)throw error;
+ await Promise.all((admins||[]).map(a=>createVerityNotification(a.id,payload)));
+}
+
 app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
 
 app.get("/api/directory/organizations",run(async(q,s)=>{
@@ -760,6 +781,32 @@ async function sendVerityPush(userIds,payload){
   await Promise.all((rows||[]).map(async row=>{try{await webpush.sendNotification(row.subscription,JSON.stringify(payload));}catch(err){if(err.statusCode===404||err.statusCode===410)await adminDb.from("PushSubscription").delete().eq("id",row.id);}}));
  }catch(err){console.error("VERITY push delivery:",err.message);}
 }
+
+app.get("/api/notifications",auth,run(async(q,s)=>{
+ const [itemsResult,prefsResult]=await Promise.all([
+  q.supabase.from("Notification").select("id,type,category,title,body,url,metadata,readAt,createdAt").eq("userId",q.user.id).order("createdAt",{ascending:false}).limit(100),
+  q.supabase.from("NotificationPreference").select("category,inAppEnabled,pushEnabled,emailEnabled").eq("userId",q.user.id)
+ ]);
+ if(itemsResult.error)throw itemsResult.error;if(prefsResult.error)throw prefsResult.error;
+ s.json({notifications:itemsResult.data||[],unreadCount:(itemsResult.data||[]).filter(n=>!n.readAt).length,preferences:prefsResult.data||[]});
+}));
+app.patch("/api/notifications/:id/read",auth,run(async(q,s)=>{
+ const now=new Date().toISOString();
+ const {data,error}=await q.supabase.from("Notification").update({readAt:now}).eq("id",q.params.id).eq("userId",q.user.id).is("readAt",null).select("id,readAt").maybeSingle();
+ if(error)throw error;s.json({notification:data});
+}));
+app.post("/api/notifications/read-all",auth,run(async(q,s)=>{
+ const now=new Date().toISOString();
+ const {error}=await q.supabase.from("Notification").update({readAt:now}).eq("userId",q.user.id).is("readAt",null);
+ if(error)throw error;s.json({markedRead:true});
+}));
+app.put("/api/notifications/preferences",auth,run(async(q,s)=>{
+ const b=z.object({preferences:z.array(z.object({category:z.enum(["ACCOUNT","CERTIFICATE","VERIFICATION","ACCESS","SUPPORT","PLATFORM"]),inAppEnabled:z.boolean(),pushEnabled:z.boolean(),emailEnabled:z.boolean() })).max(6)}).parse(q.body);
+ const rows=b.preferences.map(p=>({id:crypto.randomUUID(),userId:q.user.id,...p,updatedAt:new Date().toISOString()}));
+ const {error}=await q.supabase.from("NotificationPreference").upsert(rows,{onConflict:"userId,category"});
+ if(error)throw error;s.json({saved:true});
+}));
+
 app.get("/api/push/config",auth,(_q,s)=>s.json({publicKey:process.env.VAPID_PUBLIC_KEY||null}));
 app.post("/api/push/subscribe",auth,run(async(q,s)=>{
  const b=z.object({subscription:z.object({endpoint:z.string().url(),keys:z.object({p256dh:z.string(),auth:z.string()})})}).parse(q.body);
