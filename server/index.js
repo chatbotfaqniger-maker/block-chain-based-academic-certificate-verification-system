@@ -198,11 +198,8 @@ app.post("/api/auth/register",run(async(q,s)=>{
   if(b.role==="GRADUATE"){
    const studentNumber=String(b.studentNumber||"").trim(),organizationId=String(b.studentOrganizationId||"").trim();
    if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your institution and enter your matriculation number before creating a student account."});
-   const {data:org,error:oe}=await makeClient().from("Organization").select("id,type,status,directoryVisible").eq("id",organizationId).maybeSingle();if(oe)throw oe;
-   if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!org.directoryVisible)return s.status(400).json({error:"Choose an approved institution from the registration list."});
-   const normalized=studentNumber.toUpperCase().replace(/\s+/g,"");
-   const {data:roster,error:re}=await makeClient().from("StudentRoster").select("id,status").eq("organizationId",org.id).eq("normalizedStudentNumber",normalized).maybeSingle();if(re)throw re;
-   if(!roster||!["ELIGIBLE","CLAIM_PENDING"].includes(roster.status))return s.status(400).json({error:"Your student record could not be prepared for activation. Check the matriculation number with your institution ICT office."});
+   const {data:eligible,error:precheckError}=await makeClient().rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;
+   if(eligible!==true)return s.status(400).json({error:"Your student record could not be prepared for activation. Check the matriculation number with your institution ICT office."});
   }
   const client=makeClient();
   const {data,error}=await client.auth.signUp({
@@ -307,9 +304,9 @@ app.post("/api/organization/registration-code/rotate",auth,roles("EMPLOYER"),run
 }));
 
 app.get("/api/student/registration-options",run(async(q,s)=>{
- const {data,error}=await makeClient().from("Organization").select("id,name,locationCity,locationState,locationCountry").eq("type","INSTITUTION").eq("status","APPROVED").eq("directoryVisible",true).order("name").limit(500);
+ const {data,error}=await makeClient().rpc("verity_public_organization_directory",{p_search:null,p_type:"INSTITUTION"});
  if(error)throw error;
- s.json({institutions:(data||[]).map(o=>({id:o.id,name:o.name,location:[o.locationCity,o.locationState,o.locationCountry].filter(Boolean).join(", ")}))});
+ s.json({institutions:(Array.isArray(data)?data:[]).map(o=>({id:o.id,name:o.name,location:[o.locationCity,o.locationState,o.locationCountry].filter(Boolean).join(", ")})).sort((a,b)=>a.name.localeCompare(b.name))});
 }));
 app.get("/api/student/registration-context",auth,roles("GRADUATE"),run(async(q,s)=>{
  const metadata=q.authUser.user_metadata||{},organizationId=metadata.studentOrganizationId||null,studentNumber=metadata.studentNumber||null;
