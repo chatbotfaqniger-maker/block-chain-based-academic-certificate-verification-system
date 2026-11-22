@@ -26,7 +26,7 @@ create policy "Issue reports visible to reporter admins and organization owners"
  or exists(select 1 from public."Organization" o where o.id="IssueReport"."organizationId" and o."ownerId"=(select auth.uid())::text)
 );
 create policy "Users can submit their own issue reports" on public."IssueReport" for insert to authenticated with check (
- "reporterId"=(select auth.uid())::text and ("organizationId" is null or exists(select 1 from public."Organization" o where o.id="IssueReport"."organizationId" and o."ownerId"=(select auth.uid())::text))
+ "reporterId"=(select auth.uid())::text and "status"='OPEN' and "resolutionNotes" is null and "assignedTo" is null and ("organizationId" is null or exists(select 1 from public."Organization" o where o.id="IssueReport"."organizationId" and o."ownerId"=(select auth.uid())::text))
 );
 create policy "Admins and organization owners can update visible issue reports" on public."IssueReport" for update to authenticated using (
  exists(select 1 from public."User" u where u.id=(select auth.uid())::text and u.role='ADMIN')
