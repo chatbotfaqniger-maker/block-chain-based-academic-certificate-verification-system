@@ -1,3 +1,4 @@
+// Institution-only bulk issuance. Each credential reuses the existing server-side issue and document endpoints.
 import React,{useMemo,useState} from "react";
 import {PDFDocument,StandardFonts,rgb} from "pdf-lib";
 import {FileSpreadsheet,FileArchive,Files,FileText,Upload,AlertTriangle,CheckCircle2,ShieldCheck,ArrowRight,Download} from "lucide-react";
