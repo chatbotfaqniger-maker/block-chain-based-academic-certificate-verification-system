@@ -71,6 +71,39 @@ async function ensureStudentMembership(client, authUser, profile) {
  const {error}=await client.rpc("request_verity_membership",{p_registration_code:code,p_student_number:authUser.user_metadata?.studentNumber||null});
  if(error) console.warn("Student institution-link request was not accepted:",error.message);
 }
+function parseRosterCsv(source) {
+ const rows=[];let row=[],field="",quoted=false;
+ for(let i=0;i<source.length;i++){const ch=source[i],next=source[i+1];
+  if(quoted){if(ch==='"'&&next==='"'){field+='"';i++;}else if(ch==='"')quoted=false;else field+=ch;}
+  else if(ch==='"')quoted=true;
+  else if(ch===","){row.push(field);field="";}
+  else if(ch==="\\n"){row.push(field);rows.push(row);row=[];field="";}
+  else if(ch!=="\\r")field+=ch;
+ }
+ if(quoted)throw new Error("The CSV contains an unclosed quoted field.");
+ if(field.length||row.length){row.push(field);rows.push(row);}
+ const headers=(rows.shift()||[]).map(x=>String(x).trim().toLowerCase().replace(/[\\s-]+/g,"_"));
+ const required=["student_number","full_name"];
+ for(const key of required)if(!headers.includes(key))throw new Error("CSV must include student_number and full_name columns.");
+ return rows.filter(r=>r.some(v=>String(v||"").trim())).map(values=>Object.fromEntries(headers.map((h,i)=>[h,String(values[i]||"").trim()])));
+}
+async function institutionRosterContext(client,userId) {
+ const {data:owned,error:oe}=await client.from("Organization").select("id,name,type,status,ownerId,registrationCode,registrationCodeExpiryEnabled,registrationCodeExpiresAt").eq("ownerId",userId).maybeSingle();
+ if(oe)throw oe;
+ if(owned)return owned;
+ const {data:staff,error:se}=await client.from("InstitutionICTStaff").select("organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE").limit(10);
+ if(se)throw se;
+ const active=(staff||[]).find(x=>x.permissions?.some(p=>["roster:manage","registration:recover"].includes(p)));
+ if(!active)return null;
+ const {data:org,error}=await client.from("Organization").select("id,name,type,status,ownerId,registrationCode,registrationCodeExpiryEnabled,registrationCodeExpiresAt").eq("id",active.organizationId).maybeSingle();
+ if(error)throw error;
+ return org?{...org,_ictPermissions:active.permissions}:null;
+}
+function hasInstitutionPermission(org,permission,userId) {
+ if(org?.ownerId===userId)return true;
+ return org?._ictPermissions?.includes(permission)===true;
+}
+
 const run = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
 async function publicIssuerDetails(client, certificateId) {
  const {data,error}=await client.rpc("verity_public_certificate_issuer",{p_certificate_id:certificateId});
@@ -242,6 +275,94 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const patch={status:b.status,updatedAt:new Date().toISOString()};if(b.permissions)patch.permissions=b.permissions;
  const {data,error:e}=await q.supabase.from("OrganizationStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(e)throw e;
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
+}));
+
+app.get("/api/institution/roster",auth,run(async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ const term=String(q.query.search||"").trim();
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,academicSession,status,claimedAt,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(500);
+ if(term)query=query.or("studentNumber.ilike.%"+term.replace(/[,%()]/g,"")+"%,fullName.ilike.%"+term.replace(/[,%()]/g,"")+"%");
+ const {data,error}=await query;if(error)throw error;
+ const counts=(data||[]).reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{});
+ s.json({organization:{id:org.id,name:org.name,registrationCode:org.registrationCode,registrationCodeExpiryEnabled:org.registrationCodeExpiryEnabled,registrationCodeExpiresAt:org.registrationCodeExpiresAt},students:data||[],counts});
+}));
+app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","text/plain","application/vnd.ms-excel"],limit:"5mb"}),run(async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!Buffer.isBuffer(q.body)||!q.body.length)return s.status(400).json({error:"Upload a non-empty CSV roster file."});
+ const fileName=String(q.headers["x-file-name"]||"student-roster.csv").normalize("NFKC").slice(0,180);
+ if(!/\.csv$/i.test(fileName))return s.status(415).json({error:"The first roster-import release accepts CSV files. Excel workbook import will be added as a compatible format."});
+ const rows=parseRosterCsv(q.body.toString("utf8").replace(/^\\uFEFF/,""));
+ if(!rows.length)return s.status(400).json({error:"The CSV contains no student records."});
+ if(rows.length>10000)return s.status(413).json({error:"A single import is limited to 10,000 student records."});
+ const batchId=crypto.randomUUID(),seen=new Set(),valid=[],rejected=[];
+ for(let i=0;i<rows.length;i++){
+  const r=rows[i],number=String(r.student_number||r.matric_number||"").trim(),name=String(r.full_name||r.student_name||"").trim(),normalized=number.toUpperCase().replace(/\\s+/g,"");
+  if(number.length<2||number.length>80||name.length<2||name.length>160||!normalized){rejected.push({row:i+2,reason:"Missing or invalid student_number/full_name"});continue;}
+  if(seen.has(normalized)){rejected.push({row:i+2,reason:"Duplicate matriculation number in this file"});continue;}
+  seen.add(normalized);
+  const email=String(r.institutional_email||r.email||"").trim().toLowerCase();
+  if(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){rejected.push({row:i+2,reason:"Invalid institutional email"});continue;}
+  valid.push({id:crypto.randomUUID(),organizationId:org.id,studentNumber:number,normalizedStudentNumber:normalized,fullName:name,institutionalEmail:email||null,faculty:r.faculty||null,department:r.department||null,programme:r.programme||r.course||null,academicSession:r.academic_session||r.session||null,status:"ELIGIBLE",createdBy:q.user.id,importBatchId:batchId,updatedAt:new Date().toISOString()});
+ }
+ let inserted=0;
+ for(let i=0;i<valid.length;i+=200){
+  const chunk=valid.slice(i,i+200);
+  const {data,error}=await q.supabase.from("StudentRoster").upsert(chunk,{onConflict:"organizationId,normalizedStudentNumber",ignoreDuplicates:true}).select("id");
+  if(error)throw error;
+  inserted+=(data||[]).length;
+ }
+ const rejectedCount=rejected.length+(valid.length-inserted);
+ const {error:logError}=await q.supabase.from("StudentRosterImport").insert({id:batchId,organizationId:org.id,uploadedBy:q.user.id,fileName,totalRows:rows.length,insertedRows:inserted,rejectedRows:rejectedCount});
+ if(logError)throw logError;
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORTED","StudentRosterImport",batchId,{organizationId:org.id,totalRows:rows.length,insertedRows:inserted,rejectedRows:rejectedCount});
+ s.status(201).json({batchId,totalRows:rows.length,insertedRows:inserted,rejectedRows:rejectedCount,errors:rejected.slice(0,100),message:"Roster import completed. Existing institution/matriculation records were not overwritten."});
+}));
+app.get("/api/institution/ict",auth,run(async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.ownerId!==q.user.id)return s.status(403).json({error:"Only the institution owner can manage ICT assignments."});
+ const {data,error}=await q.supabase.from("InstitutionICTStaff").select("id,userId,permissions,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(error)throw error;
+ const ids=(data||[]).map(x=>x.userId);
+ const {data:users,error:ue}=ids.length?await q.supabase.from("User").select("id,fullName,email,role").in("id",ids):{data:[],error:null};if(ue)throw ue;
+ s.json({staff:(data||[]).map(x=>({...x,user:(users||[]).find(u=>u.id===x.userId)||null}))});
+}));
+app.post("/api/institution/ict",auth,run(async(q,s)=>{
+ const b=z.object({email:z.string().email(),permissions:z.array(z.enum(["roster:manage","registration:recover"])).min(1).max(2)}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
+ if(!org||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only an approved institution owner can appoint ICT officers."});
+ const {data:person,error:pe}=await q.supabase.from("User").select("id,email,role").ilike("email",b.email.trim()).maybeSingle();if(pe)throw pe;
+ if(!person||person.id===q.user.id||person.role!=="GRADUATE")return s.status(404).json({error:"The ICT officer must already have a Graduate account in VERITY."});
+ const {data,error:saveError}=await q.supabase.from("InstitutionICTStaff").upsert({id:crypto.randomUUID(),organizationId:org.id,userId:person.id,permissions:[...new Set(b.permissions)],status:"ACTIVE",createdBy:q.user.id,updatedAt:new Date().toISOString()},{onConflict:"organizationId,userId"}).select().single();if(saveError)throw saveError;
+ await audit(q.supabase,q.user.id,"INSTITUTION_ICT_ASSIGNED","InstitutionICTStaff",data.id,{organizationId:org.id,permissions:data.permissions});
+ s.status(201).json({staff:data});
+}));
+app.patch("/api/institution/ict/:id",auth,run(async(q,s)=>{
+ const b=z.object({status:z.enum(["ACTIVE","SUSPENDED"]),permissions:z.array(z.enum(["roster:manage","registration:recover"])).min(1).max(2).optional()}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
+ if(!org||org.type!=="INSTITUTION")return s.status(403).json({error:"Only the institution owner can change ICT privileges."});
+ const patch={status:b.status,updatedAt:new Date().toISOString()};if(b.permissions)patch.permissions=[...new Set(b.permissions)];
+ const {data,error:saveError}=await q.supabase.from("InstitutionICTStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(saveError)throw saveError;
+ await audit(q.supabase,q.user.id,"INSTITUTION_ICT_"+b.status,"InstitutionICTStaff",data.id,{organizationId:org.id,permissions:data.permissions});
+ s.json({staff:data});
+}));
+app.get("/api/institution/recoveries",auth,run(async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution owner or ICT recovery officer is required."});
+ const {data,error}=await q.supabase.from("StudentRegistrationRecovery").select("id,rosterId,reportedBy,reviewedBy,reason,status,resolutionNotes,createdAt,resolvedAt,StudentRoster:rosterId(studentNumber,fullName,status)").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(200);if(error)throw error;
+ s.json({recoveries:data||[]});
+}));
+app.post("/api/institution/recoveries",auth,run(async(q,s)=>{
+ const b=z.object({studentNumber:z.string().min(2).max(80),reason:z.string().trim().min(10).max(1000)}).parse(q.body);
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution owner or ICT recovery officer is required."});
+ const normalized=b.studentNumber.trim().toUpperCase().replace(/\\s+/g,"");
+ const {data:roster,error:re}=await q.supabase.from("StudentRoster").select("id,status").eq("organizationId",org.id).eq("normalizedStudentNumber",normalized).maybeSingle();if(re)throw re;
+ if(!roster)return s.status(404).json({error:"No matching roster record was found. Check the number against official institution records."});
+ const {data,error}=await q.supabase.from("StudentRegistrationRecovery").insert({id:crypto.randomUUID(),organizationId:org.id,rosterId:roster.id,reportedBy:q.user.id,reason:b.reason}).select().single();if(error)throw error;
+ await q.supabase.from("StudentRoster").update({status:"DISPUTED",updatedAt:new Date().toISOString()}).eq("id",roster.id).eq("organizationId",org.id);
+ await audit(q.supabase,q.user.id,"STUDENT_REGISTRATION_DISPUTE_OPENED","StudentRegistrationRecovery",data.id,{organizationId:org.id,rosterId:roster.id});
+ s.status(201).json({recovery:data,message:"A registration dispute has been opened. The existing account has not been transferred or deleted."});
 }));
 app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
 app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved first."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
