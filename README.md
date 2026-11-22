@@ -10,7 +10,7 @@ Configure for the core application:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 
-Certificate uploads do not require a scanner service or Supabase service-role key. The server uses the Supabase Publishable Key with the signed-in user's access token; never place secret or service-role keys in frontend configuration or committed source code.
+Certificate uploads do not require a scanner service or Supabase service-role key. The core web application uses the Supabase Publishable Key with the signed-in user's access token. The optional Postgres-backed student-import processor requires a server-only `SUPABASE_SERVICE_ROLE_KEY` and `ENABLE_STUDENT_IMPORT_WORKER=true`. It runs inside the existing Node web process in the current deployment design; a dedicated Render worker can be introduced when institutional volume justifies the additional hosting cost. Never place secret or service-role keys in frontend configuration or committed source code.
 
 The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
 
@@ -36,6 +36,8 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Institution staff access scoped to their own approved institution, with only `certificates:read` and `documents:download` implemented; document downloads require both permissions and never grant issuance or revocation authority
 - Organization registration with System Admin approval
 - Organization-specific student / employee membership and registration codes
+- Institution bulk student roster import from CSV, with validation, duplicate prevention, durable Postgres-backed chunk queue, background processing, import history, tenant-scoped full-roster search and pagination
+- Institution operational analytics for registered students, issued certificates and active credentials
 - Student institution-link requests and organization approval workflow
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow

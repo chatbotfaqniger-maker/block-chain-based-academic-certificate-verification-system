@@ -12,6 +12,7 @@ import { z } from "zod";
 import { createVerityMarketingMp4 } from "./marketing-video.js";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
 import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "./staff-permissions.js";
+import { startStudentImportWorker } from "./student-import-worker.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -20,6 +21,8 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
+const importWorkerEnabled = process.env.ENABLE_STUDENT_IMPORT_WORKER === "true" && Boolean(SUPABASE_SERVER_KEY);
+let stopImportWorker = null;
 const makeClient = (accessToken) => {
   if (!configured) throw new Error("Supabase is not configured. Add the Project URL and Publishable Key.");
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -126,7 +129,7 @@ async function audit(client,actorId,action,entity,entityId,metadata={}) {
 app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
 
 app.get("/api/directory/organizations",run(async(q,s)=>{
- const term=String(q.query.search||"").trim().slice(0,100);
+ const term=String(q.query.search||"").trim().slice(0,100).replace(/[^\p{L}\p{N}\s\-\/]/gu,"").trim();
  const type=String(q.query.type||"ALL").toUpperCase();
  if(!["ALL","INSTITUTION","EMPLOYER"].includes(type))return s.status(400).json({error:"Invalid organization type filter."});
  const db=makeClient();
@@ -209,6 +212,103 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const patch={status:b.status,updatedAt:new Date().toISOString()};if(b.permissions)patch.permissions=b.permissions;
  const {data,error:e}=await q.supabase.from("OrganizationStaff").update(patch).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(e)throw e;
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
+}));
+
+const studentRosterInput=z.object({
+ studentNumber:z.string().trim().min(1).max(80),
+ fullName:z.string().trim().min(2).max(160),
+ email:z.string().trim().max(254).email().or(z.literal("")).optional(),
+ faculty:z.string().trim().min(2).max(160),
+ department:z.string().trim().min(2).max(160),
+ programme:z.string().trim().min(2).max(180),
+ qualification:z.string().trim().min(2).max(180),
+ classification:z.string().trim().max(100).optional().default(""),
+ awardDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{const date=new Date(v+"T00:00:00.000Z");return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===v;}).nullable().optional()
+});
+async function institutionOwner(client,userId,{approved=false}={}) {
+ const {data:org,error}=await client.from("Organization").select("id,name,type,status").eq("ownerId",userId).maybeSingle();
+ if(error)throw error;
+ if(!org||org.type!=="INSTITUTION")return {error:"An academic institution owner account is required."};
+ if(approved&&org.status!=="APPROVED")return {error:"Your institution must be approved before importing student records."};
+ return {org};
+}
+app.get("/api/organization/analytics",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
+ const [students,certificates,active]=await Promise.all([
+  q.supabase.from("StudentRoster").select("id",{count:"exact",head:true}).eq("organizationId",org.id),
+  q.supabase.from("Certificate").select("id",{count:"exact",head:true}).eq("organizationId",org.id),
+  q.supabase.from("Certificate").select("id",{count:"exact",head:true}).eq("organizationId",org.id).eq("status","ACTIVE")
+ ]);
+ for(const r of [students,certificates,active])if(r.error)throw r.error;
+ s.json({totalStudents:students.count||0,certificatesIssued:certificates.count||0,activeCertificates:active.count||0});
+}));
+app.get("/api/organization/students",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
+ const limit=Math.min(200,Math.max(1,Number(q.query.limit)||100)),offset=Math.max(0,Number(q.query.offset)||0);
+ const term=String(q.query.search||"").trim().slice(0,100).replace(/[^\\p{L}\\p{N}\\s\\-\\/]/gu,"").trim();
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ if(term)query=query.or("fullName.ilike.%"+term+"%,studentNumber.ilike.%"+term+"%,faculty.ilike.%"+term+"%,department.ilike.%"+term+"%,programme.ilike.%"+term+"%");
+ const {data,error,count}=await query;
+ if(error)throw error;
+ s.json({students:data||[],total:count||0,limit,offset,search:term});
+}));
+app.get("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
+ const {data,error}=await q.supabase.from("StudentImportBatch").select("id,fileName,totalRows,totalChunks,processedChunks,failedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(20);
+ if(error)throw error;
+ s.json({batches:data||[],workerEnabled:importWorkerEnabled});
+}));
+app.post("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({
+  fileName:z.string().trim().min(1).max(180),
+  totalRows:z.number().int().min(1).max(50000),
+  totalChunks:z.number().int().min(1).max(500),
+  rejectedRows:z.number().int().min(0).max(50000).default(0),
+  errorSummary:z.array(z.object({rowNumber:z.number().int().nonnegative(),message:z.string().max(300)})).max(50).default([])
+ }).refine(v=>v.rejectedRows<=v.totalRows&&v.totalChunks===Math.ceil((v.totalRows-v.rejectedRows)/100),{message:"Import chunk count does not match the valid row count."}).parse(q.body);
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
+ const id=crypto.randomUUID(),fileName=b.fileName.replace(/[\\\/]/g,"_").slice(0,180);
+ const {data,error}=await q.supabase.from("StudentImportBatch").insert({id,organizationId:org.id,fileName,totalRows:b.totalRows,totalChunks:b.totalChunks,rejectedRows:b.rejectedRows,errorSummary:b.errorSummary,status:"UPLOADING",createdBy:q.user.id}).select().single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"STUDENT_IMPORT_STARTED","StudentImportBatch",id,{organizationId:org.id,totalRows:b.totalRows,totalChunks:b.totalChunks,rejectedRows:b.rejectedRows});
+ s.status(201).json({batch:data});
+}));
+app.post("/api/organization/students/import-batches/:id/chunks",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({chunkIndex:z.number().int().min(0).max(499),rows:z.array(studentRosterInput).min(1).max(100)}).parse(q.body);
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
+ const {data:batch,error:be}=await q.supabase.from("StudentImportBatch").select("id,totalRows,totalChunks,rejectedRows,status,createdBy").eq("id",q.params.id).eq("organizationId",org.id).single();
+ if(be)throw be;
+ if(batch.status!=="UPLOADING")return s.status(409).json({error:"This import batch is no longer accepting rows."});
+ const validRows=batch.totalRows-batch.rejectedRows;
+ if(b.chunkIndex>=batch.totalChunks)return s.status(400).json({error:"Chunk index is outside the declared import batch."});
+ const expected=Math.min(100,validRows-b.chunkIndex*100);
+ if(b.rows.length!==expected)return s.status(400).json({error:"The chunk row count does not match its declared position."});
+ const normalized=b.rows.map(r=>({studentNumber:r.studentNumber.trim().toUpperCase(),fullName:r.fullName.trim(),email:r.email?.trim().toLowerCase()||"",faculty:r.faculty.trim(),department:r.department.trim(),programme:r.programme.trim(),qualification:r.qualification.trim(),classification:r.classification?.trim()||"",awardDate:r.awardDate||null}));
+ const contentHash=digest(JSON.stringify(normalized));
+ const row={id:crypto.randomUUID(),batchId:batch.id,organizationId:org.id,chunkIndex:b.chunkIndex,rows:normalized,contentHash,createdBy:q.user.id};
+ const {data:staged,error}=await q.supabase.from("StudentImportChunk").upsert(row,{onConflict:"batchId,chunkIndex",ignoreDuplicates:true}).select("id,contentHash").maybeSingle();
+ if(error)throw error;
+ if(!staged){
+  const {data:existing,error:existingError}=await q.supabase.from("StudentImportChunk").select("id,contentHash").eq("batchId",batch.id).eq("chunkIndex",b.chunkIndex).single();
+  if(existingError)throw existingError;
+  if(existing.contentHash!==contentHash)return s.status(409).json({error:"This chunk index already contains different student data. Start a new import batch."});
+ }
+ s.status(202).json({accepted:true,chunkIndex:b.chunkIndex,duplicateSubmission:!staged});
+}));
+app.post("/api/organization/students/import-batches/:id/complete",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id,{approved:true});if(accessError)return s.status(403).json({error:accessError});
+ const {data:batch,error:be}=await q.supabase.from("StudentImportBatch").select("id,totalChunks,rejectedRows,status").eq("id",q.params.id).eq("organizationId",org.id).single();
+ if(be)throw be;
+ if(batch.status!=="UPLOADING")return s.status(409).json({error:"This import batch has already been submitted."});
+ const {count,error:countError}=await q.supabase.from("StudentImportChunk").select("id",{count:"exact",head:true}).eq("batchId",batch.id);
+ if(countError)throw countError;
+ if(count!==batch.totalChunks)return s.status(409).json({error:"Some import chunks have not been uploaded yet. Please retry the missing chunks."});
+ const status=batch.totalChunks===0?"PARTIAL":"QUEUED";
+ const now=new Date().toISOString();
+ const {data,error}=await q.supabase.from("StudentImportBatch").update({status,updatedAt:now,...(status==="PARTIAL"?{completedAt:now}:{})}).eq("id",batch.id).eq("organizationId",org.id).select().single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"STUDENT_IMPORT_QUEUED","StudentImportBatch",batch.id,{organizationId:org.id,totalChunks:batch.totalChunks});
+ s.status(202).json({batch:data,workerEnabled:importWorkerEnabled});
 }));
 app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
 app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved first."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
@@ -696,6 +796,27 @@ async function start(){
   console.log("Blockchain:",chain.enabled?"connected (optional Polygon anchor)":"disabled (optional future layer)");
   console.log("Certificate ledger: Supabase append-only SHA-256 hash chain.");
   console.log("Document security: private storage, file-signature validation and SHA-256 integrity checks; antivirus scanning is disabled.");
-  app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
+  if(process.env.ENABLE_STUDENT_IMPORT_WORKER==="true"){
+    if(!SUPABASE_SERVER_KEY) throw new Error("ENABLE_STUDENT_IMPORT_WORKER requires SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY).");
+    const workerClient=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    stopImportWorker=startStudentImportWorker({client:workerClient});
+    console.log("Institutional student import worker: enabled (Postgres-backed, restart-safe queue).");
+  }else{
+    console.log("Institutional student import worker: disabled; enable it only after applying the queue migration.");
+  }
+  const server=app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
+  const shutdown=async signal=>{
+    console.log(`Received ${signal}; stopping HTTP intake and student import worker.`);
+    const forceExit=setTimeout(()=>process.exit(1),10000);forceExit.unref();
+    try{
+      await new Promise(resolve=>server.close(resolve));
+      if(stopImportWorker)await stopImportWorker();
+    }finally{
+      clearTimeout(forceExit);
+      process.exit(0);
+    }
+  };
+  process.once("SIGTERM",()=>shutdown("SIGTERM"));
+  process.once("SIGINT",()=>shutdown("SIGINT"));
 }
 start().catch(e=>{console.error(e);process.exit(1);});

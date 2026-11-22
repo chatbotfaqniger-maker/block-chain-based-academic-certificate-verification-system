@@ -224,6 +224,45 @@ While the application is pending, correct incomplete details if the interface al
 
 Never approve a membership based only on a matching name. Registration codes are invitations and should not be published openly.
 
+#### 5.2.1 Bulk student import and roster management
+
+The Bulk student import module is available to an approved academic institution owner. It supports controlled CSV imports for large cohorts without creating a Verity login account for every student.
+
+1. Open **Bulk student import** from the Institution workspace.
+2. Download the official VERITY CSV template.
+3. Export the relevant student records from the institution's student information system and populate the required columns:
+   - `student_number`
+   - `full_name`
+   - `faculty`
+   - `department`
+   - `programme`
+   - `qualification`
+4. Optional columns are `email`, `classification` and `award_date` (YYYY-MM-DD).
+5. Save the file as CSV and upload it. The browser validates the file and shows a preview before submission.
+6. Correct missing required values, invalid email/date values and duplicate student numbers within the file.
+7. Start the import. VERITY stages records in sequential batches of up to 100 rows and then submits the batch to its durable database queue.
+8. Once the batch shows **QUEUED**, the browser is no longer responsible for processing the records. The server worker processes queued chunks and updates the batch status and progress.
+9. Review Import history for inserted records, duplicates, rejected rows, failed chunks and processing progress.
+
+
+**Background worker configuration (administrator/deployment task)**
+
+- The queue is stored in Supabase Postgres. Each staged chunk is processed transactionally; a worker restart does not discard queued chunks. In the current deployment design, the processor runs as a controlled background loop inside the existing Node web process; it does not create a separate Render service.
+- To enable processing, first reconcile and apply the reviewed VERITY import migration, then configure the Render web service with the server-only `SUPABASE_SERVICE_ROLE_KEY` and `ENABLE_STUDENT_IMPORT_WORKER=true`.
+- Never put the service-role/secret key in Vite variables, browser code, public documentation values or Git.
+- If the worker is disabled, batches remain queued and the page will explicitly report that processing is not active. Do not tell users their records have been imported until the batch reaches **COMPLETED** or **PARTIAL**.
+- On the current single free web instance, the processor runs alongside the web process and resumes pending work after a restart or service wake. It is not an independent always-on worker, so do not promise immediate completion while the free web service is asleep. For sustained high-volume institutional use, deploy a dedicated Render background worker and scale it independently; that may add hosting cost.
+- If a chunk fails, VERITY records the failed chunk and error summary; an administrator should correct the source data or investigate the failure before starting a corrected batch.
+
+**Important safeguards**
+
+- The maximum CSV file size is 20 MB and one file may contain up to 50,000 data rows.
+- Student numbers are normalized and unique within the institution. Existing institution/student-number pairs are skipped; existing roster details are not silently overwritten.
+- If a connection is interrupted, upload the same corrected file again. Existing records are skipped rather than duplicated.
+- A roster entry is not a Verity authentication account, a certificate, or a grant to view a private certificate document.
+- Graduates create their own accounts and use the existing institution-link request and approval workflow.
+- The roster directory displays 100 records per page. Search runs against the institution's full roster on the server, and Previous/Next controls move through the matching results.
+
 ### 5.3 Assign staff permissions
 
 An organization owner can assign limited access to existing VERITY accounts.
