@@ -15,7 +15,6 @@ export default function IssueCentre({user,organization,notice}){
  const admin=user?.role==="ADMIN",institutionOwner=user?.role==="EMPLOYER"&&organization?.type==="INSTITUTION";
  const [issues,setIssues]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState("");
  const [form,setForm]=useState({category:"OTHER",severity:"NORMAL",subject:"",description:""});
- const [notes,setNotes]=useState({});
  async function load(){
   setLoading(true);setError("");
   try{const result=await api("/issues");setIssues(result.issues||[]);}
@@ -31,7 +30,7 @@ export default function IssueCentre({user,organization,notice}){
  }
  async function update(item,status){
   setBusy(true);setError("");
-  try{await api("/issues/"+item.id,{method:"PATCH",body:JSON.stringify({status,...(admin?{resolutionNotes:notes[item.id]??item.resolutionNotes??""}:{})})});notice("Issue "+status.toLowerCase().replaceAll("_"," ") + ".");await load();}
+  try{await api("/issues/"+item.id,{method:"PATCH",body:JSON.stringify({status})});notice("Issue "+status.toLowerCase().replaceAll("_"," ") + ".");await load();}
   catch(e){setError(e.message);}
   finally{setBusy(false);}
  }
@@ -54,9 +53,7 @@ export default function IssueCentre({user,organization,notice}){
     <div className="issue-card-top"><div><span className="eyebrow">{item.ticketNumber} · {item.category.replaceAll("_"," ")}</span><h4>{item.subject}</h4><small>Submitted {date(item.createdAt)} · {item.organization?.name||"Personal report"}</small></div><span className={"issue-status "+item.status.toLowerCase()}>{item.status.replaceAll("_"," ")}</span></div>
     <p className="issue-description">{item.description}</p>
     <div className="issue-meta"><span>Impact: <b>{item.severity}</b></span><span>Updated: {date(item.updatedAt)}</span></div>
-    {item.resolutionNotes&&<div className="issue-resolution"><b>Resolution update</b><p>{item.resolutionNotes}</p></div>}
     {(admin||institutionOwner)&&!["CLOSED","RESOLVED"].includes(item.status)&&<div className="issue-actions">
-      {admin&&<label className="issue-wide">Resolution notes<textarea rows={2} maxLength={2000} value={notes[item.id]??item.resolutionNotes??""} onChange={e=>setNotes({...notes,[item.id]:e.target.value})} placeholder="Record what was checked or changed. Do not claim a repair until verified."/></label>}
       <div className="actions">{statuses.filter(status=>status!==item.status&&status!=="OPEN").map(status=><button type="button" key={status} className={status==="RESOLVED"?"btn-approve":"btn-outline"} disabled={busy} onClick={()=>update(item,status)}>{status.replaceAll("_"," ")}</button>)}</div>
     </div>}
    </article>):<div className="issue-empty"><ShieldCheck size={25}/><b>No issue reports yet</b><p>When you submit a report, its reference and status will appear here.</p></div>}
