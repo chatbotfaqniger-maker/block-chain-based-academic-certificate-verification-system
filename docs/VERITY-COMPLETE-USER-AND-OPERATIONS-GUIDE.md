@@ -261,7 +261,7 @@ The Bulk student import module is available to an approved academic institution 
 - If a connection is interrupted, upload the same corrected file again. Existing records are skipped rather than duplicated.
 - A roster entry is not a Verity authentication account, a certificate, or a grant to view a private certificate document.
 - Graduates create their own accounts and use the existing institution-link request and approval workflow.
-- The roster directory currently displays the latest 100 records; use the search field to filter those loaded records.
+- The roster directory displays 100 records per page. Search runs against the institution's full roster on the server, and Previous/Next controls move through the matching results.
 
 ### 5.3 Assign staff permissions
 
