@@ -325,7 +325,6 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const clean=Object.fromEntries(Object.entries(b).map(([k,v])=>[k,typeof v==="string"?v.trim():v]));
   if(organization) clean.institution=organization.name;
   const hash=digest(canonical({...clean,certificateId}));
-  const chain=await issueOnChain(certificateId,hash);
   let graduateId=null;
   if(clean.studentEmail){
     const {data:graduate,error:gError}=await q.supabase.from("User").select("id").eq("email",clean.studentEmail.toLowerCase()).maybeSingle();
@@ -333,11 +332,27 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
     graduateId=graduate?.id||null;
   }
   const now=new Date().toISOString();
-  const record={...clean,id:crypto.randomUUID(),studentEmail:clean.studentEmail||null,certificateId,verificationKey,organizationId:organization?.id||null,digest:hash,awardDate:new Date(clean.awardDate).toISOString(),issuerId:q.user.id,graduateId,txHash:chain.txHash,chainId:chain.chainId,contractAddress:chain.contractAddress,createdAt:now,updatedAt:now,issuedAt:now};
-  const {data,error}=await q.supabase.from("Certificate").insert(record).select().single();
+  const record={...clean,id:crypto.randomUUID(),studentEmail:clean.studentEmail||null,certificateId,verificationKey,organizationId:organization?.id||null,digest:hash,awardDate:new Date(clean.awardDate).toISOString(),issuerId:q.user.id,graduateId,txHash:null,chainId:null,contractAddress:null,createdAt:now,updatedAt:now,issuedAt:now};
+  // Persist first: the PostgreSQL trigger appends the ISSUED ledger event in
+  // the same transaction. Optional blockchain anchoring must never prevent
+  // the authoritative Supabase credential from being issued.
+  const {data:created,error}=await q.supabase.from("Certificate").insert(record).select().single();
   if(error) throw error;
-  await audit(q.supabase,q.user.id,"CERTIFICATE_ISSUED","Certificate",data.id,{certificateId,mode:chain.mode,organizationId:organization?.id||null});
-  s.status(201).json({certificate:data,chainMode:chain.mode});
+  let chain={mode:"SUPABASE_LEDGER"},certificate=created,blockchainAnchorPending=false;
+  try{
+    chain=await issueOnChain(certificateId,hash);
+    if(chain.txHash){
+      const {data:anchored,error:anchorError}=await q.supabase.from("Certificate").update({txHash:chain.txHash,chainId:chain.chainId,contractAddress:chain.contractAddress,updatedAt:new Date().toISOString()}).eq("id",created.id).select().single();
+      if(anchorError)throw anchorError;
+      certificate=anchored;
+    }
+  }catch(anchorError){
+    blockchainAnchorPending=true;
+    console.error("Optional blockchain issuance anchor failed; Supabase ledger remains authoritative:",anchorError);
+    chain={mode:"SUPABASE_LEDGER"};
+  }
+  await audit(q.supabase,q.user.id,"CERTIFICATE_ISSUED","Certificate",certificate.id,{certificateId,mode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending,organizationId:organization?.id||null});
+  s.status(201).json({certificate,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
 }));
 
 app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
