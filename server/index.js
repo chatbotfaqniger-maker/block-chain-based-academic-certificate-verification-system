@@ -348,7 +348,7 @@ app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
 }));
 app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!(hasInstitutionPermission(org,"roster:manage",q.user.id)||hasInstitutionPermission(org,"registration:recover",q.user.id)))return s.status(403).json({error:"An approved institution owner or authorized ICT recovery officer is required."});
  const {data:student,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName,status,claimedUserId").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();if(error)throw error;
  if(!student)return s.status(404).json({error:"Student roster record not found."});
  if(student.status!=="ELIGIBLE"||student.claimedUserId)return s.status(409).json({error:"A new activation token cannot be issued for an already claimed, disputed or blocked student record. Use the identity-recovery review process."});
@@ -362,11 +362,11 @@ app.get("/api/institution/roster",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
  const term=String(q.query.search||"").trim();
- let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,academicSession,status,claimedAt,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(500);
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,academicSession,status,claimedUserId,claimedAt,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(500);
  if(term)query=query.or("studentNumber.ilike.%"+term.replace(/[,%()]/g,"")+"%,fullName.ilike.%"+term.replace(/[,%()]/g,"")+"%");
  const {data,error}=await query;if(error)throw error;
- const counts=(data||[]).reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{});
- s.json({organization:{id:org.id,name:org.name,registrationCode:org.registrationCode,registrationCodeExpiryEnabled:org.registrationCodeExpiryEnabled,registrationCodeExpiresAt:org.registrationCodeExpiresAt},students:data||[],counts});
+ const claimedIds=[...new Set((data||[]).map(r=>r.claimedUserId).filter(Boolean))];const {data:claimants,error:ce}=claimedIds.length?await q.supabase.from("User").select("id,fullName,email").in("id",claimedIds):{data:[],error:null};if(ce)throw ce;const counts=(data||[]).reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{});
+ s.json({organization:{id:org.id,name:org.name,registrationCode:org.registrationCode,registrationCodeExpiryEnabled:org.registrationCodeExpiryEnabled,registrationCodeExpiresAt:org.registrationCodeExpiresAt},students:(data||[]).map(r=>({...r,claimedBy:(claimants||[]).find(u=>u.id===r.claimedUserId)||null})),counts});
 }));
 app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","text/plain","application/vnd.ms-excel"],limit:"5mb"}),run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
@@ -430,8 +430,8 @@ app.patch("/api/institution/ict/:id",auth,run(async(q,s)=>{
 app.get("/api/institution/recoveries",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution owner or ICT recovery officer is required."});
- const {data,error}=await q.supabase.from("StudentRegistrationRecovery").select("id,rosterId,reportedBy,reviewedBy,reason,status,resolutionNotes,createdAt,resolvedAt,StudentRoster:rosterId(studentNumber,fullName,status)").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(200);if(error)throw error;
- s.json({recoveries:data||[]});
+ const {data,error}=await q.supabase.from("StudentRegistrationRecovery").select("id,rosterId,reportedBy,reviewedBy,secondApprovedBy,secondApprovedAt,reason,status,resolutionNotes,createdAt,resolvedAt,StudentRoster:rosterId(studentNumber,fullName,status,claimedUserId,claimedAt)").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(200);if(error)throw error;const ids=[...new Set((data||[]).map(x=>x.StudentRoster?.claimedUserId).filter(Boolean))];const {data:claimants,error:ce}=ids.length?await q.supabase.from("User").select("id,fullName,email").in("id",ids):{data:[],error:null};if(ce)throw ce;
+ s.json({recoveries:(data||[]).map(x=>({...x,claimedBy:(claimants||[]).find(u=>u.id===x.StudentRoster?.claimedUserId)||null}))});
 }));
 app.post("/api/institution/recoveries",auth,run(async(q,s)=>{
  const b=z.object({studentNumber:z.string().min(2).max(80),reason:z.string().trim().min(10).max(1000)}).parse(q.body);
@@ -444,6 +444,30 @@ app.post("/api/institution/recoveries",auth,run(async(q,s)=>{
  const {error:flagError}=await q.supabase.from("StudentRoster").update({status:"DISPUTED",updatedAt:new Date().toISOString()}).eq("id",roster.id).eq("organizationId",org.id);if(flagError)throw flagError;
  await audit(q.supabase,q.user.id,"STUDENT_REGISTRATION_DISPUTE_OPENED","StudentRegistrationRecovery",data.id,{organizationId:org.id,rosterId:roster.id});
  s.status(201).json({recovery:data,message:"A registration dispute has been opened. The existing account has not been transferred or deleted."});
+}));
+
+app.patch("/api/institution/recoveries/:id/review",auth,run(async(q,s)=>{
+ const b=z.object({decision:z.enum(["APPROVED","REJECTED"]),notes:z.string().trim().min(10).max(1000)}).parse(q.body);
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution recovery officer is required."});
+ const {data,error}=await q.supabase.rpc("review_verity_student_recovery",{p_recovery_id:q.params.id,p_decision:b.decision,p_notes:b.notes});
+ if(error)return s.status(400).json({error:error.message});
+ await audit(q.supabase,q.user.id,"STUDENT_REGISTRATION_RECOVERY_"+b.decision,"StudentRegistrationRecovery",q.params.id,{organizationId:org.id,notes:b.notes});
+ s.json({recovery:data,message:b.decision==="APPROVED"?"First review recorded. A different authorized officer must provide the second approval.":"The dispute was rejected and the roster record restored to its prior claim state."});
+}));
+app.post("/api/institution/recoveries/:id/complete",auth,run(async(q,s)=>{
+ const b=z.object({notes:z.string().trim().min(10).max(1000)}).parse(q.body);
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"registration:recover",q.user.id))return s.status(403).json({error:"An authorized institution recovery officer is required."});
+ const {data,error}=await q.supabase.rpc("complete_verity_student_recovery",{p_recovery_id:q.params.id,p_notes:b.notes});
+ if(error)return s.status(409).json({error:error.message});
+ const raw=crypto.randomBytes(24).toString("base64url"),now=new Date().toISOString();
+ const tokenRow={id:crypto.randomUUID(),organizationId:org.id,rosterId:data.rosterId,tokenHash:crypto.createHash("sha256").update(raw).digest("hex"),tokenLastFour:raw.slice(-4),issuedBy:q.user.id,createdAt:now,expiresAt:null,usedAt:null,usedBy:null,revokedAt:null};
+ const {error:tokenError}=await q.supabase.from("StudentActivationToken").upsert(tokenRow,{onConflict:"rosterId"});
+ if(tokenError)return s.status(200).json({recovery:data,activationToken:null,message:"Two-person recovery completed. The roster is eligible again, but token creation needs to be retried by an authorized ICT officer."});
+ await audit(q.supabase,q.user.id,"STUDENT_REGISTRATION_RECOVERY_COMPLETED","StudentRegistrationRecovery",q.params.id,{organizationId:org.id,rosterId:data.rosterId,previousClaimantId:data.claimedUserId});
+ if(data.claimedUserId)await createVerityNotification(data.claimedUserId,{type:"STUDENT_REGISTRATION_CLAIM_RELEASED",category:"ACCOUNT",title:"Institution student-record review completed",body:"Your institution completed a two-person review of a disputed student registration. Contact the institution if you believe this was an error.",url:"/join",metadata:{organizationId:org.id,recoveryId:q.params.id}});
+ s.json({recovery:data,activationToken:raw,message:"Two-person recovery completed. The old unused claim was released and a fresh single-use token is ready for the verified student."});
 }));
 app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
 app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved first."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
