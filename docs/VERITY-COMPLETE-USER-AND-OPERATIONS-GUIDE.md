@@ -97,7 +97,7 @@ Institution registration codes do not expire by default. An institution may expl
 
 Institution owners may appoint multiple ICT officers with limited roster-management and registration-recovery privileges. ICT can review claim status, check records against official institutional documents, open disputes and initiate controlled recovery. Pending, unused activation attempts may be invalidated and reissued after identity checks. An already activated account must never be silently transferred: require documented dispute handling, independent approval, appropriate notifications and preserved audit history. Never ask students to share passwords or reusable authentication tokens.
 
-Implementation note: This policy is locked as the product requirement. The roster/ICT database foundation is being added; do not treat bulk roster upload, self-service activation, the ICT dashboard or recovery as operational until the corresponding application workflows and security tests are complete.
+Implementation status (22 November 2026): The database foundation and first institution-owner/ICT console are deployed. The console supports CSV roster import (up to 10,000 rows), duplicate-safe insertion, private roster search/listing, owner-controlled ICT officer assignments and dispute-case intake. Excel workbook import, roster-backed student signup, verified activation delivery, single-use token reissue, two-person approval for active-account reassignment and full end-to-end recovery are not yet implemented. The existing student registration and manual membership-approval flow remains active until the secure activation workflow is completed.
 
 ## 3. Organization onboarding and approval
 
