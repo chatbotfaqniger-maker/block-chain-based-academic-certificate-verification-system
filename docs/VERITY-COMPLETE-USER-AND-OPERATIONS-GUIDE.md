@@ -614,3 +614,27 @@ Only the approved issuing institution may revoke its own credentials. Platform a
 A verifier's private-document access is separate from public credential verification. An approved verification organization requests access; the linked graduate approves or rejects it; an approval expires after 30 days. The verifier must still pass organization scope and document integrity checks to view or download the original file. Public verification does not reveal the private original document.
 
 The Admin audit timeline records application actions such as issuance, revocation, access requests and consent decisions. The append-only certificate ledger is a separate integrity history for certificate issuance and revocation. These two records serve different purposes and must not be described as interchangeable.
+
+
+---
+
+## Issue Resolution Centre
+
+The Issue Resolution Centre is available from every signed-in workspace.
+
+### Submit an issue
+1. Open **Issue Resolution Centre** from the workspace navigation.
+2. Select the closest issue category and impact level.
+3. Enter a short title and describe what happened, what you expected and any visible error message.
+4. Do not include passwords, session tokens, private keys or confidential identity documents.
+5. Submit the report and keep its VERITY ticket reference.
+
+### Track and manage reports
+- Graduates and other individual users can view the reports they submitted.
+- An institution owner can view reports associated with that institution and update their workflow status.
+- VERITY System Administrators can review platform-wide reports and update their workflow status.
+- Status changes are recorded as audit events.
+- A resolved status means the report has been marked resolved; it is not proof of an automatic repair unless the responsible operator has verified the result.
+
+### Current capability boundary
+The first release provides ticket submission, tenant-scoped visibility, status tracking and audit history. It does not yet provide automated root-cause diagnosis, repair scripts, ticket attachments, comments, or automatic retry buttons. Infrastructure-level and privileged repairs remain System Administrator responsibilities. Never change the certificate ledger or audit history to resolve a user support ticket.
