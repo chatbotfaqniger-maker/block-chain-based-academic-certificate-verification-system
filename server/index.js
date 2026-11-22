@@ -277,6 +277,25 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
  await audit(q.supabase,q.user.id,"ORGANIZATION_STAFF_"+b.status,"OrganizationStaff",data.id,{organizationId:org.id,permissions:data.permissions});s.json({staff:data});
 }));
 
+
+app.patch("/api/organization/registration-code-policy",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({enabled:z.boolean(),expiresAt:z.string().datetime().optional()}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can configure its registration-code policy."});
+ if(b.enabled&&(!b.expiresAt||new Date(b.expiresAt)<=new Date()))return s.status(400).json({error:"Choose a future expiry date, or leave expiry disabled."});
+ const patch={registrationCodeExpiryEnabled:b.enabled,registrationCodeExpiresAt:b.enabled?b.expiresAt:null,updatedAt:new Date().toISOString()};
+ const {data,error:saveError}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("id,registrationCodeExpiryEnabled,registrationCodeExpiresAt").single();if(saveError)throw saveError;
+ await audit(q.supabase,q.user.id,"INSTITUTION_REGISTRATION_CODE_POLICY_UPDATED","Organization",org.id,{enabled:b.enabled,expiresAt:patch.registrationCodeExpiresAt});
+ s.json({policy:data});
+}));
+app.post("/api/organization/registration-code/rotate",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {data:org,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can rotate its registration code."});
+ const code="VRT-"+crypto.randomBytes(8).toString("hex").toUpperCase();
+ const {data,error:saveError}=await q.supabase.from("Organization").update({registrationCode:code,updatedAt:new Date().toISOString()}).eq("id",org.id).eq("ownerId",q.user.id).select("registrationCode").single();if(saveError)throw saveError;
+ await audit(q.supabase,q.user.id,"INSTITUTION_REGISTRATION_CODE_ROTATED","Organization",org.id,{});
+ s.json({registrationCode:save.registrationCode,message:"A new invitation code is active. Existing student memberships are unchanged."});
+}));
 app.get("/api/institution/roster",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
