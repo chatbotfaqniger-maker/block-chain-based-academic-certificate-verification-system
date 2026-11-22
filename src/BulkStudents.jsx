@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {FileSpreadsheet,Upload,Download,Users,AlertTriangle,RefreshCw,Search} from "lucide-react";
 const TEMPLATE="student_number,full_name,email,faculty,department,programme,qualification,classification,award_date\n2021/CS/001,Example Student,student@example.edu.ng,Science,Computer Science,Computer Science,Bachelor of Science,Second Class Upper,2026-10-15\n";
 function parseCsv(source){
+ source=source.replace(/^\uFEFF/,"");
  const rows=[];let row=[],cell="",quoted=false;
  for(let i=0;i<source.length;i++){const ch=source[i],next=source[i+1];if(ch==='"'&&quoted&&next==='"'){cell+='"';i++;}else if(ch==='"')quoted=!quoted;else if(ch===","&&!quoted){row.push(cell);cell="";}else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&next==="\n")i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell="";}else cell+=ch;}
  if(cell.length||row.length){row.push(cell);if(row.some(v=>v.trim()))rows.push(row);}if(quoted)throw Error("The CSV contains an unfinished quoted field.");if(rows.length<2)throw Error("Add at least one student row.");if(rows.length-1>50000)throw Error("A single import is limited to 50,000 student rows.");
