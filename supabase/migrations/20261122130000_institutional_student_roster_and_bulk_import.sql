@@ -327,8 +327,12 @@ create policy verity_student_import_chunk_owner_insert on public."StudentImportC
 
 drop policy if exists verity_student_roster_owner_insert on public."StudentRoster";
 drop policy if exists verity_student_roster_owner_update on public."StudentRoster";
-revoke insert,update on public."StudentRoster" from authenticated;
+revoke all on public."StudentRoster" from public,anon,authenticated;
 grant select on public."StudentRoster" to authenticated;
 
-revoke update on public."StudentImportBatch" from authenticated;
+revoke all on public."StudentImportBatch" from public,anon,authenticated;
+grant select,insert on public."StudentImportBatch" to authenticated;
 grant update(status,"updatedAt","completedAt") on public."StudentImportBatch" to authenticated;
+
+revoke all on public."StudentImportChunk" from public,anon,authenticated;
+grant select,insert on public."StudentImportChunk" to authenticated;
