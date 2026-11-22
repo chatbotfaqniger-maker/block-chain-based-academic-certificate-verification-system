@@ -220,7 +220,7 @@ const studentRosterInput=z.object({
  programme:z.string().trim().min(2).max(180),
  qualification:z.string().trim().min(2).max(180),
  classification:z.string().trim().max(100).optional().default(""),
- awardDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional()
+ awardDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>!Number.isNaN(Date.parse(v))).nullable().optional()
 });
 async function institutionOwner(client,userId,{approved=false}={}) {
  const {data:org,error}=await client.from("Organization").select("id,name,type,status").eq("ownerId",userId).maybeSingle();
@@ -232,9 +232,7 @@ async function institutionOwner(client,userId,{approved=false}={}) {
 app.get("/api/organization/students",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
  const limit=Math.min(200,Math.max(1,Number(q.query.limit)||100)),offset=Math.max(0,Number(q.query.offset)||0);
- const term=String(q.query.search||"").trim().slice(0,100);
  let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,linkedUserId,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
- if(term)query=query.or("fullName.ilike.%"+term+"%,studentNumber.ilike.%"+term+"%,department.ilike.%"+term+"%,programme.ilike.%"+term+"%");
  const {data,error,count}=await query;if(error)throw error;
  s.json({students:data||[],total:count||0,limit,offset});
 }));
