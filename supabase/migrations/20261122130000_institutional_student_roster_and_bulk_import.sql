@@ -236,9 +236,11 @@ begin
     update public."StudentImportBatch"
       set "failedChunks"="failedChunks"+1,
           "processedChunks"="processedChunks"+1,
-          "errorSummary"="errorSummary" || jsonb_build_array(jsonb_build_object(
-            'chunkIndex',v_chunk."chunkIndex",'message','Chunk processing failed: '||v_error
-          )),
+          "errorSummary"=case when jsonb_array_length("errorSummary")<50
+            then "errorSummary" || jsonb_build_array(jsonb_build_object(
+              'chunkIndex',v_chunk."chunkIndex",'message','Chunk processing failed: '||v_error
+            ))
+            else "errorSummary" end,
           status=case when "processedChunks"+1 >= "totalChunks" then 'PARTIAL' else 'PROCESSING' end,
           "completedAt"=case when "processedChunks"+1 >= "totalChunks" then now() else null end,
           "updatedAt"=now()
