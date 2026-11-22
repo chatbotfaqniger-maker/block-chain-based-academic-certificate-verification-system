@@ -749,6 +749,72 @@ app.get("/api/issues/:id/attachments",auth,run(async(q,s)=>{
  if(error)throw error;
  s.json({url:data.signedUrl,expiresIn:300});
 }));
+
+async function sendVerityPush(userIds,payload){
+ if(!SUPABASE_SERVER_KEY||!process.env.VAPID_PUBLIC_KEY||!process.env.VAPID_PRIVATE_KEY)return;
+ try{
+  const webpush=(await import("web-push")).default;
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT||"mailto:admin@verity.local",process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);
+  const adminDb=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+  const {data:rows}=await adminDb.from("PushSubscription").select("id,userId,subscription").in("userId",userIds);
+  await Promise.all((rows||[]).map(async row=>{try{await webpush.sendNotification(row.subscription,JSON.stringify(payload));}catch(err){if(err.statusCode===404||err.statusCode===410)await adminDb.from("PushSubscription").delete().eq("id",row.id);}}));
+ }catch(err){console.error("VERITY push delivery:",err.message);}
+}
+app.post("/api/push/subscribe",auth,run(async(q,s)=>{
+ const b=z.object({subscription:z.object({endpoint:z.string().url(),keys:z.object({p256dh:z.string(),auth:z.string()})})}).parse(q.body);
+ const {error}=await q.supabase.from("PushSubscription").upsert({userId:q.user.id,endpoint:b.subscription.endpoint,subscription:b.subscription,updatedAt:new Date().toISOString()},{onConflict:"userId,endpoint"});
+ if(error)throw error;
+ s.status(201).json({enabled:true});
+}));
+app.delete("/api/push/subscribe",auth,run(async(q,s)=>{
+ const endpoint=String(q.body?.endpoint||"");
+ if(!endpoint)return s.status(400).json({error:"Subscription endpoint is required."});
+ const {error}=await q.supabase.from("PushSubscription").delete().eq("userId",q.user.id).eq("endpoint",endpoint);
+ if(error)throw error;s.json({enabled:false});
+}));
+app.get("/api/admin/users",auth,roles("ADMIN"),run(async(q,s)=>{
+ const db=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):q.supabase;
+ const {data,error}=await db.from("User").select("id,fullName,email,role").order("fullName").limit(1000);
+ if(error)throw error;
+ s.json({users:data||[]});
+}));
+app.patch("/api/issues/:id/assignment",auth,roles("ADMIN"),run(async(q,s)=>{
+ const b=z.object({assignedTo:z.string().nullable()}).parse(q.body);
+ if(b.assignedTo){
+  const {data:admin,error}=await q.supabase.from("User").select("id,fullName,role").eq("id",b.assignedTo).maybeSingle();
+  if(error)throw error;if(!admin||admin.role!=="ADMIN")return s.status(400).json({error:"Choose a registered VERITY administrator."});
+ }
+ const {data,error}=await q.supabase.from("IssueReport").update({assignedTo:b.assignedTo,updatedAt:new Date().toISOString()}).eq("id",q.params.id).select("id,assignedTo,updatedAt").maybeSingle();
+ if(error)throw error;if(!data)return s.status(404).json({error:"Conversation not found."});
+ await audit(q.supabase,q.user.id,"ISSUE_REPORT_ASSIGNED","IssueReport",data.id,{assignedTo:b.assignedTo});
+ s.json({issue:data});
+}));
+app.post("/api/issues/:id/read",auth,run(async(q,s)=>{
+ const now=new Date().toISOString();
+ const {error}=await q.supabase.from("IssueReadState").upsert({issueId:q.params.id,userId:q.user.id,lastReadAt:now,updatedAt:now},{onConflict:"issueId,userId"});
+ if(error)throw error;s.json({lastReadAt:now});
+}));
+app.post("/api/admin/broadcast-email",auth,roles("ADMIN"),run(async(q,s)=>{
+ const b=z.object({subject:z.string().trim().min(3).max(180),message:z.string().trim().min(10).max(12000)}).parse(q.body);
+ const required=["SMTP_HOST","SMTP_PORT","SMTP_USER","SMTP_PASS","SMTP_FROM"];
+ if(required.some(k=>!process.env[k]))return s.status(503).json({error:"Broadcast email is not configured yet. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM to the VERITY Render environment."});
+ const db=SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):q.supabase;
+ const {data:users,error}=await db.from("User").select("email,fullName").limit(5000);
+ if(error)throw error;
+ const recipients=[...new Map((users||[]).filter(u=>u.email).map(u=>[u.email.toLowerCase(),u])).values()];
+ if(!recipients.length)return s.status(400).json({error:"There are no registered email recipients."});
+ const nodemailer=(await import("nodemailer")).default;
+ const transporter=nodemailer.createTransport({host:process.env.SMTP_HOST,port:Number(process.env.SMTP_PORT),secure:String(process.env.SMTP_SECURE||"false")==="true",auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASS}});
+ const html="<div style=\"font-family:Arial,sans-serif;max-width:640px;margin:auto;color:#233747;line-height:1.65\"><div style=\"background:#101d35;color:white;padding:22px 26px;font-size:22px;font-weight:700\">VERITY</div><div style=\"padding:26px\"><h2>"+b.subject.replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]))+"</h2><p>"+b.message.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>")+"</p><hr><small>You're receiving this message because you have a VERITY account.</small></div></div>";
+ let sent=0,failed=0;
+ for(let offset=0;offset<recipients.length;offset+=10){
+  const batch=recipients.slice(offset,offset+10);
+  const results=await Promise.allSettled(batch.map(u=>transporter.sendMail({from:process.env.SMTP_FROM,to:u.email,subject:b.subject,text:b.message,html})));
+  sent+=results.filter(x=>x.status==="fulfilled").length;failed+=results.length-(results.filter(x=>x.status==="fulfilled").length);
+ }
+ await audit(q.supabase,q.user.id,"ADMIN_BROADCAST_EMAIL_SENT","Platform",null,{recipientCount:recipients.length,sent,failed,subject:b.subject});
+ s.json({total:recipients.length,sent,failed});
+}));
 app.get("/api/issues/:id/messages",auth,run(async(q,s)=>{
  const {data:messages,error}=await q.supabase.from("IssueMessage").select("id,issueId,authorId,authorName,authorRole,body,attachments,createdAt").eq("issueId",q.params.id).order("createdAt",{ascending:true}).limit(300);
  if(error)throw error;
@@ -760,6 +826,11 @@ app.post("/api/issues/:id/messages",auth,run(async(q,s)=>{
  const {data,error}=await q.supabase.from("IssueMessage").insert({id:crypto.randomUUID(),issueId:q.params.id,authorId:q.user.id,authorName:q.user.fullName||"VERITY user",authorRole:q.user.role,body:b.body,attachments:b.attachments,createdAt:new Date().toISOString()}).select("id,issueId,authorId,authorName,authorRole,body,createdAt").single();
  if(error)throw error;
  await audit(q.supabase,q.user.id,"ISSUE_MESSAGE_SENT","IssueReport",q.params.id,{messageId:data.id});
+ const {data:issue}=await q.supabase.from("IssueReport").select("id,reporterId,assignedTo,subject").eq("id",q.params.id).maybeSingle();
+ if(issue){
+  const recipients=q.user.role==="ADMIN"?[issue.reporterId]:[...new Set([...(issue.assignedTo?[issue.assignedTo]:[]),...(await q.supabase.from("User").select("id").eq("role","ADMIN")).data?.map(x=>x.id)||[]])];
+  await sendVerityPush(recipients.filter(id=>id&&id!==q.user.id),{title:"VERITY · New support reply",body:(issue.subject||"Support conversation")+" — "+(q.user.fullName||"A participant")+" sent a message.",url:"/support"});
+ }
  s.status(201).json({message:data});
 }));
 app.get("/api/issues",auth,run(async(q,s)=>{
