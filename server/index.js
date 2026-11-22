@@ -245,9 +245,12 @@ app.get("/api/organization/analytics",auth,roles("EMPLOYER"),run(async(q,s)=>{
 app.get("/api/organization/students",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
  const limit=Math.min(200,Math.max(1,Number(q.query.limit)||100)),offset=Math.max(0,Number(q.query.offset)||0);
- const {data,error,count}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ const term=String(q.query.search||"").trim().slice(0,100).replace(/[^\\p{L}\\p{N}\\s\\-\\/]/gu,"").trim();
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,email,faculty,department,programme,qualification,classification,awardDate,status,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ if(term)query=query.or("fullName.ilike.%"+term+"%,studentNumber.ilike.%"+term+"%,faculty.ilike.%"+term+"%,department.ilike.%"+term+"%,programme.ilike.%"+term+"%");
+ const {data,error,count}=await query;
  if(error)throw error;
- s.json({students:data||[],total:count||0,limit,offset});
+ s.json({students:data||[],total:count||0,limit,offset,search:term});
 }));
 app.get("/api/organization/students/import-batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {org,error:accessError}=await institutionOwner(q.supabase,q.user.id);if(accessError)return s.status(403).json({error:accessError});
