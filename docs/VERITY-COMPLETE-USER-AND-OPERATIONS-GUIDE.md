@@ -87,6 +87,18 @@ Use the account provider's supported password recovery flow if it is enabled for
 
 ---
 
+## Student identity, roster onboarding and ICT recovery policy
+
+The intended VERITY onboarding model is roster-backed and remote-first. Students should not need to visit ICT for routine registration. A matriculation number identifies a roster record but is not proof of ownership. Institutions must preload the student's record and a verified contact channel before self-service activation can be trusted.
+
+The approved workflow is: enter matriculation number first; select the approved institution; match the private roster record; verify through the institutional contact already on file (or complete ICT-assisted identity checking); create a personal password; then activate the institution membership. A student cannot supply a replacement email to claim somebody else's record. Failed or disputed matches must not reveal the roster student's private details.
+
+Institution registration codes do not expire by default. An institution may explicitly enable expiry and configure it. Codes are not passwords or identity evidence. Rotating a code does not affect existing student memberships.
+
+Institution owners may appoint multiple ICT officers with limited roster-management and registration-recovery privileges. ICT can review claim status, check records against official institutional documents, open disputes and initiate controlled recovery. Pending, unused activation attempts may be invalidated and reissued after identity checks. An already activated account must never be silently transferred: require documented dispute handling, independent approval, appropriate notifications and preserved audit history. Never ask students to share passwords or reusable authentication tokens.
+
+Implementation note: This policy is locked as the product requirement. The roster/ICT database foundation is being added; do not treat bulk roster upload, self-service activation, the ICT dashboard or recovery as operational until the corresponding application workflows and security tests are complete.
+
 ## 3. Organization onboarding and approval
 
 This process applies to both academic institutions and verifier organizations.
