@@ -115,7 +115,9 @@ async function activeStaffFor(client,userId) {
  const {data:organizations,error:orgError}=await client.from("Organization").select("id,status,type").in("id",organizationIds);
  if(orgError)throw orgError;
  const approved=new Set((organizations||[]).filter(x=>x.status==="APPROVED"&&x.type==="INSTITUTION").map(x=>x.id));
- return rows.filter(x=>approved.has(x.organizationId));
+ return rows
+   .filter(x=>approved.has(x.organizationId))
+   .filter(x=>isValidStaffPermissions(x.permissions));
 }
 const staffForOrganization=(staff,organizationId)=>staff.find(x=>x.organizationId===organizationId)||null;
 async function audit(client,actorId,action,entity,entityId,metadata={}) {
