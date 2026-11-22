@@ -38,7 +38,8 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Organization-reported city, state / region and country captured at signup or updated in the organization identity workspace
 - Public Global Institutions & Organizations directory with organization-type, name and location filters; only approved organizations that opt into public listing appear
 - Organization-specific student / employee membership and registration codes
-- Student institution-link requests and organization approval workflow
+- Institution student identity console: private roster import from CSV (up to 10,000 rows), duplicate-safe matriculation matching, roster status view, institution-owner-controlled ICT officer assignment, and audited registration-dispute intake
+- Existing student institution-link requests and organization approval workflow remain in place while secure roster-backed account activation is completed
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
@@ -120,7 +121,7 @@ The institution's registration/invitation code does not expire by default. Expir
 - Student roster information, institutional contact details and claim history are private and available only to authorized institution owner/ICT staff and the relevant student through purpose-limited flows.
 
 ### Implementation status
-The database foundation migration is being introduced for institution ICT assignments, private student roster records, import history, recovery cases and institution-controlled invitation-code expiry. The complete roster import, secure activation, student signup UI, ICT dashboard and recovery workflow must not be described as finished until their API, interface and end-to-end security tests are complete.
+The database foundation migration is applied, and the first institution-owner/ICT roster console is deployed. It currently supports CSV import (up to 10,000 rows), duplicate-safe roster insertion, private roster search/listing, scoped ICT officer assignment, and registration-dispute case intake. Excel workbook import, roster-backed student self-registration, verified activation delivery, token reissue, two-person approval for active-account reassignment, and full end-to-end recovery remain in progress. Do not treat those unfinished workflows as operational.
 
 ## Organization and student onboarding
 
