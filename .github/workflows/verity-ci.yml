@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/verity-cinematic-showcase-guides]
+    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance]
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Check server syntax
-        run: node --check server/index.js && node --check server/staff-permissions.js && node --check server/student-import-worker.js
+        run: node --check server/index.js && node --check server/staff-permissions.js && node --check server/student-import-worker.js && node --check server/bulk-certificate-worker.js && node --check server/bulk-certificate-service.js
       - name: Build frontend
         run: npm run build
       - name: Run automated tests
