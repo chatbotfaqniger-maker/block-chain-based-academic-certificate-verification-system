@@ -11,8 +11,9 @@ function parseCsv(source){
 }
 function downloadTemplate(){const blob=new Blob([TEMPLATE],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="VERITY-student-import-template.csv";a.click();URL.revokeObjectURL(url);}
 export default function BulkStudents({api,notice,organization}){
- const [file,setFile]=useState(null),[rows,setRows]=useState([]),[errors,setErrors]=useState([]),[busy,setBusy]=useState(false),[progress,setProgress]=useState({done:0,total:0,inserted:0,duplicates:0}),[students,setStudents]=useState([]),[studentTotal,setStudentTotal]=useState(0),[page,setPage]=useState(0),[batches,setBatches]=useState([]),[analytics,setAnalytics]=useState({totalStudents:0,certificatesIssued:0,activeCertificates:0}),[workerEnabled,setWorkerEnabled]=useState(false),[search,setSearch]=useState(""),[loadError,setLoadError]=useState("");
- const approved=organization?.status==="APPROVED"&&organization?.type==="INSTITUTION";\n const statCount=value=>value==null?"—":Number(value).toLocaleString();
+ const [file,setFile]=useState(null),[rows,setRows]=useState([]),[errors,setErrors]=useState([]),[busy,setBusy]=useState(false),[progress,setProgress]=useState({done:0,total:0,inserted:0,duplicates:0}),[students,setStudents]=useState([]),[studentTotal,setStudentTotal]=useState(0),[page,setPage]=useState(0),[batches,setBatches]=useState([]),[analytics,setAnalytics]=useState({totalStudents:0,certificatesIssued:0,activeCertificates:0}),[workerEnabled,setWorkerEnabled]=useState(false),[search,setSearch]=useState(""),[loadError,setLoadError]=useState(""),[pendingUpload,setPendingUpload]=useState(null);
+ const approved=organization?.status==="APPROVED"&&organization?.type==="INSTITUTION";
+ const statCount=value=>value==null?"—":Number(value).toLocaleString();
  async function load(){try{const [b,a]=await Promise.all([api("/organization/students/import-batches"),api("/organization/analytics")]);setBatches(b.batches||[]);setAnalytics(a);setWorkerEnabled(Boolean(b.workerEnabled));setLoadError("");}catch(e){setLoadError(e.message);}}
  async function loadStudents(){const offset=page*100;const r=await api("/organization/students?limit=100&offset="+offset+"&search="+encodeURIComponent(search));setStudents(r.students||[]);setStudentTotal(r.total||0);}
  useEffect(()=>{load();},[]);

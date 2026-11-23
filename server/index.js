@@ -503,7 +503,7 @@ app.post("/api/organization/students/import-batches/:id/complete",auth,run(async
  const {data:batch,error}=await q.supabase.from("StudentRosterImport").select("id,organizationId,uploadedBy,totalChunks,status").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
  if(error)throw error;
  if(!batch)return s.status(404).json({error:"Import batch not found."});
- if(batch.uploadedBy!==q.user.id||batch.status!=="UPLOADING")return s.status(409).json({error:"This import batch cannot be submitted again."});
+ if(batch.uploadedBy!==q.user.id)return s.status(403).json({error:"Only the person who created this import batch can submit it."});if(batch.status!=="UPLOADING"){if(["QUEUED","PROCESSING","COMPLETED","PARTIAL","FAILED"].includes(batch.status))return s.json({batch:{id:batch.id,status:batch.status},workerEnabled:STUDENT_IMPORT_WORKER_ENABLED,alreadySubmitted:true});return s.status(409).json({error:"This import batch cannot be submitted in its current state."});}
  const {data:chunks,error:chunkError}=await q.supabase.from("StudentImportChunk").select("chunkIndex").eq("batchId",batch.id).eq("organizationId",org.id);
  if(chunkError)throw chunkError;
  const indexes=new Set((chunks||[]).map(x=>x.chunkIndex));
