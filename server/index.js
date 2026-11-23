@@ -12,6 +12,7 @@ import { z } from "zod";
 import { createVerityMarketingMp4 } from "./marketing-video.js";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
 import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "./staff-permissions.js";
+import { parseRosterCsv } from "./student-roster.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -70,22 +71,6 @@ async function ensureStudentMembership(client, authUser, profile) {
  if(profile.role!=="GRADUATE")return; const code=String(authUser.user_metadata?.organizationCode||"").trim().toUpperCase();if(!code)return;
  const {error}=await client.rpc("request_verity_membership",{p_registration_code:code,p_student_number:authUser.user_metadata?.studentNumber||null});
  if(error) console.warn("Student institution-link request was not accepted:",error.message);
-}
-function parseRosterCsv(source) {
- const rows=[];let row=[],field="",quoted=false;
- for(let i=0;i<source.length;i++){const ch=source[i],next=source[i+1];
-  if(quoted){if(ch==='"'&&next==='"'){field+='"';i++;}else if(ch==='"')quoted=false;else field+=ch;}
-  else if(ch==='"')quoted=true;
-  else if(ch===","){row.push(field);field="";}
-  else if(ch==="\n"){row.push(field);rows.push(row);row=[];field="";}
-  else if(ch!=="\r")field+=ch;
- }
- if(quoted)throw new Error("The CSV contains an unclosed quoted field.");
- if(field.length||row.length){row.push(field);rows.push(row);}
- const headers=(rows.shift()||[]).map(x=>String(x).trim().toLowerCase().replace(/[\s-]+/g,"_"));
- const required=["student_number","full_name"];
- for(const key of required)if(!headers.includes(key))throw new Error("CSV must include student_number and full_name columns.");
- return rows.filter(r=>r.some(v=>String(v||"").trim())).map(values=>Object.fromEntries(headers.map((h,i)=>[h,String(values[i]||"").trim()])));
 }
 async function institutionRosterContext(client,userId) {
  const {data:owned,error:oe}=await client.from("Organization").select("id,name,type,status,ownerId,registrationCode,registrationCodeExpiryEnabled,registrationCodeExpiresAt").eq("ownerId",userId).maybeSingle();
