@@ -36,7 +36,7 @@ const makeClient = (accessToken) => {
   });
 };
 const makeServerClient = () => {
-  if(!configured || !SUPABASE_SERVER_KEY) throw new Error("A server-only Supabase service key is required for durable bulk processing.");
+  if(!configured || !SUPABASE_SERVER_KEY) throw new Error("A server-only Supabase service key is required for protected server operations.");
   return createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 };
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
@@ -112,6 +112,7 @@ async function publicIssuerDetails(client, certificateId) {
 app.set("trust proxy",1);
 const isProduction=process.env.NODE_ENV==="production";
 app.use(helmet({
+  crossOriginResourcePolicy:{policy:"cross-origin"},
   contentSecurityPolicy:isProduction?{directives:{
     defaultSrc:["'self'"],baseUri:["'self'"],frameAncestors:["'none'"],objectSrc:["'none'"],
     scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],
