@@ -80,3 +80,107 @@ end;
 $function$;
 
 revoke all on function private.guard_certificate_access_grant_update() from public, anon, authenticated;
+
+
+-- Fail closed on grants with a missing expiry in every verifier-facing read path.
+drop policy if exists "verity_certificate_granted_verifier_read" on public."Certificate";
+create policy "verity_certificate_granted_verifier_read"
+  on public."Certificate"
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public."CertificateAccessGrant" g
+      join public."Organization" o on o.id = g."organizationId"
+      where g."certificateId" = "Certificate".id
+        and g.status = 'APPROVED'
+        and g."expiresAt" > now()
+        and o."ownerId" = (select auth.uid())::text
+        and o.type = 'EMPLOYER'
+        and o.status = 'APPROVED'
+    )
+  );
+
+-- The scoped policy already includes issuer, graduate and staff access.
+-- Replace only its verifier branch with a strict non-null, unexpired grant.
+drop policy if exists "verity_document_granted_verifier_read"
+  on public."CertificateDocument";
+drop policy if exists "verity_document_read_scoped"
+  on public."CertificateDocument";
+create policy "verity_document_read_scoped"
+  on public."CertificateDocument"
+  for select
+  to authenticated
+  using (
+    (select private.is_admin())
+    or exists (
+      select 1
+      from public."Organization" o
+      join public."Certificate" c on c.id = "CertificateDocument"."certificateId"
+      where o.id = "CertificateDocument"."organizationId"
+        and c.id = "CertificateDocument"."certificateId"
+        and c."organizationId" = o.id
+        and o."ownerId" = (select auth.uid())::text
+        and o.status = 'APPROVED'
+        and o.type = 'INSTITUTION'
+    )
+    or exists (
+      select 1
+      from public."Certificate" c
+      where c.id = "CertificateDocument"."certificateId"
+        and c."organizationId" = "CertificateDocument"."organizationId"
+        and c."graduateId" = (select auth.uid())::text
+    )
+    or (
+      private.is_active_org_staff("organizationId", 'certificates:read')
+      and exists (
+        select 1
+        from public."Certificate" c
+        where c.id = "CertificateDocument"."certificateId"
+          and c."organizationId" = "CertificateDocument"."organizationId"
+      )
+    )
+    or exists (
+      select 1
+      from public."CertificateAccessGrant" g
+      join public."Organization" o on o.id = g."organizationId"
+      join public."Certificate" c on c.id = "CertificateDocument"."certificateId"
+      where g."certificateId" = "CertificateDocument"."certificateId"
+        and c."organizationId" = "CertificateDocument"."organizationId"
+        and g.status = 'APPROVED'
+        and g."expiresAt" > now()
+        and o."ownerId" = (select auth.uid())::text
+        and o.type = 'EMPLOYER'
+        and o.status = 'APPROVED'
+    )
+  );
+
+drop policy if exists "verity_storage_granted_verifier_read"
+  on storage.objects;
+create policy "verity_storage_granted_verifier_read"
+  on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'verity-certificates'
+    and exists (
+      select 1
+      from public."CertificateDocument" d
+      join public."Certificate" c
+        on c.id = d."certificateId"
+       and c."organizationId" = d."organizationId"
+      join public."CertificateAccessGrant" g
+        on g."certificateId" = d."certificateId"
+      join public."Organization" o
+        on o.id = g."organizationId"
+      where d."storagePath" = objects.name
+        and d."organizationId" = (storage.foldername(objects.name))[1]
+        and d."certificateId" = (storage.foldername(objects.name))[2]
+        and g.status = 'APPROVED'
+        and g."expiresAt" > now()
+        and o."ownerId" = (select auth.uid())::text
+        and o.type = 'EMPLOYER'
+        and o.status = 'APPROVED'
+    )
+  );
