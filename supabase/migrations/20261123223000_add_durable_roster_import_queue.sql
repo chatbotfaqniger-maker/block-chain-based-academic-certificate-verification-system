@@ -250,10 +250,9 @@ DECLARE
   v_final_status text:='PROCESSING';
   v_error text;
 BEGIN
-  SELECT c,o.status INTO v_chunk,v_org_status
+  SELECT c.* INTO v_chunk
   FROM public."StudentImportChunk" c
   JOIN public."StudentRosterImport" b ON b.id=c."batchId"
-  JOIN public."Organization" o ON o.id=c."organizationId"
   WHERE c.status='PENDING' AND b.status IN ('QUEUED','PROCESSING')
   ORDER BY c."createdAt",c."chunkIndex"
   FOR UPDATE OF c SKIP LOCKED
@@ -262,6 +261,10 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('processed',false);
   END IF;
+
+  SELECT o.status INTO v_org_status
+  FROM public."Organization" o
+  WHERE o.id=v_chunk."organizationId";
 
   UPDATE public."StudentImportChunk"
     SET attempts=attempts+1 WHERE id=v_chunk.id;
