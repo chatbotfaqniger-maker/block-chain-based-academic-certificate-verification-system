@@ -156,3 +156,11 @@ The Support & Communication Centre includes a browser-notification opt-in, priva
 ## Platform-wide Notification Centre
 
 All authenticated roles have a Notification Centre for account and organization status, certificate issuance and revocation, graduate consent/access requests, support conversations, and platform announcements. It provides in-app history, unread counts, mark-read controls, browser push opt-in, and per-category in-app/push preferences. Current event triggers include new organization registration (Admin), organization approval/status change (owner), certificate issue/revocation (graduate and Admin), certificate access request (graduate and Admin), graduate access decision (requesting organization), and support conversation/replies (participants and Admin). Background push requires HTTPS, browser permission, VAPID keys, and SUPABASE_SERVICE_ROLE_KEY configured server-side. Cross-user in-app event creation also requires that server-only Supabase key. Email category preferences are stored for future transactional delivery; current email broadcast is the Admin bulk-announcement feature and requires SMTP settings. Do not describe unconfigured email delivery as active.
+
+## Public verification and RPC security controls
+
+The public `POST /api/verify` application endpoint is rate-limited per client IP (30 requests per minute) and returns HTTP 429 when the allowance is exceeded. This application-level control protects the Render verification route; it is not a claim that direct Supabase Data API traffic uses the same per-IP limiter.
+
+Supabase SECURITY DEFINER functions use an explicit execution allowlist. Student activation, roster access, membership requests, recovery actions and organization settings are authenticated-only. Public execution is retained only for the limited certificate verification, certificate-ledger integrity, public issuer/directory and student signup discovery/precheck workflows. Trigger-only ledger and profile functions are not exposed as RPCs.
+
+Default function privileges for the Postgres migration owners are hardened so new public-schema functions are not automatically executable by `anon` or `authenticated`. Future RPC migrations must explicitly grant only the roles they require.

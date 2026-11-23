@@ -14,6 +14,7 @@ import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain }
 import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "./staff-permissions.js";
 import { isCertificateAccessActive } from "./certificate-access.js";
 import { parseRosterCsv } from "./student-roster.js";
+import { createVerificationRateLimiter } from "./rate-limits.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -915,7 +916,7 @@ app.get("/api/organization/access-requests/:id/document/download",auth,roles("EM
   s.send(output);
 }));
 
-app.post("/api/verify",run(async(q,s)=>{
+app.post("/api/verify",createVerificationRateLimiter(),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4),verifierName:z.string().optional(),verifierOrg:z.string().optional()}).parse(q.body);
   const client=makeClient();
   const {data,error}=await client.rpc("lookup_verity_certificate",{p_certificate_id:b.certificateId.trim(),p_verifier_name:b.verifierName||null,p_verifier_org:b.verifierOrg||null});
