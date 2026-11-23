@@ -822,7 +822,10 @@ app.get("/api/graduate/access-requests",auth,roles("GRADUATE"),run(async(q,s)=>{
   const ids=(data||[]).map(x=>x.certificateId);
   const {data:certs,error:ce}=ids.length?await q.supabase.from("Certificate").select("id,certificateId,studentName,institution,qualification").in("id",ids):{data:[],error:null};
   if(ce)throw ce;
-  s.json({requests:(data||[]).map(x=>({...x,certificate:(certs||[]).find(c=>c.id===x.certificateId)||null}))});
+  const grantIds=(data||[]).map(x=>x.id);
+  const {data:organizations,error:oe}=grantIds.length?await q.supabase.rpc("verity_graduate_consent_organization_details",{p_grant_ids:grantIds}):{data:[],error:null};
+  if(oe)throw oe;
+  s.json({requests:(data||[]).map(x=>{const org=(organizations||[]).find(o=>o.grant_id===x.id);return {...x,certificate:(certs||[]).find(c=>c.id===x.certificateId)||null,Organization:org?{name:org.organization_name,type:org.organization_type,registrationNumber:org.registration_number,officialWebsite:org.official_website,officialEmailDomain:org.official_email_domain,accreditationBody:org.accreditation_body,verifiedAt:org.verified_at,locationCity:org.location_city,locationState:org.location_state,locationCountry:org.location_country}:x.Organization};})});
 }));
 
 app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q,s)=>{
