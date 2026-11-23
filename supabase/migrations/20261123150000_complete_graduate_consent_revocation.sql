@@ -5,6 +5,9 @@ alter table public."CertificateAccessGrant"
   add column if not exists "revokedAt" timestamptz,
   add column if not exists "revokedBy" text;
 
+create index if not exists "CertificateAccessGrant_organization_graduate_idx"
+  on public."CertificateAccessGrant" ("organizationId", "graduateId");
+
 -- Keep a single pending request per certificate / verifier, while retaining
 -- rejected, revoked and expired approvals as immutable history.
 create unique index if not exists "CertificateAccessGrant_one_pending_per_pair_idx"
