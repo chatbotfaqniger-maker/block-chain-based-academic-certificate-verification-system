@@ -184,3 +184,47 @@ create policy "verity_storage_granted_verifier_read"
         and o.status = 'APPROVED'
     )
   );
+
+
+-- Let a graduate inspect the legal identity of an organization that requested
+-- access, without making private organization rows generally readable.
+create or replace function public.verity_graduate_consent_organization_details(p_grant_ids text[])
+returns table (
+  grant_id text,
+  organization_name text,
+  organization_type text,
+  registration_number text,
+  official_website text,
+  official_email_domain text,
+  accreditation_body text,
+  verified_at timestamptz,
+  location_city text,
+  location_state text,
+  location_country text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select
+    g.id,
+    o.name,
+    o.type,
+    o."registrationNumber",
+    o."officialWebsite",
+    o."officialEmailDomain",
+    o."accreditationBody",
+    o."verifiedAt",
+    o."locationCity",
+    o."locationState",
+    o."locationCountry"
+  from public."CertificateAccessGrant" g
+  join public."Organization" o on o.id = g."organizationId"
+  where g.id = any(p_grant_ids)
+    and g."graduateId" = (select auth.uid())::text
+    and o.status = 'APPROVED';
+$function$;
+
+revoke all on function public.verity_graduate_consent_organization_details(text[]) from public, anon;
+grant execute on function public.verity_graduate_consent_organization_details(text[]) to authenticated;
