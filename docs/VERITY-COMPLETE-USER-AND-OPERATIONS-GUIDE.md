@@ -712,3 +712,19 @@ Users and administrators can opt in to browser notifications from Support & Comm
 ## Notification Centre (all roles)
 
 Open Notifications in the main workspace navigation to review recent account and platform activity. The Centre includes unread counts, mark-as-read actions, browser push opt-in, and preferences for in-app and browser notifications by category. Notifications can cover organization registration and approval, certificate issuance and revocation, graduate consent and document access requests, support conversations, and platform announcements. Push requires a supported browser, HTTPS, and permission. If notifications are not arriving, check browser site permissions and contact VERITY Admin. Email announcements sent by Admin are a separate broadcast channel; personal transactional email preferences are stored but transactional email delivery is not currently enabled by this feature.
+
+
+## Bulk student roster import
+
+Approved institution owners and active ICT staff with the `roster:manage` permission can open **Bulk student import** from the institution workspace.
+
+1. Download the VERITY student CSV template.
+2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional.
+3. Select the CSV and review the local preview and rejected-row messages.
+4. Import the valid records. VERITY stages them in 100-row chunks and shows the upload progress.
+5. Review Import history for queued, processing, completed or partial outcomes. The batch shows inserted, duplicate, rejected and failed counts.
+6. Open Institution ICT Centre to review the student roster and use the existing activation-token workflow.
+
+Bulk import adds eligible records to the existing student identity registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
+
+ICT staff can use Bulk student import only when their active institution assignment includes `roster:manage`. Staff with only `registration:recover` can use the recovery workflow but cannot import or browse the full roster. The institution owner remains responsible for assigning and reviewing ICT permissions.

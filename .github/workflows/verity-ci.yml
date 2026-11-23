@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Check server syntax
-        run: node --check server/index.js && node --check server/staff-permissions.js
+        run: node --check server/index.js && node --check server/staff-permissions.js && node --check server/student-import-worker.js
       - name: Build frontend
         run: npm run build
       - name: Run automated tests
@@ -63,3 +63,37 @@ jobs:
         env:
           PGPASSWORD: verity-ci-only
         run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/rpc-privilege-assertions.sql
+
+  student-roster-import-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: verity
+          POSTGRES_PASSWORD: verity-ci-only
+          POSTGRES_DB: verity_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U verity -d verity_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap the existing VERITY roster schema
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/roster-import-bootstrap.sql
+      - name: Apply durable roster import migration
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261123223013_add_durable_roster_import_queue.sql
+      - name: Verify ICT permissions, idempotency and queue accounting
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/roster-import-assertions.sql

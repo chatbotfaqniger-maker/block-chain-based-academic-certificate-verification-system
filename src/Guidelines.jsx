@@ -3,7 +3,7 @@ import VerityShowcase from "./Showcase.jsx";
 import {
   BookOpen, ShieldCheck, ArrowRight, AlertTriangle, LockKeyhole,
   CheckCircle2, LayoutDashboard, Building2, FileCheck2, Activity,
-  Settings, GraduationCap, Users, Plus, Search, Share2, ClipboardCheck
+  Settings, GraduationCap, Users, Plus, Search, Share2, ClipboardCheck, FileSpreadsheet, KeyRound
 } from "lucide-react";
 
 const g = (page, title, icon, intro, audience, steps, actions, permissions, warnings, fixes) => ({
@@ -13,7 +13,7 @@ const g = (page, title, icon, intro, audience, steps, actions, permissions, warn
 const workspaceOverview = g("overview","Overview",LayoutDashboard,"Your workspace home summarizes the services available to your signed-in role.","Graduate, institution owner or verification organization owner.",
   ["Open Overview after signing in to see the services available to your account.","Review the cards and recent activity shown for your role; these differ between graduates, institutions and verifier organizations.","Use the navigation to open a module, then return to Overview for a workspace summary.","Refresh the page after important actions when you need the latest status."],
   ["Overview cards — summarize the activity available to your role.","Navigation — opens the modules enabled for your account."],
-  "Only modules allowed by your account role and organization approval are available. Institution staff permissions are limited to certificates:read and documents:download.",
+  "Only modules allowed by your account role and organization approval are available. Institution ICT permissions are separately limited to roster:manage and registration:recover; organization verification staff permissions are certificates:read and documents:download.",
   ["Dashboard totals are snapshots and can change after a refresh.","A database-ledger status is not evidence of a live blockchain transaction."],
   ["If a module is missing, check your role and organization approval.","If data does not load, refresh the page and check System Health where available."]);
 
@@ -56,8 +56,24 @@ const adminGuides = [
     ["If saving fails, check the name length and retry after reconnecting.","For login email or password changes, use the account provider’s supported recovery/settings flow."])
 ];
 
+const ictCentreGuide = g("student-identity","Institution ICT Centre",KeyRound,"Manage the institution's student roster, activation tokens and controlled identity-recovery workflow.","Approved institution owner and active ICT staff assigned roster:manage or registration:recover.",
+  ["Open Institution ICT Centre to view the institution roster and the permissions assigned to your account.","Search by the exact matriculation number or student name and compare the result with the institution's authoritative student record.","Use Generate & export activation tokens only for eligible, unclaimed student records. Deliver each one-time token privately to its matching student.","Do not issue a replacement token for a claimed, disputed or blocked record. Open the identity-recovery workflow and provide the required first review.","A second authorized officer must complete the independent approval before a recovery token can be issued.","Keep the audit history and protect all exported token files; tokens are credentials, not passwords."],
+  ["Student roster — displays institution records and their eligibility/claim status.","Generate & export activation tokens — creates single-use tokens for eligible, unclaimed records and exports the raw values once.","Recovery cases — opens the controlled two-person review process.","ICT assignments — visible only to the institution owner for staff administration."],
+  "Institution owners control ICT assignments. ICT users can only use the permissions assigned to them: roster:manage and/or registration:recover. ICT staff cannot administer other ICT staff or issue certificates.",
+  ["Tokens do not expire unless the institution explicitly enables an expiry policy. Revoke and reissue only when an unused token is lost or compromised.","Never send a token to a different student or include it in a public message.","A matriculation number alone does not prove ownership of a student record."],
+  ["If a student cannot claim a record, compare the normalized matriculation number and institution against the official roster.","If a record is already claimed, disputed or blocked, use identity recovery rather than issuing another activation token.","If a permission is missing, ask the institution owner to review the ICT assignment."]);
+
+const bulkStudentGuide = g("bulk-students","Bulk Student Import",FileSpreadsheet,"Import large student cohorts into the existing VERITY student identity registry without creating login accounts or certificates.","Approved institution owner or active ICT staff with roster:manage.",
+  ["Download the official VERITY student CSV template.","Export the institution's student roster and fill the required student number, full name, faculty, department, programme and qualification columns. Email, classification, award date and academic session are optional where the institution has accurate values.","Choose the CSV file and review the preview. Correct rejected rows and duplicate matriculation numbers before submitting.","Select Import to stage the file in 100-row chunks. Keep the same file selected if the upload is interrupted and use Resume interrupted upload.","Submit the batch and monitor Import history for queued, processing, completed or partial status, including inserted, duplicate, rejected and failed counts.","Open the Institution ICT Centre to review imported students and issue activation tokens through the existing identity workflow."],
+  ["Download template — provides the supported CSV headers and an example row.","Choose student CSV file — reads a CSV locally and displays validation feedback before submission.","Import / Resume interrupted upload — stages the batch and safely retries incomplete chunks.","Import history — shows batch progress and outcome counts.","Student directory — searches the institution's full roster in pages."],
+  "Only an approved institution owner or an active ICT officer with roster:manage can import. Imported rows are created as ELIGIBLE records in the existing StudentRoster registry; they do not create Supabase Auth accounts, issue certificates or grant access to private documents. The background worker requires a server-only Supabase service key and the ENABLE_STUDENT_IMPORT_WORKER setting.",
+  ["Student numbers are normalized and unique within an institution. Existing records are never overwritten; duplicate numbers are counted and skipped.","Keep the source CSV and exported student data private. Do not include passwords, national identity numbers or unrelated sensitive information.","A batch can remain QUEUED until the server-side worker is enabled. Do not repeatedly create new batches while an existing batch is processing."],
+  ["If required headers are missing, download the template and correct the CSV header names.","If the worker is disabled, ask the deployment operator to configure the server-only service key and enable the worker.","If a batch is partial, inspect rejected/duplicate/failed counts and correct only the affected source rows before a new import."]);
+
 const institutionGuides = [
   workspaceOverview,
+  ictCentreGuide,
+  bulkStudentGuide,
   g("identity","Identity",Building2,"Submit official institutional identity details and supporting evidence for review.","Institution administrator / organization owner for an academic institution.",
     ["Open Institution Identity and confirm the institution name and current application status.","Enter the official registration number, website, email domain and accreditation or supervising body where requested.","Upload the official registration or accreditation evidence using the evidence form.","Submit the evidence and wait for a Verity System Administrator to review it. Respond to any clarification request."],
     ["Evidence type — labels the kind of official document being submitted.","Choose file — selects the supporting evidence file.","Submit evidence — uploads the file to the private evidence area for manual review."],
@@ -73,7 +89,7 @@ const institutionGuides = [
   g("staff","Staff",Users,"Assign limited, auditable access to existing Verity graduate accounts.","Approved academic institution owner.",
     ["Ask the staff member to create their own Verity graduate account first.","Open Staff and enter the exact email address used by that account.","Assign certificates:read for read-only access to this institution’s credential records.","Add documents:download only when the staff member needs to retrieve original certificate files; this permission requires certificates:read as well.","Select Add staff member and confirm the assignment appears as ACTIVE. Suspend access promptly when duties change or the staff member leaves."],
     ["Staff email — identifies an existing Verity account.","certificates:read — grants read-only access to this institution’s certificate records.","documents:download — allows downloads for this institution when the document passes file-signature and SHA-256 integrity checks.","Add staff member — creates or updates the assignment; Suspend / Reactivate changes active access."],
-    "Only an approved academic institution owner can assign staff. The only implemented staff permissions are certificates:read and documents:download. Verifier-organization staff and verification permissions are not available yet. Staff cannot issue or revoke certificates or administer other staff.",
+    "Only an approved academic institution owner can assign staff. Organization staff permissions are certificates:read and documents:download. Institution ICT assignments are a separate permission model for roster:manage and registration:recover. Staff cannot issue or revoke certificates or administer other staff.",
     ["Never share an owner account or grant permissions for convenience.","Only enable document download when required for the staff member’s work."],
     ["If an email is not found, ask the person to register using that exact email.","If a staff member cannot see a module, check their ACTIVE status and assigned permission set."]),
   g("certificates","Certificates",FileCheck2,"Review credentials issued by your institution and manage available certificate records.","Approved institution owner; staff access is read-only and limited to assigned permissions.",
@@ -163,10 +179,16 @@ export default function RoleGuidelines({ user, organization, onOpen, data, certi
   const isInstitution = user?.role === "EMPLOYER" && organization?.type === "INSTITUTION";
   const isOrganization = user?.role === "EMPLOYER" && organization?.type === "EMPLOYER";
   const canReadAsStaff = staffAssignments.some(x => x.permissions?.includes("certificates:read"));
-  const modules = isAdmin ? adminGuides : isInstitution ? institutionGuides : isOrganization ? organizationGuides : isStaff
+  const canManageRoster = (user?.institutionICT || []).some(x => x.status === "ACTIVE" && x.permissions?.includes("roster:manage"));
+  const canRecoverRoster = (user?.institutionICT || []).some(x => x.status === "ACTIVE" && x.permissions?.includes("registration:recover"));
+  const isInstitutionICT = canManageRoster || canRecoverRoster;
+  const baseModules = isAdmin ? adminGuides : isInstitution ? institutionGuides : isOrganization ? organizationGuides : isStaff
     ? staffGuides.filter(x => x.page !== "certificates" || canReadAsStaff)
     : graduateGuides;
-  const role = isAdmin ? "SYSTEM ADMINISTRATOR" : isInstitution ? "ACADEMIC INSTITUTION" : isOrganization ? "VERIFICATION ORGANIZATION" : isStaff ? "AUTHORIZED STAFF" : "GRADUATE / STUDENT";
+  const modules = isInstitutionICT && !isInstitution && !isAdmin
+    ? [...baseModules, ictCentreGuide, ...(canManageRoster ? [bulkStudentGuide] : [])]
+    : baseModules;
+  const role = isAdmin ? "SYSTEM ADMINISTRATOR" : isInstitution ? "ACADEMIC INSTITUTION" : isOrganization ? "VERIFICATION ORGANIZATION" : isInstitutionICT ? "INSTITUTION ICT STAFF" : isStaff ? "AUTHORIZED STAFF" : "GRADUATE / STUDENT";
   return <div className="guidelines-page">
     <section className="guidelines-hero">
       <div className="guide-hero-backdrop"><i/><i/><i/><span className="guide-sweep"/></div>
