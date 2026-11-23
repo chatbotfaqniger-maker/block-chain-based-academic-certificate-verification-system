@@ -21,7 +21,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = ''
-AS $
+AS $$
 DECLARE
   v_payload text;
   v_expected_digest text;
@@ -153,7 +153,7 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = ''
-AS $
+AS $$
 DECLARE
   v_certificate public."Certificate"%ROWTYPE;
   v_base record;
