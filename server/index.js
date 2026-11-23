@@ -110,8 +110,28 @@ async function publicIssuerDetails(client, certificateId) {
 }
 
 app.set("trust proxy",1);
-app.use(helmet({contentSecurityPolicy:false}));
-app.use(cors({origin:process.env.CORS_ORIGIN?.split(",")||true}));
+const isProduction=process.env.NODE_ENV==="production";
+app.use(helmet({
+  contentSecurityPolicy:isProduction?{directives:{
+    defaultSrc:["'self'"],baseUri:["'self'"],frameAncestors:["'none'"],objectSrc:["'none'"],
+    scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],
+    imgSrc:["'self'","data:","blob:","https://*.supabase.co"],
+    fontSrc:["'self'","data:"],
+    connectSrc:["'self'","https://*.supabase.co","wss://*.supabase.co"],
+    workerSrc:["'self'","blob:"],frameSrc:["'self'","blob:"],formAction:["'self'"],
+    upgradeInsecureRequests:[]
+  }}:false
+}));
+const corsOrigins=[...new Set([
+  ...(process.env.CORS_ORIGIN||"").split(",").map(value=>value.trim()).filter(Boolean),
+  process.env.PUBLIC_APP_URL?.trim()
+].filter(Boolean))];
+app.use(cors({
+  origin:corsOrigins.length?corsOrigins:false,
+  credentials:true,
+  allowedHeaders:["Authorization","Content-Type","X-File-Name"],
+  methods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"]
+}));
 app.use(express.json({limit:"1mb"}));
 app.use("/api/auth",rateLimit({windowMs:900000,limit:20}));
 
@@ -194,7 +214,7 @@ app.post("/api/auth/register",run(async(q,s)=>{
   if(b.role==="GRADUATE"){
    const studentNumber=String(b.studentNumber||"").trim(),organizationId=String(b.studentOrganizationId||"").trim();
    if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your institution and enter your matriculation number before creating a student account."});
-   const {data:eligible,error:precheckError}=await makeClient().rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;
+   const {data:eligible,error:precheckError}=await makeServerClient().rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;
    if(eligible!==true)return s.status(400).json({error:"Your student record could not be prepared for activation. Check the matriculation number with your institution ICT office."});
   }
   const client=makeClient();
@@ -1031,26 +1051,33 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   s.json({verified,status,issuer,message:verified?"This certificate matches the academic record issued by your institution.":status==="REVOKED"?"Your institution has revoked this certificate.":"The certificate record's integrity check did not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Supabase PostgreSQL certificate ledger; on-chain verification is not active."}});
 }));
 
-app.post("/api/organization/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
+app.post("/api/organization/verify",createVerificationRateLimiter({windowMs:60_000,limit:20}),auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
   if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can verify credentials through its workspace."});
   const {data,error}=await q.supabase.rpc("lookup_verity_certificate_for_org",{p_certificate_id:b.certificateId.trim()});
   if(error)throw error;
-  if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the Verity registry."});
+  if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the VERITY registry."});
   const c=data,recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyCertificateChain(c);
+  if(!SUPABASE_SERVER_KEY)return s.status(503).json({error:"Secure server-side ledger verification is not configured."});
+  const serverClient=makeServerClient();
+  const {data:ledgerRows,error:ledgerError}=await serverClient.rpc("verify_verity_certificate_ledger_record",{p_certificate_id:c.certificateId});
+  if(ledgerError)throw ledgerError;
+  const ledger=Array.isArray(ledgerRows)?ledgerRows[0]:ledgerRows;
+  const ledgerOk=ledger?.ledger_valid===true&&Number(ledger?.event_count||0)>0&&ledger?.record_matches===true;
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===recomputed.toLowerCase()&&!chain.revoked);
-  const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
+  const verified=c.status==="ACTIVE"&&dbOk&&ledgerOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
-  await audit(q.supabase,q.user.id,"ORGANIZATION_CERTIFICATE_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status});
+  await audit(q.supabase,q.user.id,"ORGANIZATION_CERTIFICATE_VERIFIED","Certificate",c.id,{certificateId:c.certificateId,organizationId:org.id,status,ledgerValid:ledgerOk,recordMatches:ledger?.record_matches===true});
   await createVerityNotification(q.user.id,{type:"VERIFICATION_COMPLETED",category:"VERIFICATION",title:status==="VERIFIED"?"Credential verification completed":"Credential verification needs attention",body:c.certificateId+" · "+status.replaceAll("_"," ").toLowerCase()+".",url:"/verify",metadata:{certificateId:c.certificateId,status}});
   if(status==="INTEGRITY_MISMATCH")await notifyVerityAdmins({type:"VERIFICATION_ALERT",category:"PLATFORM",title:"Credential integrity verification alert",body:"An organization verification returned an integrity mismatch for "+c.certificateId+".",url:"/activity",metadata:{certificateId:c.certificateId,organizationId:org.id}});
-  const issuer=await publicIssuerDetails(q.supabase,c.certificateId);
-  s.json({verified,status,issuer,message:verified?"Credential matches the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":"The registered fingerprint does not match.",certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Supabase PostgreSQL certificate ledger; on-chain verification is not active."}});
+  const issuer=await publicIssuerDetails(serverClient,c.certificateId);
+  const message=verified?"Credential record and Supabase ledger match the issuing institution's registered record.":status==="REVOKED"?"The issuing institution has revoked this credential.":!dbOk?"The academic record fingerprint does not match its issued digest.":!ledgerOk?"The Supabase ledger or its latest certificate event could not be validated.":"The blockchain fingerprint does not match the registered record.";
+  s.json({verified,status,issuer,message,integrity:dbOk&&ledgerOk?"SUPABASE_RECORD_AND_LEDGER_MATCH":"DATABASE_LEDGER_INTEGRITY_FAILED",ledger:{valid:ledgerOk,recordMatches:ledger?.record_matches===true,eventCount:Number(ledger?.event_count||0),latestEvent:ledger?.latest_event||null,headHash:ledger?.head_hash||null},certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,studentNumber:c.studentNumber,institution:c.institution,faculty:c.faculty,department:c.department,programme:c.programme,qualification:c.qualification,classification:c.classification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},verifierOrganization:org.name,chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress}:{enabled:false,note:"Supabase PostgreSQL certificate ledger; on-chain verification is not active."}});
 }));
 
-app.post("/api/organization/student-lookup",auth,roles("EMPLOYER"),run(async(q,res)=>{
+app.post("/api/organization/student-lookup",createVerificationRateLimiter({windowMs:60_000,limit:15}),auth,roles("EMPLOYER"),run(async(q,res)=>{
   const b=z.object({studentName:z.string().min(2).max(120),studentNumber:z.string().min(2).max(80),institution:z.string().min(2).max(160),department:z.string().min(2).max(160)}).parse(q.body);
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
@@ -1193,20 +1220,22 @@ app.get("/api/organization/access-requests/:id/document/download",auth,roles("EM
 
 app.post("/api/verify",createVerificationRateLimiter(),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4),verifierName:z.string().optional(),verifierOrg:z.string().optional()}).parse(q.body);
-  const client=makeClient();
+  if(!SUPABASE_SERVER_KEY)return s.status(503).json({verified:false,status:"SERVICE_UNAVAILABLE",message:"Secure server-side certificate verification is not configured."});
+  const client=makeServerClient();
   const {data,error}=await client.rpc("lookup_verity_certificate",{p_certificate_id:b.certificateId.trim(),p_verifier_name:b.verifierName||null,p_verifier_org:b.verifierOrg||null});
-  if(error) throw error;
-  if(!data?.found) return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID exists in the registry."});
-  const c=data,chain=await verifyCertificateChain(c);
-  const {data:ledgerRows,error:ledgerError}=await client.rpc("verify_verity_certificate_ledger",{p_certificate_id:c.certificateId});
+  if(error)throw error;
+  if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID exists in the registry."});
+  const c=data,dbOk=digest(canonical(c))===String(c.digest||""),chain=await verifyCertificateChain(c);
+  const {data:ledgerRows,error:ledgerError}=await client.rpc("verify_verity_certificate_ledger_record",{p_certificate_id:c.certificateId});
   if(ledgerError)throw ledgerError;
   const ledger=Array.isArray(ledgerRows)?ledgerRows[0]:ledgerRows;
-  const ledgerOk=ledger?.ledger_valid===true&&Number(ledger?.event_count||0)>0;
+  const ledgerOk=ledger?.ledger_valid===true&&Number(ledger?.event_count||0)>0&&ledger?.record_matches===true;
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
-  const verified=c.status==="ACTIVE"&&ledgerOk&&chainOk;
+  const verified=c.status==="ACTIVE"&&dbOk&&ledgerOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
-  const issuer=await publicIssuerDetails((SUPABASE_SERVER_KEY?createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):client),c.certificateId);
-  s.json({verified,status,issuer,message:verified?(chain.enabled?"Credential record, Supabase ledger and blockchain fingerprint match.":"Credential is registered and its Supabase hash-chained ledger is valid.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":!ledgerOk?"The Supabase certificate ledger could not be validated.":"The blockchain fingerprint does not match the registered record.",integrity:chain.enabled?"BLOCKCHAIN_AND_DATABASE_LEDGER_MATCH":ledgerOk?"SUPABASE_HASH_CHAIN_VALID":"DATABASE_LEDGER_INTEGRITY_FAILED",ledger:{valid:ledgerOk,eventCount:Number(ledger?.event_count||0),latestEvent:ledger?.latest_event||null,headHash:ledger?.head_hash||null},certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Supabase append-only certificate ledger with SHA-256 hash chaining. Polygon anchoring remains an optional future enhancement."}});
+  const issuer=await publicIssuerDetails(client,c.certificateId);
+  const message=verified?(chain.enabled?"Credential record, Supabase ledger and blockchain fingerprint match.":"Credential record and its Supabase hash-chained ledger match.") :status==="REVOKED"?"This credential has been revoked by its issuing institution.":!dbOk?"The academic record fingerprint does not match its issued digest.":!ledgerOk?"The Supabase ledger or its latest certificate event could not be validated.":"The blockchain fingerprint does not match the registered record.";
+  s.json({verified,status,issuer,message,integrity:chain.enabled&&dbOk&&ledgerOk?"BLOCKCHAIN_AND_DATABASE_LEDGER_MATCH":dbOk&&ledgerOk?"SUPABASE_RECORD_AND_LEDGER_MATCH":"DATABASE_LEDGER_INTEGRITY_FAILED",ledger:{valid:ledgerOk,recordMatches:ledger?.record_matches===true,eventCount:Number(ledger?.event_count||0),latestEvent:ledger?.latest_event||null,headHash:ledger?.head_hash||null},certificate:{certificateId:c.certificateId,verificationKey:c.verificationKey,studentName:c.studentName,institution:c.institution,qualification:c.qualification,awardDate:c.awardDate,issuedAt:c.issuedAt,digest:c.digest,txHash:c.txHash,status:c.status},chain:chain.enabled?{enabled:true,exists:chain.exists,network:"Polygon Amoy",chainId:chain.chainId,contractAddress:chain.contractAddress,issuer:chain.issuer,issuedAt:chain.issuedAt}:{enabled:false,note:"Supabase append-only certificate ledger with SHA-256 hash chaining. Polygon anchoring remains an optional future enhancement."}});
 }));
 
 app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
