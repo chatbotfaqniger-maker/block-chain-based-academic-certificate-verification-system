@@ -50,7 +50,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Unique high-entropy certificate verification keys and QR-based public verification
 - Separate issuer and verifier organization workflows; only approved academic institutions can issue credentials
 - Authenticated verification requests attributed to approved verifier organizations
-- Graduate-controlled, time-limited (30-day) consent for verifier organizations to view original certificate documents
+- Graduate-controlled, time-limited (30-day) consent for verifier organizations to view original certificate documents, with graduate-initiated revocation, clear expiry states and repeat requests after rejection, revocation or expiry
 - SHA-256 canonical credential fingerprint
 - Audit events
 - Issue Resolution Centre available in every signed-in workspace: submit and track issue reports, with institution-owner and System Administrator status-management boundaries
