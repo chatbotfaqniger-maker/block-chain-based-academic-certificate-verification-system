@@ -96,6 +96,7 @@ create policy "verity_certificate_granted_verifier_read"
       where g."certificateId" = "Certificate".id
         and g.status = 'APPROVED'
         and g."expiresAt" > now()
+        and c.status = 'ACTIVE'
         and o."ownerId" = (select auth.uid())::text
         and o.type = 'EMPLOYER'
         and o.status = 'APPROVED'
@@ -150,6 +151,7 @@ create policy "verity_document_read_scoped"
         and c."organizationId" = "CertificateDocument"."organizationId"
         and g.status = 'APPROVED'
         and g."expiresAt" > now()
+        and c.status = 'ACTIVE'
         and o."ownerId" = (select auth.uid())::text
         and o.type = 'EMPLOYER'
         and o.status = 'APPROVED'
