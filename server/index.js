@@ -415,7 +415,7 @@ app.get("/api/organization/students",auth,run(async(q,s)=>{
  const limit=Math.min(200,Math.max(1,Number.parseInt(q.query.limit,10)||100));
  const offset=Math.min(50000,Math.max(0,Number.parseInt(q.query.offset,10)||0));
  const term=String(q.query.search||"").trim().slice(0,100).replace(/[^\p{L}\p{N}\s\-/]/gu,"");
- let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,qualification,classification,awardDate,academicSession,status,claimedUserId,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,qualification,classification,awardDate,academicSession,status,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
  if(term)query=query.or("studentNumber.ilike.%"+term+"%,fullName.ilike.%"+term+"%,department.ilike.%"+term+"%,faculty.ilike.%"+term+"%");
  const {data,error,count}=await query;if(error)throw error;
  s.json({students:data||[],total:count??0,limit,offset});

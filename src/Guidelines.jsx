@@ -185,7 +185,7 @@ export default function RoleGuidelines({ user, organization, onOpen, data, certi
   const baseModules = isAdmin ? adminGuides : isInstitution ? institutionGuides : isOrganization ? organizationGuides : isStaff
     ? staffGuides.filter(x => x.page !== "certificates" || canReadAsStaff)
     : graduateGuides;
-  const modules = isInstitutionICT && !isInstitution
+  const modules = isInstitutionICT && !isInstitution && !isAdmin
     ? [...baseModules, ictCentreGuide, ...(canManageRoster ? [bulkStudentGuide] : [])]
     : baseModules;
   const role = isAdmin ? "SYSTEM ADMINISTRATOR" : isInstitution ? "ACADEMIC INSTITUTION" : isOrganization ? "VERIFICATION ORGANIZATION" : isInstitutionICT ? "INSTITUTION ICT STAFF" : isStaff ? "AUTHORIZED STAFF" : "GRADUATE / STUDENT";
