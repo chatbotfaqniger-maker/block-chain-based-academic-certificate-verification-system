@@ -167,4 +167,28 @@ BEGIN
 END;
 $$;
 
+
+CREATE FUNCTION public.default_privilege_probe() RETURNS integer
+LANGUAGE sql AS $ SELECT 1; $;
+SET ROLE supabase_admin;
+CREATE FUNCTION public.default_privilege_probe_admin() RETURNS integer
+LANGUAGE sql AS $ SELECT 1; $;
+RESET ROLE;
+
+DO $
+BEGIN
+  IF has_function_privilege('anon','public.default_privilege_probe()','EXECUTE')
+     OR has_function_privilege('authenticated','public.default_privilege_probe()','EXECUTE')
+     OR NOT has_function_privilege('service_role','public.default_privilege_probe()','EXECUTE')
+     OR has_function_privilege('anon','public.default_privilege_probe_admin()','EXECUTE')
+     OR has_function_privilege('authenticated','public.default_privilege_probe_admin()','EXECUTE')
+     OR NOT has_function_privilege('service_role','public.default_privilege_probe_admin()','EXECUTE') THEN
+    RAISE EXCEPTION 'TEST_FAIL: default public function privileges still expose new RPCs to anon/authenticated';
+  END IF;
+END;
+$;
+
+DROP FUNCTION public.default_privilege_probe();
+DROP FUNCTION public.default_privilege_probe_admin();
+
 SELECT 'certificate ledger integrity and permission hardening assertions passed' AS result;
