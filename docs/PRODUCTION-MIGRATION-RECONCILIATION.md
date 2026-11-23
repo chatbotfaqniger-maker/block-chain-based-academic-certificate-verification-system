@@ -5,9 +5,14 @@
 
 ## Finding
 
-At the time of this audit, the connected Supabase project reported **55 applied migration versions**, while the repository's `supabase/migrations` directory contained **22 SQL migration files**. Only 12 repository files matched applied migration version prefixes; **43 applied database versions had no matching migration file in the repository**.
+After the 23 November 2026 production changes, the connected Supabase project reports **57 applied migration versions**, while the repository's `supabase/migrations` directory contains **24 SQL migration files**. Fourteen repository files match applied migration version prefixes; **43 applied database versions still have no matching migration file in the repository**.
 
 This does not by itself prove that the live database schema is incorrect. It does mean that the repository does not currently contain a complete, reproducible migration history for a clean environment. Standard CLI migration operations could interpret missing historical files as unapplied and attempt to replay schema changes.
+
+## Recent repository-tracked migrations applied to production
+
+- `20261123221423_restrict_sensitive_rpc_execution` — restricts sensitive RPC execution and supports the verification rate-limit hardening.
+- `20261123223013_add_durable_roster_import_queue` — extends the existing student roster/import history, adds a private chunk queue and installs a service-role-only worker RPC. The migration is applied; the application code is awaiting merge/deployment and the worker remains disabled until its server-only key and enable flag are configured.
 
 ## Applied database versions missing from the repository
 
@@ -66,11 +71,13 @@ Until the missing history is recovered or a verified baseline is established:
 2. Do not replay missing historical migrations blindly.
 3. Keep new schema changes additive, individually reviewed and tested against an isolated PostgreSQL fixture.
 4. When a production migration is applied through the managed migration workflow, commit the exact SQL and align its filename with the version recorded in Supabase.
-5. Before enabling the bulk student-import or bulk certificate-issuance queues, verify their migrations against the actual production schema and reconcile the migration history.
+5. The student roster-import queue migration is now verified and applied. Do not enable its worker until the matching application code is deployed and the server-only key/worker flag are configured. The bulk certificate-issuance queue still requires schema review, isolated tests and a durable server-side worker before it can be enabled.
 
 ## Bulk issuance status
 
-The institution student-import work (PR #3) and bulk certificate issuance work (PR #4) are not deployed. Their queue migrations are not present in the live migration history. PR #4 currently provides a browser-sequential issuance experience and database queue groundwork only; it does not yet provide the complete durable server-side issuance worker and retry/reconciliation workflow.
+The original student-import proposal (PR #3) was not safe to merge because it assumed a different roster schema and would have disrupted existing student registration/identity flows. It has been superseded by the compatible implementation in PR #7. Its additive migration `20261123223013_add_durable_roster_import_queue` is applied and CI-tested; the matching application code is awaiting merge and Render deployment. The in-process worker is disabled by default until a server-only Supabase key and `ENABLE_STUDENT_IMPORT_WORKER=true` are configured.
+
+Bulk certificate issuance (PR #4) remains separate and is not deployed. Its queue migration is not in the live migration history, and it still needs a durable server-side worker, retry/reconciliation behavior and tests against the existing certificate ledger before it can be enabled.
 
 ## Next reconciliation work
 
