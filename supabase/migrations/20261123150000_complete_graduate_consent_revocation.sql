@@ -69,7 +69,7 @@ begin
        or new."revokedBy" is distinct from (select auth.uid())::text then
       raise exception 'Only the graduate who owns this grant can revoke it.';
     end if;
-    new."revokedAt" := coalesce(new."revokedAt", now());
+    new."revokedAt" := now();
   else
     raise exception 'Invalid certificate access grant state transition.';
   end if;
