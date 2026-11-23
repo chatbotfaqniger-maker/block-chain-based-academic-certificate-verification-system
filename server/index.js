@@ -12,6 +12,7 @@ import { z } from "zod";
 import { createVerityMarketingMp4 } from "./marketing-video.js";
 import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain } from "./chain.js";
 import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "./staff-permissions.js";
+import { isCertificateAccessActive } from "./certificate-access.js";
 import { parseRosterCsv } from "./student-roster.js";
 
 const app = express();
@@ -795,7 +796,7 @@ app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,
   const {data:existing,error:ee}=await q.supabase.from("CertificateAccessGrant").select("id,status,expiresAt").eq("certificateId",cert.id).eq("organizationId",org.id).in("status",["PENDING","APPROVED"]).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(ee)throw ee;
   if(existing?.status==="PENDING")return s.status(200).json({grant:existing,message:"An access request is already awaiting the graduate’s decision."});
-  if(existing?.status==="APPROVED"&&existing.expiresAt&&new Date(existing.expiresAt)>new Date())return s.status(200).json({grant:existing,message:"This organization already has active graduate-approved access to this certificate."});
+  if(isCertificateAccessActive(existing))return s.status(200).json({grant:existing,message:"This organization already has active graduate-approved access to this certificate."});
   const {data:grant,error}=await q.supabase.from("CertificateAccessGrant").insert({id:crypto.randomUUID(),certificateId:cert.id,graduateId:cert.graduateId,organizationId:org.id,requestedBy:q.user.id,purpose:b.purpose||"Employment or academic credential verification",status:"PENDING"}).select().single();
   if(error)throw error;
   await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_REQUESTED","CertificateAccessGrant",grant.id,{certificateId:cert.certificateId,organizationId:org.id});
@@ -845,7 +846,7 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
   if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
-  if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  if(!isCertificateAccessActive(grant))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
   const {data:credential,error:credentialError}=await q.supabase.from("Certificate").select("id,status").eq("id",grant.certificateId).maybeSingle();
   if(credentialError)throw credentialError;
   if(!credential||credential.status!=="ACTIVE")return s.status(410).json({error:"This certificate is no longer active. Shared document access has been stopped."});
@@ -872,7 +873,7 @@ app.get("/api/organization/access-requests/:id/document/download",auth,roles("EM
   if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can download shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
-  if(!grant||grant.status!=="APPROVED"||(grant.expiresAt&&new Date(grant.expiresAt)<=new Date()))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
+  if(!isCertificateAccessActive(grant))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
   const {data:credential,error:credentialError}=await q.supabase.from("Certificate").select("id,status").eq("id",grant.certificateId).maybeSingle();
   if(credentialError)throw credentialError;
   if(!credential||credential.status!=="ACTIVE")return s.status(410).json({error:"This certificate is no longer active. Shared document access has been stopped."});
