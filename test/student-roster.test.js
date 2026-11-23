@@ -12,9 +12,9 @@ test("parses a basic UTF-8 roster and normalizes header names", () => {
 });
 
 test("supports commas, escaped quotes and newlines inside quoted values", () => {
-  const rows = parseRosterCsv('student_number,full_name,department\n001,"Suleiman, Yakubu","Computer ""Science""\\nDepartment"\n');
+  const rows = parseRosterCsv('student_number,full_name,department\n001,"Suleiman, Yakubu","Computer ""Science""\nDepartment"\n');
   assert.equal(rows[0].full_name, "Suleiman, Yakubu");
-  assert.equal(rows[0].department, 'Computer "Science"\\nDepartment');
+  assert.equal(rows[0].department, 'Computer "Science"\nDepartment');
 });
 
 test("ignores blank rows but preserves leading zeroes in matriculation numbers", () => {
