@@ -16,6 +16,8 @@ import { isCertificateAccessActive } from "./certificate-access.js";
 import { parseRosterCsv } from "./student-roster.js";
 import { createVerificationRateLimiter } from "./rate-limits.js";
 import { startStudentImportWorker } from "./student-import-worker.js";
+import { startBulkCertificateWorker } from "./bulk-certificate-worker.js";
+import { createBulkCertificateProcessor } from "./bulk-certificate-service.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -25,12 +27,17 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const configured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
 const STUDENT_IMPORT_WORKER_ENABLED = process.env.ENABLE_STUDENT_IMPORT_WORKER === "true" && Boolean(SUPABASE_SERVER_KEY);
+const BULK_CERTIFICATE_WORKER_ENABLED = process.env.ENABLE_BULK_CERTIFICATE_WORKER === "true" && Boolean(SUPABASE_SERVER_KEY);
 const makeClient = (accessToken) => {
   if (!configured) throw new Error("Supabase is not configured. Add the Project URL and Publishable Key.");
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {})
   });
+};
+const makeServerClient = () => {
+  if(!configured || !SUPABASE_SERVER_KEY) throw new Error("A server-only Supabase service key is required for durable bulk processing.");
+  return createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 };
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
 const canonical = c => JSON.stringify({
@@ -168,7 +175,7 @@ async function notifyVerityAdmins(payload){
  await Promise.all((admins||[]).map(a=>createVerityNotification(a.id,payload)));
 }
 
-app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),notifications:{inAppConfigured:Boolean(SUPABASE_SERVER_KEY),browserPushConfigured:Boolean(SUPABASE_SERVER_KEY&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY),adminEmailConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASS&&process.env.SMTP_FROM)},documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760}}));
+app.get("/api/health",(_q,s)=>s.json({status:"ok",database:configured?"supabase_data_api_configured":"not_configured",blockchain:chainStatus(),notifications:{inAppConfigured:Boolean(SUPABASE_SERVER_KEY),browserPushConfigured:Boolean(SUPABASE_SERVER_KEY&&process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY),adminEmailConfigured:Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASS&&process.env.SMTP_FROM)},documentSecurity:{storage:"private",integrity:"sha256_verified_on_download",malwareScanning:false,maximumUploadBytes:10485760},workers:{studentRosterImport:STUDENT_IMPORT_WORKER_ENABLED,bulkCertificateIssuance:BULK_CERTIFICATE_WORKER_ENABLED}}));
 
 app.get("/api/directory/organizations",run(async(q,s)=>{
  const term=String(q.query.search||"").trim().slice(0,100);
@@ -720,6 +727,143 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   if(graduateId)await createVerityNotification(graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A new certificate is available",body:"A certificate from "+clean.institution+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId}});
   await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Certificate issued",body:certificateId+" was issued by "+(organization?.name||clean.institution)+".",url:"/certificates",metadata:{certificateId}});
   s.status(201).json({certificate,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
+}));
+
+
+// Durable bulk certificate issuance: institution owners stage private PDFs and
+// immutable certificate payloads; the in-process worker writes the Supabase ledger.
+async function bulkInstitutionFor(q,requireApproved=true){
+  const {data:org,error}=await q.supabase.from("Organization")
+    .select("id,name,type,status,ownerId").eq("ownerId",q.user.id).maybeSingle();
+  if(error)throw error;
+  if(!org)return {error:"Institution organization not found.",status:404};
+  if(org.type!=="INSTITUTION")return {error:"Only academic institutions can issue certificates.",status:403};
+  if(requireApproved&&org.status!=="APPROVED")return {error:"Your institution must be approved before bulk certificate issuance.",status:403};
+  return {organization:org};
+}
+const bulkBatchInput=z.object({
+  fileName:z.string().trim().min(1).max(180),
+  method:z.enum(["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"]),
+  totalItems:z.number().int().min(1).max(500)
+});
+const bulkItemInput=z.object({
+  itemId:z.string().uuid(),
+  rowNumber:z.number().int().min(2).max(501),
+  payload:issue,
+  documentName:z.string().trim().min(1).max(180),
+  documentSha256:z.string().regex(/^[a-f0-9]{64}$/)
+});
+const bulkSafeName=value=>String(value||"certificate.pdf").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"certificate.pdf";
+const bulkWorkerReady=()=>BULK_CERTIFICATE_WORKER_ENABLED;
+
+app.get("/api/organization/certificates/bulk/batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const result=await bulkInstitutionFor(q,false);if(result.error)return s.status(result.status).json({error:result.error});
+  const {data,error}=await q.supabase.from("CertificateIssuanceBatch")
+    .select("id,fileName,method,totalItems,queuedItems,processingItems,issuedItems,failedItems,documentFailedItems,status,createdAt,updatedAt,completedAt")
+    .eq("organizationId",result.organization.id).order("createdAt",{ascending:false}).limit(25);
+  if(error)throw error;
+  s.json({batches:data||[],workerEnabled:bulkWorkerReady()});
+}));
+
+app.get("/api/organization/certificates/bulk/batches/:batchId",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const result=await bulkInstitutionFor(q,false);if(result.error)return s.status(result.status).json({error:result.error});
+  const {data:batch,error}=await q.supabase.from("CertificateIssuanceBatch")
+    .select("id,organizationId,createdBy,fileName,method,totalItems,queuedItems,processingItems,issuedItems,failedItems,documentFailedItems,status,createdAt,updatedAt,completedAt")
+    .eq("id",q.params.batchId).eq("organizationId",result.organization.id).maybeSingle();
+  if(error)throw error;if(!batch)return s.status(404).json({error:"Bulk issuance batch not found."});
+  const {data:items,error:itemError}=await q.supabase.from("CertificateIssuanceItem")
+    .select("id,rowNumber,studentNumber,payload,status,certificateId,errorCode,errorMessage,documentName,createdAt,updatedAt,processedAt")
+    .eq("batchId",batch.id).order("rowNumber",{ascending:true});
+  if(itemError)throw itemError;
+  s.json({batch,items:items||[],workerEnabled:bulkWorkerReady()});
+}));
+
+app.post("/api/organization/certificates/bulk/batches",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const result=await bulkInstitutionFor(q,true);if(result.error)return s.status(result.status).json({error:result.error});
+  if(!SUPABASE_SERVER_KEY)return s.status(503).json({error:"Durable bulk issuance is not configured. Add a server-only Supabase service key in Render."});
+  if(!BULK_CERTIFICATE_WORKER_ENABLED)return s.status(503).json({error:"The bulk certificate worker is not enabled yet. Contact the VERITY administrator before submitting a batch."});
+  const b=bulkBatchInput.parse(q.body);
+  const server=makeServerClient(),id=crypto.randomUUID();
+  const fileName=bulkSafeName(b.fileName);
+  const {data,error}=await server.from("CertificateIssuanceBatch").insert({
+    id,organizationId:result.organization.id,createdBy:q.user.id,fileName,method:b.method,totalItems:b.totalItems,status:"UPLOADING"
+  }).select("id,organizationId,fileName,method,totalItems,status,createdAt").single();
+  if(error)throw error;
+  s.status(201).json({batch:data,workerEnabled:true});
+}));
+
+app.post("/api/organization/certificates/bulk/batches/:batchId/items/:itemId/document",auth,roles("EMPLOYER"),
+  express.raw({type:"application/pdf",limit:"10mb"}),run(async(q,s)=>{
+  const result=await bulkInstitutionFor(q,true);if(result.error)return s.status(result.status).json({error:result.error});
+  if(!SUPABASE_SERVER_KEY||!BULK_CERTIFICATE_WORKER_ENABLED)return s.status(503).json({error:"The durable bulk certificate worker is not configured."});
+  if(!/^[0-9a-f-]{36}$/i.test(q.params.batchId)||!/^[0-9a-f-]{36}$/i.test(q.params.itemId))return s.status(400).json({error:"Invalid batch or item identifier."});
+  const bytes=q.body,mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
+  if(mime!=="application/pdf"||!Buffer.isBuffer(bytes)||!bytes.length||bytes.subarray(0,5).toString("ascii")!=="%PDF-")return s.status(415).json({error:"Upload a valid PDF certificate document."});
+  if(bytes.length>10*1024*1024)return s.status(413).json({error:"Each certificate PDF must be 10 MB or smaller."});
+  const server=makeServerClient();
+  const {data:batch,error:batchError}=await server.from("CertificateIssuanceBatch").select("id,organizationId,createdBy,status").eq("id",q.params.batchId).maybeSingle();
+  if(batchError)throw batchError;
+  if(!batch||batch.organizationId!==result.organization.id||batch.createdBy!==q.user.id)return s.status(404).json({error:"Bulk issuance batch not found in your institution."});
+  if(batch.status!=="UPLOADING")return s.status(409).json({error:"This batch is no longer accepting documents."});
+  let rawName=String(q.headers["x-file-name"]||"certificate.pdf");try{rawName=decodeURIComponent(rawName);}catch{}
+  const documentName=bulkSafeName(rawName);
+  const sha256=digest(bytes),storagePath=`bulk-staging/${result.organization.id}/${batch.id}/${q.params.itemId}.pdf`;
+  const storage=server.storage.from("verity-certificates");
+  const {error:uploadError}=await storage.upload(storagePath,bytes,{contentType:"application/pdf",upsert:false,cacheControl:"3600"});
+  if(uploadError){
+    const {data:existing,error:existingError}=await storage.download(storagePath);
+    if(existingError)throw uploadError;
+    const existingBytes=Buffer.from(await existing.arrayBuffer());
+    if(digest(existingBytes)!==sha256)return s.status(409).json({error:"This item identifier already has a different PDF. Start a new upload."});
+  }
+  s.status(201).json({documentName,sha256,sizeBytes:bytes.length});
+}));
+
+app.post("/api/organization/certificates/bulk/batches/:batchId/items",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const result=await bulkInstitutionFor(q,true);if(result.error)return s.status(result.status).json({error:result.error});
+  if(!SUPABASE_SERVER_KEY||!BULK_CERTIFICATE_WORKER_ENABLED)return s.status(503).json({error:"The durable bulk certificate worker is not configured."});
+  const b=bulkItemInput.parse(q.body),server=makeServerClient();
+  const {data:batch,error:batchError}=await server.from("CertificateIssuanceBatch").select("id,organizationId,createdBy,status").eq("id",q.params.batchId).maybeSingle();
+  if(batchError)throw batchError;
+  if(!batch||batch.organizationId!==result.organization.id||batch.createdBy!==q.user.id)return s.status(404).json({error:"Bulk issuance batch not found in your institution."});
+  if(batch.status!=="UPLOADING")return s.status(409).json({error:"This batch is no longer accepting rows."});
+  const clean=Object.fromEntries(Object.entries(b.payload).map(([key,value])=>[key,typeof value==="string"?value.trim():value]));
+  clean.institution=result.organization.name;
+  clean.studentEmail=String(clean.studentEmail||"").trim().toLowerCase();
+  const normalizedStudentNumber=String(clean.studentNumber||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(normalizedStudentNumber.length<2)return s.status(400).json({error:"Student number is invalid after normalization."});
+  const documentName=bulkSafeName(b.documentName);
+  const documentStoragePath=`bulk-staging/${result.organization.id}/${batch.id}/${b.itemId}.pdf`;
+  const {data:stagedFile,error:stagedError}=await server.storage.from("verity-certificates").download(documentStoragePath);
+  if(stagedError) return s.status(400).json({error:"Upload the matching PDF before staging this certificate row."});
+  const stagedBytes=Buffer.from(await stagedFile.arrayBuffer());
+  if(stagedBytes.subarray(0,5).toString("ascii")!=="%PDF-"||digest(stagedBytes)!==b.documentSha256)return s.status(409).json({error:"The staged PDF failed its SHA-256 or PDF-signature check."});
+  const idempotencyKey=digest(JSON.stringify({batchId:batch.id,rowNumber:b.rowNumber,studentNumber:normalizedStudentNumber,payload:clean,documentSha256:b.documentSha256}));
+  const row={
+    id:b.itemId,batchId:batch.id,organizationId:result.organization.id,rowNumber:b.rowNumber,
+    studentNumber:normalizedStudentNumber,idempotencyKey,payload:clean,
+    documentStoragePath,documentName,documentSha256:b.documentSha256,status:"STAGED",attempts:0
+  };
+  const {data,error}=await server.from("CertificateIssuanceItem").insert(row).select("id,batchId,rowNumber,studentNumber,status,documentName,documentSha256").single();
+  if(error){
+    if(error.code==="23505"){
+      const {data:existing,error:lookupError}=await server.from("CertificateIssuanceItem").select("id,batchId,rowNumber,studentNumber,idempotencyKey,status").eq("id",b.itemId).maybeSingle();
+      if(lookupError)throw lookupError;
+      if(existing&&existing.idempotencyKey===idempotencyKey)return s.json({item:existing,alreadyStaged:true});
+      return s.status(409).json({error:"A different row already uses this item or student number in the batch."});
+    }
+    throw error;
+  }
+  s.status(201).json({item:data});
+}));
+
+app.post("/api/organization/certificates/bulk/batches/:batchId/complete",auth,roles("EMPLOYER"),run(async(q,s)=>{
+  const result=await bulkInstitutionFor(q,true);if(result.error)return s.status(result.status).json({error:result.error});
+  if(!SUPABASE_SERVER_KEY||!BULK_CERTIFICATE_WORKER_ENABLED)return s.status(503).json({error:"The durable bulk certificate worker is not configured."});
+  const server=makeServerClient();
+  const {data,error}=await server.rpc("queue_certificate_issuance_batch",{p_batch_id:q.params.batchId,p_owner_id:q.user.id});
+  if(error)return s.status(409).json({error:error.message});
+  s.json({batch:data?.batch||null,alreadySubmitted:Boolean(data?.alreadySubmitted),workerEnabled:true,message:"Batch submitted. VERITY will continue issuing certificates in the background."});
 }));
 
 app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
@@ -1318,6 +1462,7 @@ app.use((e,q,s,_n)=>{if(e instanceof z.ZodError)return s.status(400).json({error
 app.use(express.static(path.resolve(root,"../dist")));
 app.get("*",(_q,s)=>s.sendFile(path.resolve(root,"../dist/index.html")));
 let stopStudentImportWorker=null;
+let stopBulkCertificateWorker=null;
 async function start(){
   if(!configured) throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required.");
   const chain=await connectChain();
@@ -1332,10 +1477,28 @@ async function start(){
   }else{
     console.log("Student roster import worker: disabled; set ENABLE_STUDENT_IMPORT_WORKER=true and a server-only Supabase service key after the queue migration is deployed.");
   }
+  if(BULK_CERTIFICATE_WORKER_ENABLED){
+    const workerClient=makeServerClient();
+    const processor=createBulkCertificateProcessor({
+      client:workerClient,
+      audit,
+      createVerityNotification,
+      notifyVerityAdmins
+    });
+    stopBulkCertificateWorker=startBulkCertificateWorker({
+      client:workerClient,
+      processItem:processor.processItem,
+      reconcilePending:processor.reconcilePending
+    });
+    console.log("Bulk certificate issuance worker: enabled (in-process, durable PostgreSQL queue; Supabase ledger only).");
+  }else{
+    console.log("Bulk certificate issuance worker: disabled; set ENABLE_BULK_CERTIFICATE_WORKER=true and a server-only Supabase service key after the queue migration is deployed.");
+  }
   const server=app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
   const shutdown=async signal=>{
     console.log(`Received ${signal}; stopping VERITY workers and HTTP server.`);
     try{await stopStudentImportWorker?.();}catch(error){console.error("Student import worker shutdown failed:",error);}
+    try{await stopBulkCertificateWorker?.();}catch(error){console.error("Bulk certificate worker shutdown failed:",error);}
     server.close(()=>process.exit(0));
   };
   process.once("SIGTERM",()=>shutdown("SIGTERM"));
