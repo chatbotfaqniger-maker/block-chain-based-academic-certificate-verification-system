@@ -37,7 +37,7 @@ export function createBulkCertificateProcessor({client,audit,createVerityNotific
     const now=new Date().toISOString();
     const record={
       ...clean,id:crypto.randomUUID(),studentEmail:clean.studentEmail,certificateId,verificationKey,
-      organizationId:organization.id,digest:hash,awardDate:new Date(clean.awardDate).toISOString(),
+      organizationId:organization.id,digest:hash,awardDate:new Date(clean.awardDate).toISOString(),status:"ACTIVE",
       issuerId:batch.createdBy,graduateId,txHash:null,chainId:null,contractAddress:null,
       createdAt:now,updatedAt:now,issuedAt:now,bulkIssuanceItemId:item.id
     };

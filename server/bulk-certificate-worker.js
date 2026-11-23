@@ -5,7 +5,8 @@ export function isTransientBulkCertificateError(error) {
   const status=Number(error?.statusCode||error?.status||error?.response?.status||0);
   return [408,425,429,500,502,503,504].includes(status)
     || ["ETIMEDOUT","ECONNRESET","ECONNREFUSED","EAI_AGAIN","UND_ERR_CONNECT_TIMEOUT","UND_ERR_SOCKET"].includes(code)
-    || error?.transient===true;
+    || error?.transient===true
+    || /timeout|network|temporarily unavailable|fetch failed|connection reset|socket hang up/i.test(String(error?.message||""));
 }
 
 export function startBulkCertificateWorker({
