@@ -44,13 +44,23 @@ BEGIN
     IF NEW."revokedAt" IS NOT NULL OR NEW."revokeReason" IS NOT NULL THEN
       RAISE EXCEPTION 'A new certificate cannot contain revocation metadata';
     END IF;
-    IF NOT COALESCE((
+    IF (
       (NEW."txHash" IS NULL AND NEW."chainId" IS NULL AND NEW."contractAddress" IS NULL)
       OR
-      (NEW."txHash" ~* '^0x[0-9a-f]{64}$'
-       AND NEW."chainId" ~ '^[0-9]+$'
-       AND NEW."contractAddress" ~* '^0x[0-9a-f]{40}$')
-    ), false) THEN
+      (
+        NEW."txHash" IS NOT NULL
+        AND length(NEW."txHash") = 66
+        AND left(NEW."txHash", 2) = '0x'
+        AND translate(substr(NEW."txHash", 3), '0123456789abcdefABCDEF', '') = ''
+        AND NEW."chainId" IS NOT NULL
+        AND length(NEW."chainId") > 0
+        AND translate(NEW."chainId", '0123456789', '') = ''
+        AND NEW."contractAddress" IS NOT NULL
+        AND length(NEW."contractAddress") = 42
+        AND left(NEW."contractAddress", 2) = '0x'
+        AND translate(substr(NEW."contractAddress", 3), '0123456789abcdefABCDEF', '') = ''
+      )
+    ) IS NOT TRUE THEN
       RAISE EXCEPTION 'Blockchain anchor fields must be either all empty or a complete valid anchor';
     END IF;
 
@@ -124,12 +134,20 @@ BEGIN
   IF (NEW."txHash", NEW."chainId", NEW."contractAddress")
      IS DISTINCT FROM
      (OLD."txHash", OLD."chainId", OLD."contractAddress") THEN
-    IF NOT COALESCE((
+    IF (
       OLD."txHash" IS NULL AND OLD."chainId" IS NULL AND OLD."contractAddress" IS NULL
-      AND NEW."txHash" ~* '^0x[0-9a-f]{64}$'
-      AND NEW."chainId" ~ '^[0-9]+$'
-      AND NEW."contractAddress" ~* '^0x[0-9a-f]{40}$'
-    ), false) THEN
+      AND NEW."txHash" IS NOT NULL
+      AND length(NEW."txHash") = 66
+      AND left(NEW."txHash", 2) = '0x'
+      AND translate(substr(NEW."txHash", 3), '0123456789abcdefABCDEF', '') = ''
+      AND NEW."chainId" IS NOT NULL
+      AND length(NEW."chainId") > 0
+      AND translate(NEW."chainId", '0123456789', '') = ''
+      AND NEW."contractAddress" IS NOT NULL
+      AND length(NEW."contractAddress") = 42
+      AND left(NEW."contractAddress", 2) = '0x'
+      AND translate(substr(NEW."contractAddress", 3), '0123456789abcdefABCDEF', '') = ''
+    ) IS NOT TRUE THEN
       RAISE EXCEPTION 'Blockchain anchor metadata may be attached once and cannot later be changed';
     END IF;
   END IF;
