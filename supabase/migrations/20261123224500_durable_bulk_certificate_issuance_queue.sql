@@ -271,7 +271,7 @@ begin
     update public."CertificateIssuanceBatch"
       set "processingItems"=greatest(0,"processingItems"-1),
           "queuedItems"="queuedItems"+1,
-          status='QUEUED',"completedAt"=null,"updatedAt"=now()
+          status=case when "processingItems">0 then 'PROCESSING' else 'QUEUED' end,"completedAt"=null,"updatedAt"=now()
       where id=v_item."batchId"
       returning * into v_batch;
     return jsonb_build_object('itemId',v_item.id,'itemStatus',v_item.status,
@@ -310,6 +310,7 @@ begin
     when v_batch."processingItems"=0 and v_batch."queuedItems"=0
       and v_batch."failedItems"=0 and v_batch."documentFailedItems"=0 then 'COMPLETED'
     when v_batch."processingItems"=0 and v_batch."queuedItems"=0 then 'PARTIAL'
+    when v_batch."processingItems">0 then 'PROCESSING'
     when v_batch."queuedItems">0 then 'QUEUED'
     else 'PROCESSING'
   end;
@@ -474,8 +475,9 @@ begin
        or new."leaseToken" is not null or new."leasedAt" is not null then
       raise exception 'New issuance items must be staged in an uploading batch';
     end if;
-    if new."documentStoragePath" is null or new."documentStoragePath" !~ '^bulk-staging/' then
-      raise exception 'A private bulk-staging PDF path is required';
+    if new."documentStoragePath" is null or new."documentStoragePath" !~ '^bulk-staging/'
+       or new."documentName" is null or new."documentSha256" is null then
+      raise exception 'A validated private bulk-staging PDF is required';
     end if;
   else
     if new."batchId"<>old."batchId"
@@ -519,54 +521,3 @@ create trigger verity_guard_certificate_issuance_item_tenant
 
 revoke all on function public.guard_certificate_issuance_item_tenant() from public,anon,authenticated;
 grant execute on function public.guard_certificate_issuance_item_tenant() to service_role;
-
-create or replace function public.guard_certificate_issuance_item_tenant()
-returns trigger
-language plpgsql
-security invoker
-set search_path = ''
-as $$
-declare
-  v_org_id text;
-  v_batch_status text;
-begin
-  select b."organizationId",b.status
-    into v_org_id,v_batch_status
-    from public."CertificateIssuanceBatch" b
-    where b.id=new."batchId"
-    for key share;
-
-  if not found or v_org_id<>new."organizationId" then
-    raise exception 'Issuance item organization must match its batch';
-  end if;
-
-  if tg_op='INSERT' and (v_batch_status<>'UPLOADING' or new.status<>'STAGED'
-      or new.attempts<>0 or new."certificateId" is not null
-      or new."leaseToken" is not null or new."leasedAt" is not null) then
-    raise exception 'New issuance items must be staged in an uploading batch';
-  end if;
-
-  if tg_op='UPDATE' and (
-      new."batchId"<>old."batchId"
-      or new."organizationId"<>old."organizationId"
-      or new."rowNumber"<>old."rowNumber"
-      or new."studentNumber"<>old."studentNumber"
-      or new."idempotencyKey"<>old."idempotencyKey"
-      or new.payload<>old.payload
-      or new."documentStoragePath" is distinct from old."documentStoragePath"
-      or new."documentSha256" is distinct from old."documentSha256"
-  ) then
-    raise exception 'Staged issuance identity and payload are immutable';
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists verity_guard_certificate_issuance_item_tenant
-  on public."CertificateIssuanceItem";
-create trigger verity_guard_certificate_issuance_item_tenant
-  before insert or update on public."CertificateIssuanceItem"
-  for each row execute function public.guard_certificate_issuance_item_tenant();
-
-revoke all on function public.guard_certificate_issuance_item_tenant() from public,anon,authenticated;
