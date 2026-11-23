@@ -4,6 +4,12 @@
 
 -- Secure future functions created by either migration owner by default. Any future
 -- RPC that must be callable through PostgREST must receive an explicit GRANT.
+-- PostgreSQL's built-in PUBLIC function EXECUTE default is global, so revoke it
+-- globally as well; a per-schema REVOKE cannot override a global default grant.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
