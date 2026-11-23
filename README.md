@@ -164,3 +164,7 @@ The public `POST /api/verify` application endpoint is rate-limited per client IP
 Supabase SECURITY DEFINER functions use an explicit execution allowlist. Student activation, roster access, membership requests, recovery actions and organization settings are authenticated-only. Public execution is retained only for the limited certificate verification, certificate-ledger integrity, public issuer/directory and student signup discovery/precheck workflows. Trigger-only ledger and profile functions are not exposed as RPCs.
 
 Default function privileges for the Postgres migration owners are hardened so new public-schema functions are not automatically executable by `anon` or `authenticated`. Future RPC migrations must explicitly grant only the roles they require.
+
+## Production migration history
+
+The production database's applied migration history must match the repository before using automated Supabase CLI migration pushes or resets. See [Production Migration-History Reconciliation](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) for the current audit and release safety rules. Do not run `supabase db push` or replay missing historical migrations against production until the reconciliation is complete.
