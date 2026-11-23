@@ -188,45 +188,39 @@ create policy "verity_storage_granted_verifier_read"
   );
 
 
--- Let a graduate inspect the legal identity of an organization that requested
--- access, without making private organization rows generally readable.
-create or replace function public.verity_graduate_consent_organization_details(p_grant_ids text[])
-returns table (
-  grant_id text,
-  organization_name text,
-  organization_type text,
-  registration_number text,
-  official_website text,
-  official_email_domain text,
-  accreditation_body text,
-  verified_at timestamptz,
-  location_city text,
-  location_state text,
-  location_country text
-)
+
+-- Permit a graduate to inspect only the legal identity of organizations that
+-- have actually requested access to one of that graduate's certificates.
+-- The helper stays in the non-exposed private schema and checks auth.uid().
+create or replace function private.is_graduate_consent_organization(p_organization_id text)
+returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $function$
-  select
-    g.id,
-    o.name,
-    o.type,
-    o."registrationNumber",
-    o."officialWebsite",
-    o."officialEmailDomain",
-    o."accreditationBody",
-    o."verifiedAt",
-    o."locationCity",
-    o."locationState",
-    o."locationCountry"
-  from public."CertificateAccessGrant" g
-  join public."Organization" o on o.id = g."organizationId"
-  where g.id = any(p_grant_ids)
-    and g."graduateId" = (select auth.uid())::text
-    and o.status = 'APPROVED';
+  select exists (
+    select 1
+    from public."CertificateAccessGrant" g
+    where g."organizationId" = p_organization_id
+      and g."graduateId" = (select auth.uid())::text
+  );
 $function$;
 
-revoke all on function public.verity_graduate_consent_organization_details(text[]) from public, anon;
-grant execute on function public.verity_graduate_consent_organization_details(text[]) to authenticated;
+revoke all on function private.is_graduate_consent_organization(text) from public, anon;
+grant execute on function private.is_graduate_consent_organization(text) to authenticated;
+
+drop policy if exists "verity_org_select" on public."Organization";
+create policy "verity_org_select"
+  on public."Organization"
+  for select
+  to authenticated
+  using (
+    "ownerId" = (select auth.uid())::text
+    or (select private.is_admin())
+    or (
+      status = 'APPROVED'
+      and private.is_active_org_staff(id, 'certificates:read')
+    )
+    or private.is_graduate_consent_organization(id)
+  );
