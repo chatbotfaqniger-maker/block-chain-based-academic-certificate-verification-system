@@ -265,8 +265,7 @@ BEGIN
 
   SELECT o.status INTO v_org_status
   FROM public."Organization" o
-  WHERE o.id=v_chunk."organizationId"
-  FOR SHARE;
+  WHERE o.id=v_chunk."organizationId";
 
   UPDATE public."StudentImportChunk"
     SET attempts=attempts+1 WHERE id=v_chunk.id;
