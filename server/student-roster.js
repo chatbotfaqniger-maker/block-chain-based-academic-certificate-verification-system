@@ -62,7 +62,7 @@ export function parseRosterCsv(input) {
 
   const headerRow = rows.shift() || [];
   const headers = headerRow.map(value =>
-    String(value).trim().toLowerCase().replace(/[\\s-]+/g, "_")
+    String(value).trim().toLowerCase().replace(/[\s-]+/g, "_")
   );
 
   if (!headers.length || headers.some(header => !header)) {
