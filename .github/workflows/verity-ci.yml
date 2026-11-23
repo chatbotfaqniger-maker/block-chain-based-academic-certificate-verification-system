@@ -58,7 +58,7 @@ jobs:
       - name: Apply RPC execution hardening migration
         env:
           PGPASSWORD: verity-ci-only
-        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261123210000_restrict_sensitive_rpc_execution.sql
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261123221423_restrict_sensitive_rpc_execution.sql
       - name: Assert public and authenticated execution boundaries
         env:
           PGPASSWORD: verity-ci-only
