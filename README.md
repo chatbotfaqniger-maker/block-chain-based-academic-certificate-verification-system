@@ -168,3 +168,9 @@ Default function privileges for the Postgres migration owners are hardened so ne
 ## Production migration history
 
 The production database's applied migration history must match the repository before using automated Supabase CLI migration pushes or resets. See [Production Migration-History Reconciliation](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) for the current audit and release safety rules. Do not run `supabase db push` or replay missing historical migrations against production until the reconciliation is complete.
+
+## Durable institutional student roster import
+
+Approved institutions can import up to 50,000 student rows per batch from the VERITY CSV template. The application validates the file in the browser, stages it in 100-row chunks, and processes those chunks through a durable PostgreSQL queue. Imports extend the existing `StudentRoster` identity registry; they do not create graduate login accounts or issue certificates. New rows enter the existing `ELIGIBLE` state and continue through the established single-use activation-token workflow.
+
+The import worker runs inside the existing Node/Express web service, so it does not require a separate paid Render worker service. To process queued batches, configure the server-only `SUPABASE_SERVICE_ROLE_KEY` (or supported Supabase secret key) and set `ENABLE_STUDENT_IMPORT_WORKER=true` in Render. Keep the worker disabled until the matching database migration is applied. If the worker is disabled, batches remain safely queued and the interface displays that status. The worker uses a transaction-scoped `FOR UPDATE SKIP LOCKED` queue, retry-safe chunk staging, and the existing institution/matriculation uniqueness constraint; it never overwrites existing student records. Institution owners and active ICT staff with `roster:manage` can import and view the batch history.
