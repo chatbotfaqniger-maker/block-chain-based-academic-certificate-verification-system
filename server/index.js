@@ -1254,15 +1254,21 @@ app.get("/api/admin/showcase-video",auth,roles("ADMIN"),run(async(q,s)=>{
   let verification=null;
   if(certificate?.verificationKey){
     try{
-      const {data:record,error}=await q.supabase.rpc("lookup_verity_certificate",{p_certificate_id:certificate.verificationKey,p_verifier_name:null,p_verifier_org:null});
+      const serverClient=makeServerClient();
+      const {data:record,error}=await serverClient.rpc("lookup_verity_certificate",{p_certificate_id:certificate.verificationKey,p_verifier_name:null,p_verifier_org:null});
       if(error) throw error;
       if(!record?.found){
         verification={verified:false,status:"NOT_FOUND",message:"The live registry did not return this credential."};
       }else{
+        const dbOk=digest(canonical(record))===String(record.digest||"");
+        const {data:ledgerRows,error:ledgerError}=await serverClient.rpc("verify_verity_certificate_ledger_record",{p_certificate_id:record.certificateId});
+        if(ledgerError)throw ledgerError;
+        const ledger=Array.isArray(ledgerRows)?ledgerRows[0]:ledgerRows;
+        const ledgerOk=ledger?.ledger_valid===true&&Number(ledger?.event_count||0)>0&&ledger?.record_matches===true;
         const chain=await verifyCertificateChain(record);
         const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(record.digest||"").toLowerCase()&&!chain.revoked);
-        const verified=record.status==="ACTIVE"&&chainOk;
-        verification={verified,status:record.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH"};
+        const verified=record.status==="ACTIVE"&&dbOk&&ledgerOk&&chainOk;
+        verification={verified,status:record.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH",ledgerValid:ledgerOk,recordMatches:ledger?.record_matches===true};
       }
     }catch(error){
       verification={verified:false,status:"LIVE CHECK UNAVAILABLE",message:error.message};
