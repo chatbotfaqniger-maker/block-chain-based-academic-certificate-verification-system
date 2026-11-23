@@ -137,6 +137,41 @@ CREATE POLICY verity_student_import_chunk_roster_insert
     )
   );
 
+DROP POLICY IF EXISTS "Institution owners and ICT create roster import audit" ON public."StudentRosterImport";
+CREATE POLICY "Institution owners and ICT create roster import audit"
+  ON public."StudentRosterImport" FOR INSERT TO authenticated
+  WITH CHECK (
+    "uploadedBy"=(SELECT auth.uid())::text
+    AND (
+      (
+        status='UPLOADING'
+        AND "insertedRows"=0 AND "duplicateRows"=0
+        AND "processedChunks"=0 AND "failedChunks"=0
+        AND "completedAt" IS NULL
+      )
+      OR (
+        status='COMPLETED' AND "totalChunks"=0
+        AND "duplicateRows"=0 AND "processedChunks"=0
+        AND "failedChunks"=0 AND "completedAt" IS NULL
+      )
+    )
+    AND EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentRosterImport"."organizationId"
+        AND o.type='INSTITUTION' AND o.status='APPROVED'
+        AND (
+          o."ownerId"=(SELECT auth.uid())::text
+          OR EXISTS (
+            SELECT 1 FROM public."InstitutionICTStaff" i
+            WHERE i."organizationId"=o.id
+              AND i."userId"=(SELECT auth.uid())::text
+              AND i.status='ACTIVE'
+              AND 'roster:manage'=ANY(i.permissions)
+          )
+        )
+    )
+  );
+
 DROP POLICY IF EXISTS verity_student_import_roster_queue_update ON public."StudentRosterImport";
 CREATE POLICY verity_student_import_roster_queue_update
   ON public."StudentRosterImport" FOR UPDATE TO authenticated
