@@ -153,6 +153,12 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d verity_security_test -v ON_ERROR_STOP=1 -f tests/fixtures/certificate-ledger-hardening-bootstrap.sql
+      - name: Confirm checkout contains the latest anchor validation
+        run: |
+          grep -q 'translate(NEW."chainId"' supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
+          ! grep -q 'NEW."chainId" ~' supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
+          git rev-parse HEAD
+          sha256sum supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
       - name: Apply certificate ledger hardening migration
         env:
           PGPASSWORD: postgres
