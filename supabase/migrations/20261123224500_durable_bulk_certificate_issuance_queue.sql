@@ -339,7 +339,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = ''
-as $
+as $$
 declare
   v_batch public."CertificateIssuanceBatch"%rowtype;
   v_count integer;
@@ -375,7 +375,7 @@ begin
     returning * into v_batch;
   return jsonb_build_object('queued',true,'batch',to_jsonb(v_batch));
 end;
-$;
+$$;
 
 revoke all on function public.queue_certificate_issuance_batch(text,text) from public,anon,authenticated;
 grant execute on function public.queue_certificate_issuance_batch(text,text) to service_role;
@@ -389,7 +389,7 @@ returns jsonb
 language plpgsql
 security invoker
 set search_path = ''
-as $
+as $$
 declare
   v_item public."CertificateIssuanceItem"%rowtype;
   v_batch public."CertificateIssuanceBatch"%rowtype;
@@ -442,7 +442,7 @@ begin
   return jsonb_build_object('reconciled',true,'itemId',v_item.id,
     'certificateId',v_certificate_id,'itemStatus',v_status,'batchStatus',v_terminal);
 end;
-$;
+$$;
 
 revoke all on function public.reconcile_certificate_issuance_item(text,boolean,text) from public,anon,authenticated;
 grant execute on function public.reconcile_certificate_issuance_item(text,boolean,text) to service_role;
