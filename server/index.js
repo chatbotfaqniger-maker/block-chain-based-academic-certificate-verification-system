@@ -792,9 +792,10 @@ app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,
   const {data:cert,error:ce}=await q.supabase.from("Certificate").select("id,certificateId,graduateId").or("certificateId.eq."+b.certificateId+",verificationKey.eq."+b.certificateId.toUpperCase()).maybeSingle();
   if(ce)throw ce;if(!cert)return s.status(404).json({error:"Certificate not found."});
   if(!cert.graduateId)return s.status(409).json({error:"The graduate must link their Verity account to this certificate before private document access can be requested."});
-  const {data:existing,error:ee}=await q.supabase.from("CertificateAccessGrant").select("id,status").eq("certificateId",cert.id).eq("organizationId",org.id).maybeSingle();
+  const {data:existing,error:ee}=await q.supabase.from("CertificateAccessGrant").select("id,status,expiresAt").eq("certificateId",cert.id).eq("organizationId",org.id).in("status",["PENDING","APPROVED"]).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(ee)throw ee;
-  if(existing)return s.status(200).json({grant:existing,message:"An access request or decision already exists for this organization and certificate."});
+  if(existing?.status==="PENDING")return s.status(200).json({grant:existing,message:"An access request is already awaiting the graduate’s decision."});
+  if(existing?.status==="APPROVED"&&existing.expiresAt&&new Date(existing.expiresAt)>new Date())return s.status(200).json({grant:existing,message:"This organization already has active graduate-approved access to this certificate."});
   const {data:grant,error}=await q.supabase.from("CertificateAccessGrant").insert({id:crypto.randomUUID(),certificateId:cert.id,graduateId:cert.graduateId,organizationId:org.id,requestedBy:q.user.id,purpose:b.purpose||"Employment or academic credential verification",status:"PENDING"}).select().single();
   if(error)throw error;
   await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_REQUESTED","CertificateAccessGrant",grant.id,{certificateId:cert.certificateId,organizationId:org.id});
@@ -806,7 +807,7 @@ app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,
 app.get("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can view its access requests."});
-  const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,graduateId,purpose,status,createdAt,approvedAt,expiresAt").eq("organizationId",org.id).order("createdAt",{ascending:false});
+  const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,graduateId,purpose,status,createdAt,approvedAt,expiresAt,revokedAt").eq("organizationId",org.id).order("createdAt",{ascending:false});
   if(error)throw error;
   const ids=(data||[]).map(x=>x.certificateId);
   const {data:certs,error:ce}=ids.length?await q.supabase.from("Certificate").select("id,certificateId,studentName,institution,qualification").in("id",ids):{data:[],error:null};
@@ -815,7 +816,7 @@ app.get("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s
 }));
 
 app.get("/api/graduate/access-requests",auth,roles("GRADUATE"),run(async(q,s)=>{
-  const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,organizationId,purpose,status,createdAt,approvedAt,expiresAt,Organization:organizationId(name,type)").eq("graduateId",q.user.id).order("createdAt",{ascending:false});
+  const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,organizationId,purpose,status,createdAt,approvedAt,expiresAt,revokedAt,Organization:organizationId(name,type)").eq("graduateId",q.user.id).order("createdAt",{ascending:false});
   if(error)throw error;
   const ids=(data||[]).map(x=>x.certificateId);
   const {data:certs,error:ce}=ids.length?await q.supabase.from("Certificate").select("id,certificateId,studentName,institution,qualification").in("id",ids):{data:[],error:null};
@@ -824,14 +825,17 @@ app.get("/api/graduate/access-requests",auth,roles("GRADUATE"),run(async(q,s)=>{
 }));
 
 app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q,s)=>{
-  const b=z.object({status:z.enum(["APPROVED","REJECTED"])}).parse(q.body);
+  const b=z.object({status:z.enum(["APPROVED","REJECTED","REVOKED"])}).parse(q.body);
   const now=new Date().toISOString();
-  const patch={status:b.status,updatedAt:now,approvedAt:b.status==="APPROVED"?now:null,expiresAt:b.status==="APPROVED"?new Date(Date.now()+30*24*60*60*1000).toISOString():null};
-  const {data,error}=await q.supabase.from("CertificateAccessGrant").update(patch).eq("id",q.params.id).eq("graduateId",q.user.id).eq("status","PENDING").select().single();
+  const patch=b.status==="APPROVED"?{status:"APPROVED",updatedAt:now,approvedAt:now,expiresAt:new Date(Date.now()+30*24*60*60*1000).toISOString()}:b.status==="REJECTED"?{status:"REJECTED",updatedAt:now,approvedAt:null,expiresAt:null}:{status:"REVOKED",updatedAt:now,revokedAt:now,revokedBy:q.user.id};
+  let update=q.supabase.from("CertificateAccessGrant").update(patch).eq("id",q.params.id).eq("graduateId",q.user.id);
+  if(b.status==="REVOKED")update=update.eq("status","APPROVED").gt("expiresAt",now);else update=update.eq("status","PENDING");
+  const {data,error}=await update.select().maybeSingle();
   if(error)throw error;
-  await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_"+b.status,"CertificateAccessGrant",data.id,{organizationId:data.organizationId,expiresAt:data.expiresAt});
+  if(!data)return s.status(409).json({error:b.status==="REVOKED"?"This access grant is no longer active or has already expired.":"This request has already been decided."});
+  await audit(q.supabase,q.user.id,"CERTIFICATE_ACCESS_"+b.status,"CertificateAccessGrant",data.id,{organizationId:data.organizationId,expiresAt:data.expiresAt,revokedAt:data.revokedAt||null});
   const {data:org}=await q.supabase.from("Organization").select("ownerId,name").eq("id",data.organizationId).maybeSingle();
-  if(org?.ownerId)await createVerityNotification(org.ownerId,{type:"ACCESS_DECISION",category:"ACCESS",title:b.status==="APPROVED"?"Certificate access approved":"Certificate access declined",body:"Your request to access a graduate certificate was "+b.status.toLowerCase()+".",url:"/access",metadata:{grantId:data.id,status:b.status,expiresAt:data.expiresAt}});
+  if(org?.ownerId)await createVerityNotification(org.ownerId,{type:"ACCESS_DECISION",category:"ACCESS",title:b.status==="APPROVED"?"Certificate access approved":b.status==="REVOKED"?"Certificate access revoked":"Certificate access declined",body:b.status==="REVOKED"?"The graduate has revoked access to the original certificate.":"Your request to access a graduate certificate was "+b.status.toLowerCase()+".",url:"/access",metadata:{grantId:data.id,status:b.status,expiresAt:data.expiresAt,revokedAt:data.revokedAt||null}});
   s.json({grant:data});
 }));
 
@@ -852,10 +856,14 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
   if(fe)throw fe;
   const bytes=Buffer.from(await file.arrayBuffer());
   if(!doc.sha256||digest(bytes)!==doc.sha256)return s.status(409).json({error:"Document integrity check failed. The stored file does not match its registered SHA-256 fingerprint."});
-  const {data:link,error:le}=await q.supabase.storage.from("verity-certificates").createSignedUrl(doc.storagePath,60);
-  if(le)throw le;
   await audit(q.supabase,q.user.id,"SHARED_CERTIFICATE_DOCUMENT_VIEWED","CertificateDocument",doc.id,{organizationId:org.id,grantId:grant.id,scanStatus:doc.scanStatus});
-  s.json({url:link.signedUrl,expiresIn:60,originalName:doc.originalName,mimeType:doc.mimeType});
+  s.setHeader("Content-Type",doc.mimeType);
+  s.setHeader("Content-Disposition",`inline; filename="verity-certificate-preview.${doc.mimeType==="application/pdf"?"pdf":doc.mimeType==="image/png"?"png":"jpg"}"`);
+  s.setHeader("Cache-Control","private, no-store, max-age=0");
+  s.setHeader("Pragma","no-cache");
+  s.setHeader("X-Content-Type-Options","nosniff");
+  s.setHeader("Content-Security-Policy","sandbox; default-src 'none'; img-src 'self' data:");
+  s.status(200).send(bytes);
 }));
 
 app.get("/api/organization/access-requests/:id/document/download",auth,roles("EMPLOYER"),run(async(q,s)=>{
