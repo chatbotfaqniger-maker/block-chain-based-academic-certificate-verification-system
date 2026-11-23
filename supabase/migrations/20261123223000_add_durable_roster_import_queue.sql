@@ -246,6 +246,7 @@ DECLARE
   v_inserted_total integer:=0;
   v_duplicate_total integer:=0;
   v_failed_total integer:=0;
+  v_remaining_failed integer:=0;
   v_rejected integer:=0;
   v_final_status text:='PROCESSING';
   v_error text;
@@ -264,7 +265,8 @@ BEGIN
 
   SELECT o.status INTO v_org_status
   FROM public."Organization" o
-  WHERE o.id=v_chunk."organizationId";
+  WHERE o.id=v_chunk."organizationId"
+  FOR SHARE;
 
   UPDATE public."StudentImportChunk"
     SET attempts=attempts+1 WHERE id=v_chunk.id;
@@ -275,13 +277,19 @@ BEGIN
     UPDATE public."StudentImportChunk"
       SET status='FAILED',"processedAt"=now(),"errorMessage"=v_error
       WHERE id=v_chunk.id;
+    UPDATE public."StudentImportChunk"
+      SET status='FAILED',"processedAt"=now(),"errorMessage"=v_error
+      WHERE "batchId"=v_chunk."batchId" AND status='PENDING';
+    GET DIAGNOSTICS v_remaining_failed=ROW_COUNT;
     UPDATE public."StudentRosterImport"
-      SET "failedChunks"="failedChunks"+1,
-          "processedChunks"="processedChunks"+1,
-          "errorSummary"="errorSummary"||jsonb_build_array(jsonb_build_object('chunkIndex',v_chunk."chunkIndex",'message',v_error)),
+      SET "failedChunks"="failedChunks"+1+v_remaining_failed,
+          "processedChunks"="processedChunks"+1+v_remaining_failed,
+          "errorSummary"=CASE WHEN jsonb_array_length("errorSummary")<50
+            THEN "errorSummary"||jsonb_build_array(jsonb_build_object('chunkIndex',v_chunk."chunkIndex",'message',v_error))
+            ELSE "errorSummary" END,
           status='FAILED',"completedAt"=now(),"updatedAt"=now()
       WHERE id=v_chunk."batchId";
-    RETURN jsonb_build_object('processed',true,'failed',true,'batchId',v_chunk."batchId",'chunkIndex',v_chunk."chunkIndex",'error',v_error,'status','FAILED');
+    RETURN jsonb_build_object('processed',true,'failed',true,'batchId',v_chunk."batchId",'chunkIndex',v_chunk."chunkIndex",'failedChunks',1+v_remaining_failed,'error',v_error,'status','FAILED');
   END IF;
 
   UPDATE public."StudentRosterImport"
