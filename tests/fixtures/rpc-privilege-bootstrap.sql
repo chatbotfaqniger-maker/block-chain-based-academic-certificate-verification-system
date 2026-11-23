@@ -5,10 +5,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role NOLOGIN; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='postgres') THEN CREATE ROLE postgres NOLOGIN SUPERUSER; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='supabase_admin') THEN CREATE ROLE supabase_admin NOLOGIN; END IF;
 END $$;
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres, supabase_admin;
-GRANT CREATE ON SCHEMA public TO postgres, supabase_admin;
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
+GRANT CREATE ON SCHEMA public TO postgres;
 
 CREATE FUNCTION public.activate_verity_student_roster(text,text,text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN RETURN; END $$;
 CREATE FUNCTION public.complete_verity_student_recovery(text,text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN RETURN; END $$;
@@ -30,4 +29,3 @@ CREATE FUNCTION public.verity_prevent_ledger_mutation() RETURNS trigger LANGUAGE
 
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;

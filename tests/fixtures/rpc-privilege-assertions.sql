@@ -22,9 +22,6 @@ END $$;
 SET ROLE postgres;
 CREATE FUNCTION public.future_postgres_rpc() RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN; END $$;
 RESET ROLE;
-SET ROLE supabase_admin;
-CREATE FUNCTION public.future_supabase_admin_rpc() RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN; END $$;
-RESET ROLE;
 
 DO $$
 BEGIN
