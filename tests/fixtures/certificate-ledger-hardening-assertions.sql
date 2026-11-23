@@ -8,6 +8,9 @@ BEGIN
   v_payload :=
     '{"certificateId":"VRT-2026-TEST001","studentName":"Test Graduate","studentNumber":"TEST/CS/001","institution":"Example University","faculty":"Computing","department":"Computer Science","programme":"BSc Computer Science","qualification":"Bachelor of Science","classification":"First Class","awardDate":"2026-06-30T00:00:00.000Z"}';
   v_digest := encode(extensions.digest(convert_to(v_payload,'UTF8'),'sha256'),'hex');
+  IF v_digest <> '56b163ff8f9eb8e6c993fe000e0a60fe6300dd035e45d039192c0d34257a67cb' THEN
+    RAISE EXCEPTION 'TEST_FAIL: PostgreSQL canonical fingerprint differs from the application JSON SHA-256 format';
+  END IF;
 
   INSERT INTO public."Certificate" (
     id,"certificateId","verificationKey","studentName","studentNumber","studentEmail",
