@@ -2,9 +2,9 @@ name: VERITY build and test
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/verity-durable-bulk-certificate-issuance]
   push:
-    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance]
+    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening]
 
 permissions:
   contents: read
