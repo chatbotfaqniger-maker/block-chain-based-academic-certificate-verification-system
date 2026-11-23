@@ -134,6 +134,11 @@ BEGIN
     RAISE EXCEPTION 'TEST_FAIL: service_role ledger privileges are not read-only';
   END IF;
 
+  IF (SELECT bool_or(p.prosecdef) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname IN ('lookup_verity_certificate','verify_verity_certificate_ledger','verity_student_registration_precheck','verify_verity_certificate_ledger_record','verity_guard_certificate_record')) THEN
+    RAISE EXCEPTION 'TEST_FAIL: internal verification/guard functions should run as SECURITY INVOKER';
+  END IF;
+
   IF has_function_privilege('anon','public.lookup_verity_certificate(text,text,text)','EXECUTE')
      OR has_function_privilege('authenticated','public.lookup_verity_certificate(text,text,text)','EXECUTE')
      OR NOT has_function_privilege('service_role','public.lookup_verity_certificate(text,text,text)','EXECUTE')

@@ -19,9 +19,9 @@ GRANT SELECT ON TABLE public."CertificateLedger" TO service_role;
 CREATE OR REPLACE FUNCTION public.verity_guard_certificate_record()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = ''
-AS $$
+AS $
 DECLARE
   v_payload text;
   v_expected_digest text;
@@ -151,9 +151,9 @@ RETURNS TABLE (
   record_matches boolean
 )
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = ''
-AS $$
+AS $
 DECLARE
   v_certificate public."Certificate"%ROWTYPE;
   v_base record;
@@ -203,6 +203,13 @@ $$;
 
 REVOKE ALL ON FUNCTION public.verify_verity_certificate_ledger_record(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.verify_verity_certificate_ledger_record(text) TO service_role;
+
+-- These internal RPCs run as the explicitly authorized service_role. They do not
+-- need SECURITY DEFINER because service_role already has the required table
+-- privileges and bypasses RLS. Keep only the append trigger privileged.
+ALTER FUNCTION public.lookup_verity_certificate(text, text, text) SECURITY INVOKER;
+ALTER FUNCTION public.verify_verity_certificate_ledger(text) SECURITY INVOKER;
+ALTER FUNCTION public.verity_student_registration_precheck(text, text) SECURITY INVOKER;
 
 -- Public callers must go through the rate-limited Express API. These
 -- SECURITY DEFINER RPCs are internal server operations, not public REST APIs.
