@@ -40,7 +40,10 @@ BEGIN
     IF NOT COALESCE((
       (NEW."txHash" IS NULL AND NEW."chainId" IS NULL AND NEW."contractAddress" IS NULL)
       OR
-      (NEW."txHash" ~* '^0x[0-9a-f]{64}
+      (NEW."txHash" ~* '^0x[0-9a-f]{64}$'
+       AND NEW."chainId" ~ '^[0-9]+$'
+       AND NEW."contractAddress" ~* '^0x[0-9a-f]{40}$')
+    ), false) THEN
       RAISE EXCEPTION 'Blockchain anchor fields must be either all empty or a complete valid anchor';
     END IF;
 
@@ -116,7 +119,10 @@ BEGIN
      (OLD."txHash", OLD."chainId", OLD."contractAddress") THEN
     IF NOT COALESCE((
       OLD."txHash" IS NULL AND OLD."chainId" IS NULL AND OLD."contractAddress" IS NULL
-      AND NEW."txHash" ~* '^0x[0-9a-f]{64}
+      AND NEW."txHash" ~* '^0x[0-9a-f]{64}$'
+      AND NEW."chainId" ~ '^[0-9]+$'
+      AND NEW."contractAddress" ~* '^0x[0-9a-f]{40}$'
+    ), false) THEN
       RAISE EXCEPTION 'Blockchain anchor metadata may be attached once and cannot later be changed';
     END IF;
   END IF;
