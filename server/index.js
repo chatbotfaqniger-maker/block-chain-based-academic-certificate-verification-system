@@ -15,6 +15,7 @@ import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "
 import { isCertificateAccessActive } from "./certificate-access.js";
 import { parseRosterCsv } from "./student-roster.js";
 import { createVerificationRateLimiter } from "./rate-limits.js";
+import { startStudentImportWorker } from "./student-import-worker.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -23,6 +24,7 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const configured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 const SUPABASE_SERVER_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
+const STUDENT_IMPORT_WORKER_ENABLED = process.env.ENABLE_STUDENT_IMPORT_WORKER === "true" && Boolean(SUPABASE_SERVER_KEY);
 const makeClient = (accessToken) => {
   if (!configured) throw new Error("Supabase is not configured. Add the Project URL and Publishable Key.");
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -212,7 +214,7 @@ app.post("/api/auth/login",run(async(q,s)=>{
   const profile=await profileFor(client,data.user); const organization=await ensureOrganization(client,data.user,profile); await ensureStudentMembership(client,data.user,profile);
   s.json({token:data.session.access_token,user:safe(profile),organization});
 }));
-app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];const {data:institutionICT,error:ictError}=q.user.role==="GRADUATE"?await q.supabase.from("InstitutionICTStaff").select("id,organizationId,permissions,status").eq("userId",q.user.id).eq("status","ACTIVE"): {data:[],error:null};if(ictError)throw ictError;const studentRegistration=q.user.role==="GRADUATE"?{organizationId:q.authUser.user_metadata?.studentOrganizationId||null,studentNumber:q.authUser.user_metadata?.studentNumber||null}:null;s.json({user:{...safe(q.user),organizationStaff,institutionICT:institutionICT||[],studentRegistration},organization});}));
+app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];const {data:institutionICT,error:ictError}=q.user.role==="GRADUATE"?await q.supabase.from("InstitutionICTStaff").select("id,organizationId,permissions,status").eq("userId",q.user.id).eq("status","ACTIVE"): {data:[],error:null};if(ictError)throw ictError;const studentRegistration=q.user.role==="GRADUATE"?{organizationId:q.authUser.user_metadata?.studentOrganizationId||null,studentNumber:q.authUser.user_metadata?.studentNumber||null}:null;const rosterOrganization=q.user.role==="GRADUATE"&&institutionICT?.some(x=>x.status==="ACTIVE"&&x.permissions?.some(p=>["roster:manage","registration:recover"].includes(p)))?await institutionRosterContext(q.supabase,q.user.id):null;const workspaceOrganization=organization||(rosterOrganization?{id:rosterOrganization.id,name:rosterOrganization.name,type:rosterOrganization.type,status:rosterOrganization.status,ownerId:rosterOrganization.ownerId}:null);s.json({user:{...safe(q.user),organizationStaff,institutionICT:institutionICT||[],studentRegistration},organization:workspaceOrganization});}));
 app.patch("/api/admin/profile",auth,roles("ADMIN"),run(async(q,s)=>{const b=z.object({fullName:z.string().trim().min(2).max(100)}).parse(q.body);const {data,error}=await q.supabase.from("User").update({fullName:b.fullName}).eq("id",q.user.id).select("id,fullName,email,role,institution").single();if(error)throw error;await audit(q.supabase,q.user.id,"ADMIN_PROFILE_NAME_UPDATED","User",q.user.id,{fullName:b.fullName});s.json({user:safe(data),message:"Administrator display name updated."});}));
 app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const b=z.object({registrationCode:z.string().min(6),studentNumber:z.string().optional()}).parse(q.body);const {data,error}=await q.supabase.rpc("request_verity_membership",{p_registration_code:b.registrationCode.trim().toUpperCase(),p_student_number:b.studentNumber||null});if(error)return s.status(400).json({error:error.message});s.status(201).json({membership:data});}));
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
@@ -384,6 +386,135 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
  await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORTED","StudentRosterImport",batchId,{organizationId:org.id,totalRows:rows.length,insertedRows:inserted,rejectedRows:rejectedCount});
  s.status(201).json({batchId,totalRows:rows.length,insertedRows:inserted,rejectedRows:rejectedCount,errors:rejected.slice(0,100),message:"Roster import completed. Existing institution/matriculation records were not overwritten."});
 }));
+
+const rosterImportAccess=async(q,s)=>{
+ const org=await institutionRosterContext(q.supabase,q.user.id);
+ if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id)){
+  s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+  return null;
+ }
+ return org;
+};
+
+app.get("/api/organization/analytics",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {count:totalStudents,error:studentError}=await q.supabase.from("StudentRoster").select("id",{count:"exact",head:true}).eq("organizationId",org.id);
+ if(studentError)throw studentError;
+ let certificatesIssued=null,activeCertificates=null;
+ if(org.ownerId===q.user.id){
+  const {count,error}=await q.supabase.from("Certificate").select("id",{count:"exact",head:true}).eq("organizationId",org.id);
+  if(error)throw error;certificatesIssued=count??0;
+  const {count:active,error:activeError}=await q.supabase.from("Certificate").select("id",{count:"exact",head:true}).eq("organizationId",org.id).eq("status","ACTIVE");
+  if(activeError)throw activeError;activeCertificates=active??0;
+ }
+ s.json({totalStudents:totalStudents??0,certificatesIssued,activeCertificates});
+}));
+
+app.get("/api/organization/students",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const limit=Math.min(200,Math.max(1,Number.parseInt(q.query.limit,10)||100));
+ const offset=Math.min(50000,Math.max(0,Number.parseInt(q.query.offset,10)||0));
+ const term=String(q.query.search||"").trim().slice(0,100).replace(/[^\p{L}\p{N}\s\-/]/gu,"");
+ let query=q.supabase.from("StudentRoster").select("id,studentNumber,fullName,institutionalEmail,faculty,department,programme,qualification,classification,awardDate,academicSession,status,claimedUserId,createdAt",{count:"exact"}).eq("organizationId",org.id).order("createdAt",{ascending:false}).range(offset,offset+limit-1);
+ if(term)query=query.or("studentNumber.ilike.%"+term+"%,fullName.ilike.%"+term+"%,department.ilike.%"+term+"%,faculty.ilike.%"+term+"%");
+ const {data,error,count}=await query;if(error)throw error;
+ s.json({students:data||[],total:count??0,limit,offset});
+}));
+
+app.get("/api/organization/students/import-batches",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {data,error}=await q.supabase.from("StudentRosterImport").select("id,fileName,totalRows,totalChunks,processedChunks,failedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(30);
+ if(error)throw error;
+ s.json({batches:data||[],workerEnabled:STUDENT_IMPORT_WORKER_ENABLED});
+}));
+
+app.post("/api/organization/students/import-batches",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const body=z.object({
+  fileName:z.string().trim().min(1).max(180),
+  totalRows:z.number().int().min(1).max(50000),
+  totalChunks:z.number().int().min(1).max(500),
+  rejectedRows:z.number().int().min(0).max(50000),
+  errorSummary:z.array(z.object({rowNumber:z.number().int().min(0),message:z.string().trim().min(1).max(300)})).max(50).default([])
+ }).parse(q.body);
+ if(body.rejectedRows>body.totalRows)return s.status(400).json({error:"Rejected rows cannot exceed the uploaded row count."});
+ const validRows=body.totalRows-body.rejectedRows;
+ const expectedChunks=Math.ceil(validRows/100);
+ if(validRows<1||body.totalChunks!==expectedChunks)return s.status(400).json({error:"The batch row and chunk counts do not match. Recheck the CSV preview and try again."});
+ const id=crypto.randomUUID(),fileName=body.fileName.replace(/[\\/]/g,"_");
+ const {data,error}=await q.supabase.from("StudentRosterImport").insert({
+  id,organizationId:org.id,uploadedBy:q.user.id,fileName,totalRows:body.totalRows,
+  insertedRows:0,duplicateRows:0,rejectedRows:body.rejectedRows,totalChunks:body.totalChunks,
+  processedChunks:0,failedChunks:0,status:"UPLOADING",errorSummary:body.errorSummary,
+  updatedAt:new Date().toISOString()
+ }).select("id,fileName,totalRows,totalChunks,rejectedRows,status,createdAt").single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORT_STAGED","StudentRosterImport",id,{organizationId:org.id,totalRows:body.totalRows,totalChunks:body.totalChunks,rejectedRows:body.rejectedRows});
+ s.status(201).json({batch:data});
+}));
+
+app.post("/api/organization/students/import-batches/:id/chunks",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const rowSchema=z.object({
+  studentNumber:z.string().trim().min(2).max(80),
+  fullName:z.string().trim().min(2).max(160),
+  email:z.string().trim().max(254).optional().default(""),
+  faculty:z.string().trim().min(2).max(160),
+  department:z.string().trim().min(2).max(160),
+  programme:z.string().trim().min(2).max(180),
+  qualification:z.string().trim().min(2).max(180),
+  classification:z.string().trim().max(100).optional().default(""),
+  awardDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional(),
+  academicSession:z.string().trim().max(80).optional().default("")
+ });
+ const body=z.object({chunkIndex:z.number().int().min(0).max(499),rows:z.array(rowSchema).min(1).max(100)}).parse(q.body);
+ const normalizedRows=body.rows.map(row=>({
+  studentNumber:row.studentNumber,fullName:row.fullName,email:row.email.toLowerCase(),
+  faculty:row.faculty,department:row.department,programme:row.programme,qualification:row.qualification,
+  classification:row.classification||"",awardDate:row.awardDate||null,academicSession:row.academicSession||""
+ }));
+ for(const row of normalizedRows){
+  if(row.email&&(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(row.email)||row.email.length>254))return s.status(400).json({error:"One or more student email addresses are invalid."});
+  if(row.awardDate){const d=new Date(row.awardDate+"T00:00:00.000Z");if(Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==row.awardDate)return s.status(400).json({error:"Award dates must be real calendar dates in YYYY-MM-DD format."});}
+ }
+ const {data:batch,error:batchError}=await q.supabase.from("StudentRosterImport").select("id,organizationId,uploadedBy,totalRows,rejectedRows,totalChunks,status").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
+ if(batchError)throw batchError;
+ if(!batch)return s.status(404).json({error:"Import batch not found."});
+ if(batch.uploadedBy!==q.user.id||batch.status!=="UPLOADING")return s.status(409).json({error:"This import batch is no longer accepting chunks."});
+ const expectedRows=Math.min(100,batch.totalRows-batch.rejectedRows-(body.chunkIndex*100));
+ if(body.chunkIndex>=batch.totalChunks||expectedRows!==normalizedRows.length)return s.status(400).json({error:"The chunk index or row count does not match the batch manifest."});
+ const contentHash=digest(JSON.stringify(normalizedRows));
+ const {error:insertError}=await q.supabase.from("StudentImportChunk").insert({
+  batchId:batch.id,organizationId:org.id,chunkIndex:body.chunkIndex,rows:normalizedRows,
+  contentHash,createdBy:q.user.id
+ });
+ if(insertError&&insertError.code==="23505"){
+  const {data:existing,error:existingError}=await q.supabase.from("StudentImportChunk").select("contentHash").eq("batchId",batch.id).eq("chunkIndex",body.chunkIndex).maybeSingle();
+  if(existingError)throw existingError;
+  if(existing?.contentHash!==contentHash)return s.status(409).json({error:"A different payload is already staged for this chunk. Start a new import batch."});
+  return s.json({staged:true,alreadyStaged:true,chunkIndex:body.chunkIndex});
+ }
+ if(insertError)throw insertError;
+ s.status(201).json({staged:true,chunkIndex:body.chunkIndex,rows:normalizedRows.length});
+}));
+
+app.post("/api/organization/students/import-batches/:id/complete",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {data:batch,error}=await q.supabase.from("StudentRosterImport").select("id,organizationId,uploadedBy,totalChunks,status").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
+ if(error)throw error;
+ if(!batch)return s.status(404).json({error:"Import batch not found."});
+ if(batch.uploadedBy!==q.user.id||batch.status!=="UPLOADING")return s.status(409).json({error:"This import batch cannot be submitted again."});
+ const {data:chunks,error:chunkError}=await q.supabase.from("StudentImportChunk").select("chunkIndex").eq("batchId",batch.id).eq("organizationId",org.id);
+ if(chunkError)throw chunkError;
+ const indexes=new Set((chunks||[]).map(x=>x.chunkIndex));
+ if(indexes.size!==batch.totalChunks||Array.from({length:batch.totalChunks},(_,i)=>i).some(i=>!indexes.has(i)))return s.status(409).json({error:"Some import chunks have not finished uploading. Retry the missing chunk before submitting the batch."});
+ const {data:queued,error:queueError}=await q.supabase.from("StudentRosterImport").update({status:"QUEUED",updatedAt:new Date().toISOString()}).eq("id",batch.id).eq("status","UPLOADING").select("id,status").maybeSingle();
+ if(queueError)throw queueError;
+ if(!queued)return s.status(409).json({error:"The batch was already submitted or changed state."});
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORT_QUEUED","StudentRosterImport",batch.id,{organizationId:org.id,totalChunks:batch.totalChunks});
+ s.json({batch:queued,workerEnabled:STUDENT_IMPORT_WORKER_ENABLED,message:STUDENT_IMPORT_WORKER_ENABLED?"The import is queued for background processing.":"The import is safely queued; background processing must be enabled by the deployment operator."});
+}));
+
 app.get("/api/institution/ict",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
  if(!org||org.type!=="INSTITUTION"||org.ownerId!==q.user.id)return s.status(403).json({error:"Only the institution owner can manage ICT assignments."});
@@ -1186,6 +1317,7 @@ app.use("/api",(q,s)=>s.status(404).json({error:"API route not found."}));
 app.use((e,q,s,_n)=>{if(e instanceof z.ZodError)return s.status(400).json({error:"Please check the form fields.",details:e.issues});console.error(e);s.status(500).json({error:e.message||"Unexpected server error."});});
 app.use(express.static(path.resolve(root,"../dist")));
 app.get("*",(_q,s)=>s.sendFile(path.resolve(root,"../dist/index.html")));
+let stopStudentImportWorker=null;
 async function start(){
   if(!configured) throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required.");
   const chain=await connectChain();
@@ -1193,6 +1325,20 @@ async function start(){
   console.log("Blockchain:",chain.enabled?"connected (optional Polygon anchor)":"disabled (optional future layer)");
   console.log("Certificate ledger: Supabase append-only SHA-256 hash chain.");
   console.log("Document security: private storage, file-signature validation and SHA-256 integrity checks; antivirus scanning is disabled.");
-  app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
+  if(STUDENT_IMPORT_WORKER_ENABLED){
+    const workerClient=createClient(SUPABASE_URL,SUPABASE_SERVER_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    stopStudentImportWorker=startStudentImportWorker({client:workerClient});
+    console.log("Student roster import worker: enabled (in-process, durable PostgreSQL queue).");
+  }else{
+    console.log("Student roster import worker: disabled; set ENABLE_STUDENT_IMPORT_WORKER=true and a server-only Supabase service key after the queue migration is deployed.");
+  }
+  const server=app.listen(PORT,"0.0.0.0",()=>console.log(`Verity listening on ${PORT}`));
+  const shutdown=async signal=>{
+    console.log(`Received ${signal}; stopping VERITY workers and HTTP server.`);
+    try{await stopStudentImportWorker?.();}catch(error){console.error("Student import worker shutdown failed:",error);}
+    server.close(()=>process.exit(0));
+  };
+  process.once("SIGTERM",()=>shutdown("SIGTERM"));
+  process.once("SIGINT",()=>shutdown("SIGINT"));
 }
 start().catch(e=>{console.error(e);process.exit(1);});
