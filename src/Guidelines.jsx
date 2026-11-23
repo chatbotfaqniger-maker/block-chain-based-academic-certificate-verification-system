@@ -70,6 +70,19 @@ const bulkStudentGuide = g("bulk-students","Bulk Student Import",FileSpreadsheet
   ["Student numbers are normalized and unique within an institution. Existing records are never overwritten; duplicate numbers are counted and skipped.","Keep the source CSV and exported student data private. Do not include passwords, national identity numbers or unrelated sensitive information.","A batch can remain QUEUED until the server-side worker is enabled. Do not repeatedly create new batches while an existing batch is processing."],
   ["If required headers are missing, download the template and correct the CSV header names.","If the worker is disabled, ask the deployment operator to configure the server-only service key and enable the worker.","If a batch is partial, inspect rejected/duplicate/failed counts and correct only the affected source rows before a new import."]);
 
+const bulkCertificateGuide = {
+ id:"bulk-certificates",title:"Bulk certificate issuance",icon:FileSpreadsheet,
+ summary:"Issue a reviewed cohort of academic certificates through VERITY's durable server-side queue.",
+ sections:[
+  {title:"Who can use this",body:"Only an approved institution owner can submit bulk certificate batches. The background worker must be enabled by the VERITY administrator."},
+  {title:"Prepare the student data",body:"Download the VERITY CSV template and complete the required columns: student number, full name, faculty, department, programme, qualification and award date. Award date is mandatory and must use YYYY-MM-DD. Excel workbooks should be exported as CSV UTF-8."},
+  {title:"Choose a document method",body:"CSV + ZIP matches one PDF per student number; CSV + multiple PDFs lets you select the files individually; Generate from template creates one VERITY PDF per student. Existing PDF filenames must match the student's normalized matriculation number, for example 2021-CS-001.pdf."},
+  {title:"Review before submission",body:"Resolve every invalid row, duplicate student number, missing PDF and duplicate filename. Each batch supports up to 500 students, a CSV up to 5 MB, a ZIP up to 250 MB and PDFs up to 10 MB each. The generated template requires the institution's authorized signature or seal before it is treated as an official original."},
+  {title:"Submit and monitor",body:"Confirm the institution's authorization. VERITY privately stages each PDF, checks its PDF signature and SHA-256 fingerprint, then submits the batch to the durable PostgreSQL queue. The existing Render web service processes it in the background; you may leave the page after the batch is successfully queued. Recent batches show queued, processing, issued, failed and document-failure counts."},
+  {title:"Recover safely",body:"If file staging is interrupted, resume the same pending batch rather than starting another. Worker retries are idempotent. If a lease expires, VERITY checks the certificate ledger for an already-created certificate before any recovery; unresolved items remain in Needs Review and are never blindly reissued."},
+  {title:"Security and limitations",body:"Certificate records are written to the Supabase certificate ledger with the existing integrity and audit workflow. Bulk issuance does not send per-certificate blockchain transactions. Documents remain in private storage and are SHA-256 checked; antivirus scanning is not performed."}
+ ]
+};
 const institutionGuides = [
   workspaceOverview,
   ictCentreGuide,
