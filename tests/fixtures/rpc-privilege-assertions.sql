@@ -30,6 +30,4 @@ DO $$
 BEGIN
   IF has_function_privilege('anon','public.future_postgres_rpc()','EXECUTE') THEN RAISE EXCEPTION 'future postgres-owned RPC is public by default'; END IF;
   IF has_function_privilege('authenticated','public.future_postgres_rpc()','EXECUTE') THEN RAISE EXCEPTION 'future postgres-owned RPC is authenticated by default'; END IF;
-  IF has_function_privilege('anon','public.future_supabase_admin_rpc()','EXECUTE') THEN RAISE EXCEPTION 'future supabase_admin-owned RPC is public by default'; END IF;
-  IF has_function_privilege('authenticated','public.future_supabase_admin_rpc()','EXECUTE') THEN RAISE EXCEPTION 'future supabase_admin-owned RPC is authenticated by default'; END IF;
 END $$;

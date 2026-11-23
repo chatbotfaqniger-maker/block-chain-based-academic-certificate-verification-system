@@ -2,17 +2,15 @@
 -- Public RPCs are explicitly allow-listed; identity, roster and recovery operations
 -- are authenticated-only. Trigger functions are not directly callable by API roles.
 
--- Secure future functions created by either migration owner by default. Any future
--- RPC that must be callable through PostgREST must receive an explicit GRANT.
+-- Secure future application functions created by the postgres migration owner.
+-- Supabase's separate supabase_admin role is platform-managed and is not assumed
+-- to be alterable by the project migration role. Any future application RPC
+-- created by postgres must receive an explicit GRANT.
 -- PostgreSQL's built-in PUBLIC function EXECUTE default is global, so revoke it
 -- globally as well; a per-schema REVOKE cannot override a global default grant.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin
-  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated;
 
 -- Authenticated-only identity, roster, recovery and organization operations.
