@@ -29,10 +29,10 @@ The capability expansion is being introduced in stages. Until all backend, roste
    - CSV + multiple PDFs: select the individual PDF files together.
    - Generate from template: let VERITY create an individual PDF from each row. The institution must add its authorized signature/seal before treating the generated template as an official original.
 4. For existing PDFs, name each file using the student's matriculation number, such as 2021-CS-001.pdf. VERITY matches by normalized student number, not by student name.
-5. Review every row and resolve invalid data, duplicate student numbers, missing files and ambiguous PDF matches. A batch supports up to 500 students; CSV maximum 5 MB; ZIP maximum 250 MB; each PDF maximum 10 MB.
-6. Confirm that you authorize issuance for the institution. VERITY privately stages the PDFs, validates their PDF signature and SHA-256 fingerprints, and submits the batch to the durable queue.
-7. Once the batch is successfully queued, the server-side worker continues processing even if you close the page. Reopen Bulk certificate issuance to review batch history and issued, failed, queued, processing and document-failure counts.
-8. If staging is interrupted before submission, resume the same pending batch. Do not start a second batch for the same rows. If an item requires review after a worker interruption, VERITY checks the certificate ledger before recovery and will not blindly reissue an uncertain certificate.
+5. Review every row and resolve invalid data, duplicate student numbers, missing files and ambiguous PDF matches. One issuance campaign supports up to 50,000 students. VERITY automatically divides it into durable processing batches of up to 500 items; 500 is an internal processing chunk, not the institution's campaign limit. CSV maximum 5 MB; ZIP maximum 250 MB; each PDF maximum 10 MB; selected PDFs together may total up to 250 MB.
+6. Confirm that you authorize issuance for the institution. VERITY privately stages the PDFs, validates their PDF signature and SHA-256 fingerprints, and submits the campaign. Its processing batches are allocated safely and queued individually.
+7. Once the campaign is submitted, the server-side worker continues processing even if you close the page. Reopen Bulk certificate issuance to review campaign totals and individual processing-batch history, including issued, failed, queued, processing and document-failure counts.
+8. If staging is interrupted before submission, resume the same pending campaign while the current page session and selected source files remain available. Do not start a duplicate campaign for the same rows. If an item requires review after a worker interruption, VERITY checks the certificate ledger before recovery and will not blindly reissue an uncertain certificate.
 
 ### Certificate issuance security
 - Each certificate is written to the existing Supabase certificate ledger and follows the standard integrity and audit workflow.
