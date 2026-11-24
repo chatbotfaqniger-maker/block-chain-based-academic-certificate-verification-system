@@ -941,6 +941,89 @@ const documentMime = new Map([
   ["image/jpeg",{ext:"jpg",magic:b=>b.length>=3&&b[0]===0xff&&b[1]===0xd8&&b[2]===0xff}],
   ["image/png",{ext:"png",magic:b=>b.length>=8&&b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))}]
 ]);
+
+async function certificateDesignInstitution(q){
+ const {data:org,error}=await q.supabase.from("Organization").select("id,name,type,status,ownerId").eq("ownerId",q.user.id).maybeSingle();
+ if(error)throw error;
+ if(!org||org.type!=="INSTITUTION")return {error:"Only an institution owner can manage certificate designs.",status:403};
+ if(org.status!=="APPROVED")return {error:"Your institution must be approved before managing certificate designs.",status:403};
+ return {organization:org};
+}
+const designName=value=>String(value||"").normalize("NFKC").trim().slice(0,120);
+app.get("/api/organization/certificate-design/templates",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const db=makeServerClient();
+ const {data,error}=await db.from("InstitutionCertificateTemplate").select("id,name,sourceType,templateKey,assetMimeType,pageSize,fieldLayout,version,isDefault,status,createdAt,updatedAt").eq("organizationId",access.organization.id).order("updatedAt",{ascending:false});
+ if(error)throw error;s.json({templates:data||[]});
+}));
+app.post("/api/organization/certificate-design/templates",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const b=z.object({name:z.string().trim().min(2).max(120),sourceType:z.literal("VERITY_TEMPLATE"),templateKey:z.enum(["verity-heritage","verity-modern","verity-signature"]),pageSize:z.enum(["A4_LANDSCAPE","A4_PORTRAIT","LETTER_LANDSCAPE","LETTER_PORTRAIT"]).default("A4_LANDSCAPE"),fieldLayout:z.record(z.any()).default({})}).parse(q.body);
+ const db=makeServerClient(),id=crypto.randomUUID(),now=new Date().toISOString();
+ const {data,error}=await db.from("InstitutionCertificateTemplate").insert({id,organizationId:access.organization.id,name:b.name,sourceType:b.sourceType,templateKey:b.templateKey,pageSize:b.pageSize,fieldLayout:b.fieldLayout,version:1,isDefault:false,status:"DRAFT",createdBy:q.user.id,updatedBy:q.user.id,createdAt:now,updatedAt:now}).select("id,name,sourceType,templateKey,pageSize,fieldLayout,version,isDefault,status,createdAt").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_CREATED","InstitutionCertificateTemplate",id,{organizationId:access.organization.id,sourceType:"VERITY_TEMPLATE",templateKey:b.templateKey});
+ s.status(201).json({template:data});
+}));
+app.post("/api/organization/certificate-design/templates/artwork",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase(),spec=documentMime.get(mime),bytes=q.body;
+ if(!spec||!Buffer.isBuffer(bytes)||!bytes.length)return s.status(400).json({error:"Upload an approved PDF, JPEG or PNG artwork file."});
+ if(bytes.length>10*1024*1024)return s.status(413).json({error:"The maximum file size is 10 MB."});
+ if(!spec.magic(bytes))return s.status(415).json({error:"The file content does not match its declared type."});
+ const id=crypto.randomUUID(),name=designName(decodeURIComponent(String(q.headers["x-template-name"]||"Institution certificate design")));
+ if(name.length<2)return s.status(400).json({error:"Enter a design name."});
+ const safeName=String(decodeURIComponent(String(q.headers["x-file-name"]||("artwork."+spec.ext)))).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("artwork."+spec.ext);
+ const storagePath="templates/"+access.organization.id+"/"+id+"/"+crypto.randomUUID()+"."+spec.ext,sha256=digest(bytes),db=makeServerClient();
+ const {error:uploadError}=await db.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});if(uploadError)throw uploadError;
+ const now=new Date().toISOString();
+ const {data,error}=await db.from("InstitutionCertificateTemplate").insert({id,organizationId:access.organization.id,name,sourceType:"INSTITUTION_ARTWORK",assetStoragePath:storagePath,assetMimeType:mime,assetSha256:sha256,pageSize:"A4_LANDSCAPE",fieldLayout:{fields:["studentName","studentNumber","qualification","programme","faculty","department","classification","awardDate","certificateId","verificationQr"],originalFileName:safeName},version:1,isDefault:false,status:"DRAFT",createdBy:q.user.id,updatedBy:q.user.id,createdAt:now,updatedAt:now}).select("id,name,sourceType,assetMimeType,assetSha256,pageSize,fieldLayout,version,isDefault,status,createdAt").single();
+ if(error){await db.storage.from("verity-certificates").remove([storagePath]);throw error;}
+ await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_ARTWORK_UPLOADED","InstitutionCertificateTemplate",id,{organizationId:access.organization.id,sha256,sizeBytes:bytes.length,mimeType:mime});
+ s.status(201).json({template:data,message:"Artwork stored privately as a draft. Configure and preview field positions before production rendering."});
+}));
+app.post("/api/organization/certificate-design/templates/:id/activate",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const db=makeServerClient(),{data:template,error:te}=await db.from("InstitutionCertificateTemplate").select("*").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(te)throw te;if(!template)return s.status(404).json({error:"Certificate design not found."});
+ if(template.sourceType==="INSTITUTION_ARTWORK"&&!template.assetStoragePath)return s.status(400).json({error:"The original artwork file is missing."});
+ const now=new Date().toISOString();
+ const {error:clearError}=await db.from("InstitutionCertificateTemplate").update({isDefault:false,updatedAt:now,updatedBy:q.user.id}).eq("organizationId",access.organization.id).eq("isDefault",true);if(clearError)throw clearError;
+ const {data,error}=await db.from("InstitutionCertificateTemplate").update({isDefault:true,status:"ACTIVE",updatedAt:now,updatedBy:q.user.id}).eq("id",template.id).eq("organizationId",access.organization.id).select("id,name,status,isDefault,version").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_ACTIVATED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,version:template.version});
+ s.json({template:data,message:"Default design activated for future certificate issuance. Existing issued documents remain unchanged."});
+}));
+app.get("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const db=makeServerClient(),{data,error}=await db.from("CertificateDigitizationCase").select("id,studentNumber,claimedStudentName,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewNote,createdAt,reviewedAt,issuedAt").eq("organizationId",access.organization.id).order("createdAt",{ascending:false}).limit(100);
+ if(error)throw error;s.json({cases:data||[]});
+}));
+app.post("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase(),spec=documentMime.get(mime),bytes=q.body;
+ if(!spec||!Buffer.isBuffer(bytes)||!bytes.length)return s.status(400).json({error:"Upload an existing certificate as PDF, JPEG or PNG."});
+ if(bytes.length>10*1024*1024)return s.status(413).json({error:"The maximum file size is 10 MB."});
+ if(!spec.magic(bytes))return s.status(415).json({error:"The file content does not match its declared type."});
+ let credentialData;try{credentialData=JSON.parse(decodeURIComponent(String(q.headers["x-credential-data"]||"%7B%7D")));}catch{return s.status(400).json({error:"Credential details are not valid JSON."});}
+ const studentNumber=decodeURIComponent(String(q.headers["x-student-number"]||"")).trim(),claimedStudentName=decodeURIComponent(String(q.headers["x-student-name"]||"")).trim();
+ if(studentNumber.length<2||claimedStudentName.length<2)return s.status(400).json({error:"Provide the graduate's full name and matriculation number."});
+ const id=crypto.randomUUID(),safeName=String(decodeURIComponent(String(q.headers["x-file-name"]||("existing-certificate."+spec.ext)))).normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||("existing-certificate."+spec.ext);
+ const storagePath="digitization/"+access.organization.id+"/"+id+"/source."+spec.ext,sha256=digest(bytes),db=makeServerClient();
+ const {error:uploadError}=await db.storage.from("verity-certificates").upload(storagePath,bytes,{contentType:mime,upsert:false,cacheControl:"3600"});if(uploadError)throw uploadError;
+ const {data,error}=await db.from("CertificateDigitizationCase").insert({id,organizationId:access.organization.id,submittedBy:q.user.id,studentNumber,claimedStudentName,credentialData,sourceStoragePath:storagePath,sourceFileName:safeName,sourceMimeType:mime,sourceSizeBytes:bytes.length,sourceSha256:sha256,status:"PENDING_REVIEW",createdAt:new Date().toISOString()}).select("id,status,createdAt").single();
+ if(error){await db.storage.from("verity-certificates").remove([storagePath]);throw error;}
+ await audit(q.supabase,q.user.id,"CERTIFICATE_DIGITIZATION_SUBMITTED","CertificateDigitizationCase",id,{organizationId:access.organization.id,sha256,sizeBytes:bytes.length});
+ s.status(201).json({case:data,message:"Submitted for institutional review. This upload is not yet a verified credential."});
+}));
+app.patch("/api/organization/certificate-design/digitization/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const b=z.object({status:z.enum(["APPROVED","REJECTED"]),reviewNote:z.string().max(1000).optional()}).parse(q.body),db=makeServerClient();
+ const {data:current,error:ce}=await db.from("CertificateDigitizationCase").select("id,status").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(ce)throw ce;if(!current)return s.status(404).json({error:"Digitisation case not found."});
+ if(current.status!=="PENDING_REVIEW")return s.status(409).json({error:"Only pending cases can be reviewed."});
+ const now=new Date().toISOString(),{data,error}=await db.from("CertificateDigitizationCase").update({status:b.status,reviewedBy:q.user.id,reviewedAt:now,reviewNote:b.reviewNote||null}).eq("id",current.id).eq("organizationId",access.organization.id).eq("status","PENDING_REVIEW").select("id,status,reviewedAt,reviewNote").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_DIGITIZATION_"+b.status,"CertificateDigitizationCase",current.id,{organizationId:access.organization.id});
+ s.json({case:data,message:b.status==="APPROVED"?"Validated. Issue a matching VERITY credential through the normal issuance workflow.":"Digitisation case rejected."});
+}));
 app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
   const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
   const spec=documentMime.get(mime), bytes=q.body;
