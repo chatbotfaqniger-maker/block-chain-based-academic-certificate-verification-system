@@ -117,17 +117,14 @@ BEGIN
   END IF;
 
   IF private.verity_organization_has_capability('org-inst-approved','ISSUE_CREDENTIALS') IS NOT TRUE
-     OR private.verity_organization_has_capability('org-inst-suspended','ISSUE_CREDENTIALS') IS NOT TRUE
-     OR private.verity_organization_has_capability('org-org-approved','VERIFY_CREDENTIALS') IS NOT TRUE
-     OR private.verity_organization_has_capability('org-org-suspended','VERIFY_CREDENTIALS') IS NOT TRUE
-     OR private.verity_organization_has_capability('org-inst-pending','ISSUE_CREDENTIALS') IS NOT TRUE THEN
-    RAISE EXCEPTION 'Baseline capability backfill did not preserve its expected states';
+     OR private.verity_organization_has_capability('org-org-approved','VERIFY_CREDENTIALS') IS NOT TRUE THEN
+    RAISE EXCEPTION 'Approved legacy organizations lost their baseline capabilities';
   END IF;
 
   IF private.verity_organization_has_capability('org-inst-suspended','ISSUE_CREDENTIALS') IS TRUE
      OR private.verity_organization_has_capability('org-org-suspended','VERIFY_CREDENTIALS') IS TRUE
      OR private.verity_organization_has_capability('org-inst-pending','ISSUE_CREDENTIALS') IS TRUE THEN
-    RAISE EXCEPTION 'A non-approved organization can use a capability';
+    RAISE EXCEPTION 'A suspended or pending organization can use a capability';
   END IF;
 
   RAISE NOTICE 'VERITY organization capability foundation assertions passed';
