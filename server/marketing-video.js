@@ -74,7 +74,7 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
       add(files[2], 21, "0xb5cbd0", 72, 330);
       add(files[3], 14, "0x82aeb6", 72, 414);
       add(files[4], 15, "0x9dded5", 724, 174);
-      for (let j = 0; j < 5; j++) add(files[5 + j], 15, "white", 724, 214 + j * 70);
+      for (let j = 0; j < scenes[i][5].length; j++) add(files[5 + j], 15, "white", 724, 214 + j * 70);
       filters.push("drawtext=fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf:text='0" + (i + 1) + " / 09':fontcolor=0x75939b:fontsize=14:x=1140:y=680:enable='between(t," + start + "," + end + ")'");
     }
 
