@@ -75,7 +75,7 @@ It covers graduate onboarding and credential access, institution approval and is
 
 ## Certificate design system
 
-VERITY is designed to support institution-approved original artwork, built-in professional templates and controlled digitisation of previously issued certificates. The three paths share the existing certificate registry, unique verification references, SHA-256 integrity checks and append-only ledger. See [Certificate Design System Decision](docs/VERITY-CERTIFICATE-DESIGN-SYSTEM.md) and the [Complete User and Operations Guide](docs/VERITY-COMPLETE-USER-AND-OPERATIONS-GUIDE.md). The database migration is a persistence foundation only; do not enable workflows until authenticated server endpoints, UI rendering and end-to-end tests are complete.
+VERITY is designed to support institution-approved original artwork, built-in professional templates and controlled digitisation of previously issued certificates. The three paths share the existing certificate registry, unique verification references, SHA-256 integrity checks and append-only ledger. See [Certificate Design System Decision](docs/VERITY-CERTIFICATE-DESIGN-SYSTEM.md) and the [Complete User and Operations Guide](docs/VERITY-COMPLETE-USER-AND-OPERATIONS-GUIDE.md). The design studio and authenticated draft/digitisation APIs are implemented on the feature branch. PDF field rendering, template activation and final issuance integration remain pending; saved designs remain drafts until those pieces are completed.
 
 ## Supabase-first, blockchain-ready architecture
 
