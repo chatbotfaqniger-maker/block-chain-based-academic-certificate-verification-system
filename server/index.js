@@ -59,7 +59,7 @@ async function ensureOrganization(client, authUser, profile) {
  if(profile.role!=="EMPLOYER") return null;
  const {data:found,error}=await client.from("Organization").select("*").eq("ownerId",profile.id).maybeSingle();
  if(error) throw error;
- if(found) { await ensureDefaultOrganizationCapability(client,found,profile.id); return found; }
+ if(found) return found;
  const m=authUser.user_metadata||{}, name=String(m.organizationName||m.institution||profile.institution||"").trim();
  if(name.length<2) return null;
  const registrationNumber=String(m.registrationNumber||"").trim()||null;
@@ -70,7 +70,6 @@ async function ensureOrganization(client, authUser, profile) {
    if(claimed && claimed.ownerId===profile.id) {
      const {data,error:reloadError}=await client.from("Organization").select("*").eq("id",claimed.id).single();
      if(reloadError) throw reloadError;
-     await ensureDefaultOrganizationCapability(client,data,profile.id);
      return data;
    }
  }
@@ -83,7 +82,6 @@ async function ensureOrganization(client, authUser, profile) {
  const {data,error:e}=await client.from("Organization").insert(org).select().single();
  if(e && e.code==="23505" && /organization_registration_number_unique/.test(e.message||"")) throw new Error("This registration number is already registered in Verity. Sign in with the original organization account or contact the System Administrator. No duplicate organization was created.");
  if(e) throw e;
- await ensureDefaultOrganizationCapability(client,data,profile.id);
  return data;
 }
 async function ensureStudentMembership(client, authUser, profile) {
@@ -179,22 +177,6 @@ async function organizationCapabilities(client,organizationId) {
    .order("createdAt",{ascending:true});
  if(error)throw error;
  return data||[];
-}
-async function ensureDefaultOrganizationCapability(client,organization,userId) {
- const capability=organization?.type==="INSTITUTION"?"ISSUE_CREDENTIALS":organization?.type==="EMPLOYER"?"VERIFY_CREDENTIALS":null;
- if(!capability||!organization?.id||!userId)return;
- const {data:existing,error:lookupError}=await client.from("OrganizationCapability")
-   .select("id").eq("organizationId",organization.id).eq("capability",capability).maybeSingle();
- if(lookupError)throw lookupError;
- if(existing)return;
- const status=organization.status==="PENDING"?"PENDING":"APPROVED";
- const {error}=await client.from("OrganizationCapability").insert({
-   id:crypto.randomUUID(),organizationId:organization.id,capability,status,requestedBy:userId,
-   requestNote:"Default capability for the existing VERITY organization category.",
-   decisionNote:status==="APPROVED"?"Preserved from the existing approved organization category.":null,
-   reviewedBy:null,reviewedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
- });
- if(error&&error.code!=="23505")throw error;
 }
 async function activeStaffFor(client,userId) {
  const {data:staff,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE");
@@ -328,7 +310,7 @@ app.get("/api/admin/organization-capabilities",auth,roles("ADMIN"),run(async(q,s
  const ids=[...new Set((rows||[]).map(x=>x.organizationId))];
  const {data:organizations,error:orgError}=ids.length?await q.supabase.from("Organization").select("id,name,type,status,ownerId").in("id",ids):{data:[],error:null};
  if(orgError)throw orgError;
- s.json({requests:(rows||[]).map(row=>({...row,organization:(organizations||[]).find(org=>org.id===row.organizationId)||null}))});
+ s.json({requests:(rows||[]).map(row=>({...row,isLegacyBaseline:row.requestNote==="Existing organization capability preserved during additive VERITY expansion.",organization:(organizations||[]).find(org=>org.id===row.organizationId)||null}))});
 }));
 app.patch("/api/admin/organization-capabilities/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  const b=z.object({status:z.enum(["APPROVED","REJECTED","SUSPENDED"]),decisionNote:z.string().trim().max(1000).optional()}).parse(q.body);
@@ -772,10 +754,11 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  const patch={status:b.status,updatedAt:new Date().toISOString(),verificationNotes:b.verificationNotes||null,verifiedAt:b.status==="APPROVED"?new Date().toISOString():null,verifiedBy:b.status==="APPROVED"?q.user.id:null};
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",q.params.id).select().single();if(error)throw error;
  if(b.status==="APPROVED"){
+   const legacyBaseline="Existing organization capability preserved during additive VERITY expansion.";
    const defaultCapability=org.type==="INSTITUTION"?"ISSUE_CREDENTIALS":org.type==="EMPLOYER"?"VERIFY_CREDENTIALS":null;
    if(defaultCapability){
-     const {error:capabilityError}=await q.supabase.from("OrganizationCapability").update({status:"APPROVED",reviewedBy:q.user.id,reviewedAt:new Date().toISOString(),decisionNote:"Baseline capability preserved from the approved VERITY organization category.",updatedAt:new Date().toISOString()})
-       .eq("organizationId",org.id).eq("capability",defaultCapability).eq("status","PENDING");
+     const {error:capabilityError}=await q.supabase.from("OrganizationCapability").update({status:"APPROVED",reviewedBy:q.user.id,reviewedAt:new Date().toISOString(),decisionNote:"Legacy baseline capability preserved after the existing organization identity was approved.",updatedAt:new Date().toISOString()})
+       .eq("organizationId",org.id).eq("capability",defaultCapability).eq("status","PENDING").eq("requestNote",legacyBaseline);
      if(capabilityError)throw capabilityError;
    }
  }
