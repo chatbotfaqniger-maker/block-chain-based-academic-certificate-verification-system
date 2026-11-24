@@ -174,3 +174,39 @@ The production database's applied migration history must match the repository be
 Approved institutions can import up to 50,000 student rows per batch from the VERITY CSV template. The application validates the file in the browser, stages it in 100-row chunks, and processes those chunks through a durable PostgreSQL queue. Imports extend the existing `StudentRoster` identity registry; they do not create graduate login accounts or issue certificates. New rows enter the existing `ELIGIBLE` state and continue through the established single-use activation-token workflow.
 
 The import worker runs inside the existing Node/Express web service, so it does not require a separate paid Render worker service. To process queued batches, configure the server-only `SUPABASE_SERVICE_ROLE_KEY` (or supported Supabase secret key) and set `ENABLE_STUDENT_IMPORT_WORKER=true` in Render. Keep the worker disabled until the matching database migration is applied. If the worker is disabled, batches remain safely queued and the interface displays that status. The worker uses a transaction-scoped `FOR UPDATE SKIP LOCKED` queue, retry-safe chunk staging, and the existing institution/matriculation uniqueness constraint; it never overwrites existing student records. Institution owners and active ICT staff with `roster:manage` can import and view the batch history.
+
+## Durable bulk certificate issuance
+
+Approved institution owners can issue up to 500 certificates in one batch using three methods: CSV + ZIP of existing PDFs, CSV + multiple selected PDFs, or VERITY-generated certificate PDFs. Student data is uploaded as CSV UTF-8 (Excel workbooks can be exported to CSV); award date is mandatory. Existing PDF filenames must match the student's normalized student number. Each PDF is limited to 10 MB and each ZIP to 250 MB.
+
+The application stages PDFs in the private verity-certificates bucket, validates the PDF signature and SHA-256 fingerprint, and records immutable batch/item payloads in PostgreSQL. A durable worker inside the existing Node/Express Render service issues each certificate into the Supabase ledger, attaches its document and records audit activity. The worker uses per-item idempotency, bounded retries and expired-lease reconciliation; it checks the certificate ledger before recovering an uncertain item, so it does not blindly issue duplicates. Bulk issuance deliberately does not submit per-certificate blockchain transactions.
+
+Configure the server-only SUPABASE_SERVICE_ROLE_KEY and set ENABLE_BULK_CERTIFICATE_WORKER=true only after the matching queue migration has been reviewed, applied and the application deployed. Keep the flag false until then. The bulk issuance interface displays whether the worker is ready. Document uploads are private and SHA-256 checked; VERITY does not perform antivirus scanning.
+
+See docs/USER_GUIDE.md for the institution workflow and recovery instructions.
+
+## Controlled production release decisions (24 November 2026)
+
+The approved release sequence for the durable bulk certificate issuance and certificate-ledger hardening changes is **PR #8 first, then PR #9**. This sequence preserves the existing Supabase-first architecture and the currently deployed application service; it is not authorization to replace the database, authentication model, deployment platform, or blockchain integration.
+
+### Locked architecture and release rules
+
+- Supabase remains the active system of record for authentication, organization and student identity, certificate records, private documents, verification and the append-only certificate ledger.
+- The existing Render Docker web service remains the application deployment target. No additional worker service or paid infrastructure is required by PR #8.
+- Blockchain remains optional and disabled for normal operation. Existing certificates remain verifiable without a wallet, RPC endpoint, gas, contract or chain transaction.
+- Production changes must be additive and applied one reviewed migration at a time. Do not reset migration history, replay missing historical migrations, or run automated supabase db push against production while reconciliation is incomplete.
+- The production audit currently reports 57 applied migration versions, 24 SQL migration files in the repository, and 43 applied versions without matching repository files. Preserve this history; the discrepancy is not permission to reconstruct or replay migrations blindly.
+- PR #8 must be merged and its additive queue migration applied before PR #9 is retargeted to main. PR #9 must then be reviewed against the updated main, merged, and its security migration applied as a separate operation.
+- The bulk certificate worker remains disabled until the PR #8 migration is confirmed applied, the matching application deployment is live, and a server-only Supabase service-role/secret key is confirmed configured. Never expose this key to browser code, logs, README content or committed source.
+- The Render integration exposes service and deployment metadata but does not expose environment-variable names or values for inspection. Therefore, do not claim that the required server-only key is configured based solely on the Render service listing. Verify its presence in the Render Dashboard without copying or revealing its value.
+- After each migration and deployment, verify the existing signup, institution approval, student activation, certificate issuance/revocation, public verification, organization verification, ledger integrity, and document-access workflows before proceeding to the next stage.
+- If any migration, deployment, or regression check fails, stop the sequence, keep optional workers disabled, preserve the live service, and resolve the issue before continuing. Do not automatically roll back or rewrite production data.
+
+### Release record
+
+- **PR #8 — Durable bulk certificate issuance:** staged first; queue schema and worker are separate from the existing single-certificate issuance path. CSV/ZIP and multiple-PDF options do not change the underlying institution ownership, certificate ledger, or blockchain policy.
+- **PR #9 — Certificate ledger integrity hardening:** staged second; protects certificate immutability, ledger append-only behavior, RPC privilege boundaries and verification rate limits. The production migration must be applied only after PR #8 has completed its stage.
+- **Environment verification:** pending manual confirmation in Render Dashboard because the connected Render service metadata API does not return environment-variable configuration.
+- **Worker activation:** explicitly not authorized by this release record; keep disabled until its prerequisites and operational checks pass.
+
+This section is the locked implementation and release decision record. Any future change to these decisions must be documented here before implementation.
