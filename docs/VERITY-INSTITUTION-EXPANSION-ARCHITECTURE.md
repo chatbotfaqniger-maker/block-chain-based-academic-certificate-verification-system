@@ -186,3 +186,17 @@ This is intentionally a compatibility-first foundation, not the complete user-fa
 ## 10. Tooling and verification gate
 
 The current connected environment provides GitHub file operations and production Supabase SQL access, but no local repository checkout or Supabase CLI executable. The Supabase workflow requires creating migration files with the CLI, validating locally, running advisors, and testing before migration release. Therefore no migration file has been fabricated, no production DDL has been executed, and no claim of a passing test run is made here. The feature branch should remain isolated until a proper local/CI migration workflow is available.
+
+
+## 11. Production contract re-check (read-only, 2026-11-24)
+
+A follow-up read-only inspection of the live Supabase schema confirmed the compatibility boundary:
+
+- `Organization` currently has its authorization `type`, ownership, approval, registration, directory and location fields; it has no persisted issuer-category or identifier-label configuration yet.
+- `StudentRoster` currently requires `studentNumber`, `normalizedStudentNumber`, `fullName`, `organizationId` and `createdBy`. Its optional metadata includes institutional email, faculty, department, programme, academic session, qualification, classification and award date.
+- `Membership` stores `organizationId`, `userId`, optional `studentNumber` and status.
+- `StudentActivationToken` is organization- and roster-scoped and stores a token hash, last four characters, issuer, expiry, used and revoked timestamps.
+- `StudentRegistrationRecovery` retains the organization/roster scope and the second-review fields.
+- Existing public RPC signatures include `verity_student_registration_precheck(p_organization_id text, p_student_number text) returns boolean` and `request_verity_membership(p_registration_code text, p_student_number text) returns jsonb`.
+
+This confirms that configurable labels cannot be treated as a UI-only change: the registration precheck, membership request and activation/claim path must be evolved together while retaining their legacy signatures or providing explicit compatibility wrappers. No DDL or production data was changed during this inspection.
