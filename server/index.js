@@ -181,7 +181,7 @@ async function ensureDefaultOrganizationCapability(client,organization,userId) {
    .select("id").eq("organizationId",organization.id).eq("capability",capability).maybeSingle();
  if(lookupError)throw lookupError;
  if(existing)return;
- const status=organization.status==="APPROVED"?"APPROVED":organization.status==="SUSPENDED"?"SUSPENDED":"PENDING";
+ const status=organization.status==="PENDING"?"PENDING":"APPROVED";
  const {error}=await client.from("OrganizationCapability").insert({
    id:crypto.randomUUID(),organizationId:organization.id,capability,status,requestedBy:userId,
    requestNote:"Default capability for the existing VERITY organization category.",
