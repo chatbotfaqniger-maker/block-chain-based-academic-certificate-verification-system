@@ -62,8 +62,7 @@ BEGIN
       WHERE c."organizationId"=o.id
         AND c.capability='ISSUE_CREDENTIALS'
         AND c.status=CASE
-          WHEN o.status='APPROVED' THEN 'APPROVED'
-          WHEN o.status='SUSPENDED' THEN 'SUSPENDED'
+          WHEN o.status IN ('APPROVED','SUSPENDED') THEN 'APPROVED'
           ELSE 'PENDING'
         END
     );
@@ -93,7 +92,7 @@ BEGIN
   FROM public."OrganizationCapability" c
   JOIN public."Organization" o ON o.id=c."organizationId"
   WHERE (o.type='INSTITUTION' AND c.capability='ISSUE_CREDENTIALS'
-          AND c.status='APPROVED' AND o.status<>'APPROVED')
+          AND c.status='APPROVED' AND o.status='PENDING')
      OR (o.type='EMPLOYER' AND c.capability='VERIFY_CREDENTIALS'
           AND c.status='APPROVED' AND o.status<>'APPROVED');
   IF v_invalid>0 THEN
