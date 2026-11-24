@@ -477,9 +477,10 @@ begin
        or new."leaseToken" is not null or new."leasedAt" is not null then
       raise exception 'New issuance items must be staged in an uploading batch';
     end if;
-    if new."documentName" is null or
-       (v_batch_method='CSV_GENERATED' and (new."documentStoragePath" is not null or new."documentSha256" is not null)) or
-       (v_batch_method<>'CSV_GENERATED' and (new."documentStoragePath" is null or new."documentStoragePath" !~ '^bulk-staging/' or new."documentSha256" is null)) then
+    if new."documentName" is null
+       or ((new."documentStoragePath" is null)<>(new."documentSha256" is null))
+       or (new."documentStoragePath" is not null and new."documentStoragePath" !~ '^bulk-staging/')
+       or (new."documentStoragePath" is null and v_batch_method<>'CSV_GENERATED') then
       raise exception 'A validated staged PDF or a generated-PDF batch item is required';
     end if;
   else
