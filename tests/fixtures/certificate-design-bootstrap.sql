@@ -14,6 +14,7 @@ CREATE TABLE public."User"(id text primary key);
 CREATE TABLE public."Organization"(
   id text primary key,
   "ownerId" text not null references public."User"(id),
+  name text not null default 'Institution A',
   type text not null,
   status text not null
 );
