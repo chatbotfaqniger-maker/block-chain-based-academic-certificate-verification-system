@@ -119,7 +119,7 @@ export async function renderCertificatePreview({ template, organizationName, dat
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
     drawBuiltIn(page, font, bold, template.templateKey, organizationName, data, dimensions[0], dimensions[1]);
   }
-  const [width, height] = page.getSize();
+  const { width, height } = page.getSize();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const layout = validateFieldLayout(template.fieldLayout || {});
