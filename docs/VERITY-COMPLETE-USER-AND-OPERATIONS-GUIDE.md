@@ -747,10 +747,13 @@ VERITY supports three document paths for approved academic institutions. These p
 - A template update applies to future certificates only. Previously issued files are not silently regenerated.
 
 ### C. Existing certificate digitisation
-- Submit an already-issued certificate PDF or image together with the claimed graduate and award details.
-- VERITY stores the source scan privately and calculates its SHA-256 fingerprint.
-- The case remains pending until an authorized officer of the issuing institution checks it against official student and award records.
-- A rejected or pending scan is not a verified credential. An approved case must still be converted into a normal VERITY certificate record through the authorized issuance workflow; the source scan remains evidence of the historical document.
+- Submit an already-issued certificate PDF or image together with the graduate's full name, matriculation number, faculty, department, programme, qualification and award date.
+- VERITY stores the source scan privately and calculates its SHA-256 fingerprint. The original file is retained; conversion never overwrites or deletes it.
+- The case remains pending until an authorized officer of the issuing institution checks it against official student and award records. The officer records an explicit approval or rejection.
+- Only an APPROVED case can be converted. The institution then selects **Convert to VERITY credential** in the review queue. VERITY rechecks the source file's actual type, size and SHA-256 fingerprint before conversion.
+- Conversion creates a normal ACTIVE certificate record with its own certificate ID, verification key and canonical SHA-256 digest. The existing database certificate-insert trigger appends the ledger event in the same database transaction that marks the historical case ISSUED.
+- The original historical scan is attached to the new credential as private evidence with its original filename, MIME type and SHA-256 fingerprint. It is not represented as a newly rendered VERITY certificate.
+- Conversion is idempotent: retrying an already-issued case returns its existing credential and does not create another certificate or ledger event. A pending or rejected scan cannot be converted.
 - VERITY must never infer authenticity from a QR code printed on an uploaded scan, a file name, or a visual resemblance to an institutional template.
 
 ### Scale and bulk operations
@@ -759,7 +762,7 @@ The institution's design is stored once and reused. Each graduate has an individ
 ### Verification rule
 Scanning a QR code resolves the credential reference. VERITY then checks the issuer, registry record, credential digest/ledger integrity and revocation status. The QR code is only a lookup route; it is not the authenticity proof. Transcript/result verification is a separate credential type and must not be implied by certificate verification.
 
-**Implementation status:** the database migration introduces private template and digitisation-review records. Do not describe the design studio, artwork rendering or digitisation review UI as production-enabled until their authenticated endpoints, UI and end-to-end tests are merged and deployed.
+**Implementation status:** the feature branch contains the design studio, approved-template rendering, editable CSV/XLSX bulk import and atomic approved-case conversion with retained source evidence. The conversion database RPC is restricted to the service role and is covered by PostgreSQL CI assertions for approved-only conversion, ledger creation, idempotency and execution privileges. These changes remain unmerged and undeployed until the stacked pull requests and full end-to-end validation are approved.
 
 
 ### PDF certificate preview (development rollout)

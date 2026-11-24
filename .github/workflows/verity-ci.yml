@@ -2,9 +2,9 @@ name: VERITY build and test
 
 on:
   pull_request:
-    branches: [main, feature/verity-durable-bulk-certificate-issuance, feat/institution-certificate-design-system]
+    branches: [main, feature/verity-durable-bulk-certificate-issuance, feat/institution-certificate-design-system, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
   push:
-    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feat/certificate-pdf-rendering-engine]
+    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
 
 permissions:
   contents: read
@@ -159,7 +159,11 @@ jobs:
         env:
           PGPASSWORD: verity-ci-only
         run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261124110000_institution_certificate_design_and_digitization.sql
-      - name: Verify tenant isolation, private writes and review-state constraints
+      - name: Apply atomic historical conversion RPC
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261124133000_atomic_historical_certificate_conversion.sql
+      - name: Verify tenant isolation, review states, historical conversion and ledger idempotency
         env:
           PGPASSWORD: verity-ci-only
         run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/certificate-design-assertions.sql
