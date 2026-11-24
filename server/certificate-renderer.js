@@ -126,10 +126,19 @@ export async function renderCertificateDocument({ template, organizationName, da
   for (const [field, position] of Object.entries(layout)) {
     drawText(page, field === "studentName" ? bold : font, data[field], position, width, height);
   }
-  await addQr(pdf, page, previewToken, width, height);
-  page.drawText("VERITY PREVIEW · NOT A VALID CREDENTIAL", {
-    x: 22, y: 14, size: 7, font: bold, color: COLORS.teal
-  });
+  if (verificationUrl) await addQr(pdf, page, verificationUrl, width, height);
+  if (preview) {
+    page.drawText("VERITY PREVIEW · NOT A VALID CREDENTIAL", {
+      x: 22, y: 14, size: 7, font: bold, color: COLORS.teal
+    });
+  }
   return Buffer.from(await pdf.save());
 }
-\nexport async function renderCertificatePreview(options) { return renderCertificateDocument({ ...options, preview: true, verificationUrl: "VERITY-PREVIEW-NOT-VALID" }); }\n
+
+export async function renderCertificatePreview(options) {
+  return renderCertificateDocument({
+    ...options,
+    preview: true,
+    verificationUrl: "VERITY-PREVIEW-NOT-VALID"
+  });
+}
