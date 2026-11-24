@@ -86,10 +86,10 @@ begin
     from public."CertificateIssuanceBatch"
     where id=p_batch_id;
   if found then
-    if v_batch."campaignId"<>p_campaign_id
-       or v_batch."createdBy"<>p_owner_id
-       or v_batch."totalItems"<>p_total_items
-       or v_batch.method<>p_method then
+    if v_batch."campaignId" is distinct from p_campaign_id
+       or v_batch."createdBy" is distinct from p_owner_id
+       or v_batch."totalItems" is distinct from p_total_items
+       or v_batch.method is distinct from p_method then
       raise exception 'Processing batch identifier is already bound to a different request';
     end if;
     select coalesce(sum("totalItems"),0)::integer into v_allocated
