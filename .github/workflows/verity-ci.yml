@@ -131,6 +131,10 @@ jobs:
         env:
           PGPASSWORD: verity-ci-only
         run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261124180000_large_certificate_issuance_campaigns.sql
+      - name: Apply monthly institution issuance allowance migration
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261124190000_institution_monthly_certificate_issuance_limit.sql
       - name: Verify retries, leases, reconciliation and privileges
         env:
           PGPASSWORD: verity-ci-only
