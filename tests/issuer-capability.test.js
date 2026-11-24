@@ -14,8 +14,8 @@ test("one school organization can serve primary and secondary education",()=>{
  assert.ok(foundation.includes('"educationLevels" text[] NOT NULL DEFAULT ARRAY[]::text[]'));
  assert.ok(foundation.includes("ARRAY['PRIMARY','SECONDARY','TERTIARY']"));
  assert.ok(server.includes('const educationLevels=organizationType==="INSTITUTION"'));
- assert.ok(app.includes('value="PRIMARY"'));
- assert.ok(app.includes('value="SECONDARY"'));
+ assert.ok(app.includes('form.educationLevels.includes("PRIMARY")'));
+ assert.ok(app.includes('form.educationLevels.includes("SECONDARY")'));
  assert.ok(app.includes('required={form.educationLevels.includes("TERTIARY")}'));
  assert.ok(server.includes("requiresTertiaryEvidence=org.type==="));
 });
