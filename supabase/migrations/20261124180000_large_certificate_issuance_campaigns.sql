@@ -87,7 +87,9 @@ begin
     where id=p_batch_id;
   if found then
     if v_batch."campaignId" is distinct from p_campaign_id
+       or v_batch."organizationId" is distinct from v_campaign."organizationId"
        or v_batch."createdBy" is distinct from p_owner_id
+       or v_batch."fileName" is distinct from left(p_file_name,180)
        or v_batch."totalItems" is distinct from p_total_items
        or v_batch.method is distinct from p_method then
       raise exception 'Processing batch identifier is already bound to a different request';
