@@ -718,5 +718,25 @@ begin
 end;
 $function$;
 
+
+-- These new security-definer RPCs are intentionally split by caller:
+-- public signup may list approved issuer organizations, but only the server's
+-- service role may test whether a private student number exists in a roster.
+REVOKE ALL ON FUNCTION public.verity_student_registration_precheck(text,text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verity_student_registration_precheck(text,text)
+  TO service_role;
+
+REVOKE ALL ON FUNCTION public.verity_student_signup_institutions()
+  FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.verity_student_signup_institutions()
+  TO anon, authenticated, service_role;
+
+-- External verification is an authenticated organization-owner operation.
+REVOKE ALL ON FUNCTION public.lookup_verity_certificate_for_org(text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.lookup_verity_certificate_for_org(text)
+  TO authenticated, service_role;
+
 COMMENT ON FUNCTION private.verity_organization_has_capability(text,text) IS
   'Returns true only when an organization is approved and the requested capability has been independently approved.';
