@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main, feature/verity-durable-bulk-certificate-issuance, feat/institution-certificate-design-system, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
   push:
-    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feat/certificate-pdf-rendering-engine]
+    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
 
 permissions:
   contents: read
