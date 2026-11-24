@@ -13,7 +13,7 @@ test("field layout accepts normalized coordinates and rejects unsafe layouts", (
   assert.throws(() => validateFieldLayout({ secretField: { x: 0.5, y: 0.5 } }), /Unsupported certificate field/);
   assert.throws(() => validateFieldLayout({ studentName: { x: 1.2, y: 0.5, width: 0.7, fontSize: 20 } }), /outside/);
   assert.throws(() => validateFieldLayout({ studentName: { x: 0.5, y: 0.5, width: 0.7, fontSize: 20 } }), /outside/);
-  assert.throws(() => validateFieldLayout({ studentName: { x: 0.5, y: 0.5, width: 0.7, fontSize: 20, align: "justify" } }), /alignment/);
+  assert.throws(() => validateFieldLayout({ studentName: { x: 0.1, y: 0.5, width: 0.7, fontSize: 20, align: "justify" } }), /alignment/);
 });
 
 test("built-in template produces a valid PDF preview with a non-verifying preview QR", async () => {
