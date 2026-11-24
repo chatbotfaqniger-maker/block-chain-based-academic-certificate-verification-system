@@ -395,7 +395,9 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
  if(rows.length>10000)return s.status(413).json({error:"A single import is limited to 10,000 student records."});
  const batchId=crypto.randomUUID(),seen=new Set(),valid=[],rejected=[];
  for(let i=0;i<rows.length;i++){
-  const r=rows[i],number=String(r.student_number||r.matric_number||"").trim(),name=String(r.full_name||r.student_name||"").trim(),normalized=number.toUpperCase().replace(/\s+/g,"");
+  const r=rows[i],number=String(r.student_number||r.matric_number||"").trim(),name=String(r.full_name||r.student_name||"").trim();
+  let normalized;
+  try { normalized=normalizeInstitutionIdentifier(number).normalizedValue; } catch { rejected.push({row:i+2,reason:"Missing or invalid student identifier"});continue; }
   if(number.length<2||number.length>80||name.length<2||name.length>160||!normalized){rejected.push({row:i+2,reason:"Missing or invalid student_number/full_name"});continue;}
   if(seen.has(normalized)){rejected.push({row:i+2,reason:"Duplicate matriculation number in this file"});continue;}
   seen.add(normalized);
