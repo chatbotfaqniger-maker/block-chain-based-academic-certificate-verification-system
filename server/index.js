@@ -1124,15 +1124,15 @@ app.post("/api/organization/certificate-design/digitization/:id/convert",auth,ro
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
  const db=makeServerClient();
  const {data:caseRow,error:caseError}=await db.from("CertificateDigitizationCase")
-  .select("id,organizationId,studentNumber,claimedStudentName,credentialData,sourceStoragePath,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewedBy,certificateId")
+  .select("id,organizationId,submittedBy,studentNumber,claimedStudentName,credentialData,sourceStoragePath,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewedBy,certificateId")
   .eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
  if(caseError)throw caseError;if(!caseRow)return s.status(404).json({error:"Historical certificate case not found."});
+ let alreadyIssuedCertificate=null;
  if(caseRow.status==="ISSUED"&&caseRow.certificateId){
   const {data:existing,error:existingError}=await db.from("Certificate").select("*").eq("certificateId",caseRow.certificateId).maybeSingle();
   if(existingError)throw existingError;if(!existing)return s.status(409).json({error:"The issued historical case is missing its credential record."});
-  return s.json({certificate:existing,idempotent:true,message:"This historical certificate has already been converted."});
- }
- if(caseRow.status!=="APPROVED")return s.status(409).json({error:"Only an institution-approved historical certificate can be converted."});
+  alreadyIssuedCertificate=existing;
+ }else if(caseRow.status!=="APPROVED")return s.status(409).json({error:"Only an institution-approved historical certificate can be converted."});
  if(!caseRow.reviewedBy)return s.status(409).json({error:"The historical record has no recorded institutional reviewer."});
  const {data:source,error:sourceError}=await db.storage.from("verity-certificates").download(caseRow.sourceStoragePath);
  if(sourceError)throw sourceError;
@@ -1177,12 +1177,15 @@ app.post("/api/organization/certificate-design/digitization/:id/convert",auth,ro
   digest:hash,txHash:null,chainId:null,contractAddress:null,status:"ACTIVE",
   issuerId:caseRow.reviewedBy,createdAt:now,updatedAt:now,issuedAt:now
  };
- const {data:converted,error:convertError}=await db.rpc("verity_convert_digitization_case",{p_case_id:caseRow.id,p_certificate:record});
- if(convertError){
-  if(String(convertError.message||"").includes("Only institution-approved"))return s.status(409).json({error:convertError.message});
-  throw convertError;
+ let certificate=alreadyIssuedCertificate;
+ if(!certificate){
+  const {data:converted,error:convertError}=await db.rpc("verity_convert_digitization_case",{p_case_id:caseRow.id,p_certificate:record});
+  if(convertError){
+   if(String(convertError.message||"").includes("Only institution-approved"))return s.status(409).json({error:convertError.message});
+   throw convertError;
+  }
+  certificate=converted;
  }
- const certificate=converted;
  const {data:existingEvidence,error:evidenceLookupError}=await db.from("CertificateDocument")
   .select("id,sha256").eq("certificateId",certificate.id).eq("sha256",caseRow.sourceSha256).maybeSingle();
  if(evidenceLookupError)throw evidenceLookupError;
@@ -1200,7 +1203,7 @@ app.post("/api/organization/certificate-design/digitization/:id/convert",auth,ro
  await audit(q.supabase,q.user.id,"HISTORICAL_CERTIFICATE_CONVERTED","Certificate",certificate.id,{certificateId:certificate.certificateId,caseId:caseRow.id,organizationId:access.organization.id,sourceSha256:caseRow.sourceSha256,mode:"SUPABASE_LEDGER"});
  if(certificate.graduateId)try{await createVerityNotification(certificate.graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A historical certificate is now available",body:"A validated historical certificate from "+access.organization.name+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId:certificate.certificateId}});}catch(notificationError){console.error("Historical certificate graduate notification failed:",notificationError);}
  try{await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Historical certificate converted",body:certificate.certificateId+" was issued from an approved historical record.",url:"/certificates",metadata:{certificateId:certificate.certificateId,caseId:caseRow.id}});}catch(notificationError){console.error("Historical conversion admin notification failed:",notificationError);}
- s.status(201).json({certificate,sourceEvidence:{sha256:caseRow.sourceSha256,originalName:caseRow.sourceFileName,retained:true},message:"Historical certificate converted through the canonical VERITY issuance and ledger workflow. The original scan remains private and unchanged."});
+ s.status(alreadyIssuedCertificate?200:201).json({certificate,idempotent:!!alreadyIssuedCertificate,sourceEvidence:{sha256:caseRow.sourceSha256,originalName:caseRow.sourceFileName,retained:true},message:"Historical certificate converted through the canonical VERITY issuance and ledger workflow. The original scan remains private and unchanged."});
 }));
  
 app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
