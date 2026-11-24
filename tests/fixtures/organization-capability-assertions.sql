@@ -105,6 +105,31 @@ BEGIN
     RAISE EXCEPTION 'Combined primary and secondary education levels are not supported';
   END IF;
 
+  UPDATE public."Organization"
+  SET "educationLevels"=ARRAY['PRIMARY','SECONDARY']::text[]
+  WHERE id='org-inst-pending';
+  IF NOT EXISTS (
+    SELECT 1 FROM public."Organization"
+    WHERE id='org-inst-pending'
+      AND "educationLevels"=ARRAY['PRIMARY','SECONDARY']::text[]
+  ) THEN
+    RAISE EXCEPTION 'A single school account cannot serve primary and secondary levels';
+  END IF;
+
+  IF private.verity_organization_has_capability('org-inst-approved','ISSUE_CREDENTIALS') IS NOT TRUE
+     OR private.verity_organization_has_capability('org-inst-suspended','ISSUE_CREDENTIALS') IS NOT TRUE
+     OR private.verity_organization_has_capability('org-org-approved','VERIFY_CREDENTIALS') IS NOT TRUE
+     OR private.verity_organization_has_capability('org-org-suspended','VERIFY_CREDENTIALS') IS NOT TRUE
+     OR private.verity_organization_has_capability('org-inst-pending','ISSUE_CREDENTIALS') IS NOT TRUE THEN
+    RAISE EXCEPTION 'Baseline capability backfill did not preserve its expected states';
+  END IF;
+
+  IF private.verity_organization_has_capability('org-inst-suspended','ISSUE_CREDENTIALS') IS TRUE
+     OR private.verity_organization_has_capability('org-org-suspended','VERIFY_CREDENTIALS') IS TRUE
+     OR private.verity_organization_has_capability('org-inst-pending','ISSUE_CREDENTIALS') IS TRUE THEN
+    RAISE EXCEPTION 'A non-approved organization can use a capability';
+  END IF;
+
   RAISE NOTICE 'VERITY organization capability foundation assertions passed';
 END;
 $$;
