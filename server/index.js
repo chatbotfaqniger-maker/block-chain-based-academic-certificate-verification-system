@@ -894,25 +894,19 @@ async function bulkInstitutionFor(q,requireApproved=true){
   if(!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return {error:"Your organization does not have an approved credential-issuance capability.",status:403};
   return {organization:org};
 }
+const BULK_MONTHLY_ISSUANCE_LIMIT=8000;
 const bulkCampaignInput=z.object({
-  campaignId:z.string().uuid(),
-  fileName:z.string().trim().min(1).max(180),
+  campaignId:z.string().uuid(),fileName:z.string().trim().min(1).max(180),
   method:z.enum(["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"]),
-  totalItems:z.number().int().min(1).max(50000)
+  totalItems:z.number().int().min(1).max(BULK_MONTHLY_ISSUANCE_LIMIT)
 });
 const bulkBatchInput=z.object({
-  fileName:z.string().trim().min(1).max(180),
-  method:z.enum(["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"]),
-  totalItems:z.number().int().min(1).max(500),
-  campaignId:z.string().uuid().optional(),
-  batchId:z.string().uuid().optional()
+  fileName:z.string().trim().min(1).max(180),method:z.enum(["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"]),
+  totalItems:z.number().int().min(1).max(500),campaignId:z.string().uuid().optional(),batchId:z.string().uuid().optional()
 });
 const bulkItemInput=z.object({
-  itemId:z.string().uuid(),
-  rowNumber:z.number().int().min(2),
-  payload:issue,
-  documentName:z.string().trim().min(1).max(180).optional(),
-  documentSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()
+  itemId:z.string().uuid(),rowNumber:z.number().int().min(2),payload:issue,
+  documentName:z.string().trim().min(1).max(180).optional(),documentSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()
 });
 const bulkSafeName=value=>String(value||"certificate.pdf").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"certificate.pdf";
 const bulkWorkerReady=()=>BULK_CERTIFICATE_WORKER_ENABLED;
@@ -922,22 +916,23 @@ app.post("/api/organization/certificates/bulk/campaigns",auth,roles("EMPLOYER"),
   if(!SUPABASE_SERVER_KEY)return s.status(503).json({error:"Durable bulk issuance is not configured. Add a server-only Supabase service key in Render."});
   if(!BULK_CERTIFICATE_WORKER_ENABLED)return s.status(503).json({error:"The bulk certificate worker is not enabled yet. Contact the VERITY administrator before submitting a campaign."});
   const campaign=bulkCampaignInput.parse(q.body),server=makeServerClient(),id=campaign.campaignId,fileName=bulkSafeName(campaign.fileName);
-  const {data:existing,error:lookupError}=await server.from("CertificateIssuanceCampaign")
-    .select("id,organizationId,createdBy,fileName,method,totalItems,createdAt")
-    .eq("id",id).maybeSingle();
-  if(lookupError)throw lookupError;
-  if(existing){
-    if(existing.organizationId!==result.organization.id||existing.createdBy!==q.user.id||existing.fileName!==fileName||existing.method!==campaign.method||existing.totalItems!==campaign.totalItems)
-      return s.status(409).json({error:"This campaign identifier is already bound to a different issuance request."});
-    return s.status(200).json({campaign:existing,alreadyCreated:true,workerEnabled:true,processingBatchSize:500});
-  }
-  const {data,error}=await server.from("CertificateIssuanceCampaign").insert({
-    id,organizationId:result.organization.id,createdBy:q.user.id,fileName,method:campaign.method,totalItems:campaign.totalItems
-  }).select("id,organizationId,fileName,method,totalItems,createdAt").single();
+  const {data,error}=await server.rpc("create_certificate_issuance_campaign_with_monthly_limit",{
+    p_campaign_id:id,p_organization_id:result.organization.id,p_owner_id:q.user.id,
+    p_file_name:fileName,p_method:campaign.method,p_total_items:campaign.totalItems
+  });
   if(error)throw error;
-  s.status(201).json({campaign:data,workerEnabled:true,processingBatchSize:500});
+  if(data?.limitExceeded)return s.status(429).json({
+    error:"This institution has reached its 8,000-certificate monthly issuance allowance. The allowance resets at the start of the next UTC calendar month.",
+    monthlyLimit:BULK_MONTHLY_ISSUANCE_LIMIT,monthlyUsed:Number(data.monthlyUsed||0),
+    monthlyRemaining:Math.max(0,BULK_MONTHLY_ISSUANCE_LIMIT-Number(data.monthlyUsed||0)),resetAt:data.resetAt
+  });
+  if(!data?.campaign)throw new Error("The database did not return the created issuance campaign.");
+  s.status(data.alreadyCreated?200:201).json({
+    campaign:data.campaign,alreadyCreated:Boolean(data.alreadyCreated),workerEnabled:true,processingBatchSize:500,
+    monthlyLimit:BULK_MONTHLY_ISSUANCE_LIMIT,monthlyUsed:Number(data.monthlyUsed||0),
+    monthlyRemaining:Math.max(0,BULK_MONTHLY_ISSUANCE_LIMIT-Number(data.monthlyUsed||0))
+  });
 }));
-
 app.get("/api/organization/certificates/bulk/campaigns",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const result=await bulkInstitutionFor(q,false);if(result.error)return s.status(result.status).json({error:result.error});
   const {data:campaigns,error}=await q.supabase.from("CertificateIssuanceCampaign")
