@@ -102,7 +102,7 @@ export async function renderCertificatePreview({ template, organizationName, dat
   const pdf = template.sourceType === "INSTITUTION_ARTWORK" && template.assetMimeType === "application/pdf" && artworkBytes
     ? await PDFDocument.load(artworkBytes)
     : await PDFDocument.create();
-  let page = pdf.getPages()[0];
+  let page = pdf.getPages()[0] || pdf.addPage(dimensions);
   if (template.sourceType === "INSTITUTION_ARTWORK" && artworkBytes) {
     if (template.assetMimeType === "image/png" || template.assetMimeType === "image/jpeg") {
       const image = template.assetMimeType === "image/png" ? await pdf.embedPng(artworkBytes) : await pdf.embedJpg(artworkBytes);
