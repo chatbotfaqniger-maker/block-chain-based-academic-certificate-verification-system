@@ -1,11 +1,11 @@
 # VERITY production migration-history reconciliation
 
-**Audit date:** 23 November 2026  
+**Audit date:** 24 November 2026  
 **Supabase project:** `fnsnhasnjmvodkwmdqkc`
 
 ## Finding
 
-After the 23 November 2026 production changes, the connected Supabase project reports **58 applied migration versions**, while the repository's `supabase/migrations` directory contains **24 SQL migration files**. Fifteen repository files match applied migration version prefixes; **43 applied database versions still have no matching migration file in the repository**.
+After the 23 November 2026 production changes, the connected Supabase project reports **59 applied migration versions**, while the repository's `supabase/migrations` directory contains **24 SQL migration files**. Sixteen repository files match applied migration version prefixes; **43 applied database versions still have no matching migration file in the repository**.
 
 This does not by itself prove that the live database schema is incorrect. It does mean that the repository does not currently contain a complete, reproducible migration history for a clean environment. Standard CLI migration operations could interpret missing historical files as unapplied and attempt to replay schema changes.
 
@@ -13,7 +13,8 @@ This does not by itself prove that the live database schema is incorrect. It doe
 
 - `20261123221423_restrict_sensitive_rpc_execution` — restricts sensitive RPC execution and supports the verification rate-limit hardening.
 - `20261123223013_add_durable_roster_import_queue` — extends the existing student roster/import history, adds a private chunk queue and installs a service-role-only worker RPC. The migration and matching application code are deployed; the worker remains disabled until its server-only key and enable flag are configured.
-- `20261124071328_durable_bulk_certificate_issuance_queue` — adds the durable institution bulk certificate issuance batch/item queue, idempotency linkage, private document metadata, lease/retry/reconciliation RPCs and RLS. The migration and matching application code are deployed; the worker remains disabled until its server-only key and enable flag are configured.
+- `20261124071328_durable_bulk_certificate_issuance_queue` — adds the durable institution bulk certificate issuance batch/item queue, idempotency linkage, private document metadata, lease/retry/reconciliation RPCs and RLS. The migration and matching application code are deployed; the worker remains disabled.
+- `20261124074628_certificate_ledger_integrity_hardening` — hardens certificate immutability, append-only ledger access, protected RPC execution and record-aware ledger verification. PR #9 is merged and the Render application deployment is live. The migration is applied and its production integrity/privilege assertions passed.
 
 ## Applied database versions missing from the repository
 
@@ -72,13 +73,15 @@ Until the missing history is recovered or a verified baseline is established:
 2. Do not replay missing historical migrations blindly.
 3. Keep new schema changes additive, individually reviewed and tested against an isolated PostgreSQL fixture.
 4. When a production migration is applied through the managed migration workflow, commit the exact SQL and align its filename with the version recorded in Supabase.
-5. The student roster-import and bulk certificate-issuance queue migrations are now verified and applied, and their matching application code is deployed. Keep both workers disabled until the server-only key and their respective enable flags are confirmed. The bulk issuance worker is an in-process worker on the existing Render web service; no separate paid worker service is required.
+5. The student roster-import, bulk certificate-issuance queue and certificate-ledger hardening migrations are verified and applied, and the matching application code is deployed. Keep both background workers disabled unless separately approved. The workers run in-process on the existing Render web service; no separate paid worker service is required.
 
 ## Bulk issuance status
 
 The original student-import proposal (PR #3) was not safe to merge because it assumed a different roster schema and would have disrupted existing student registration/identity flows. It has been superseded by the compatible implementation in PR #7. Its additive migration `20261123223013_add_durable_roster_import_queue` is applied and CI-tested; the matching application code is deployed. The in-process worker is disabled by default until a server-only Supabase key and `ENABLE_STUDENT_IMPORT_WORKER=true` are configured.
 
-Bulk certificate issuance is delivered by PR #8. Its additive queue migration `20261124071328_durable_bulk_certificate_issuance_queue` is applied, its matching application code is deployed, and its isolated PostgreSQL tests passed. The in-process worker remains disabled until the server-only Supabase key and `ENABLE_BULK_CERTIFICATE_WORKER=true` are explicitly configured and verified.
+Bulk certificate issuance is delivered by PR #8. Its additive queue migration `20261124071328_durable_bulk_certificate_issuance_queue` is applied, its matching application code is deployed, and its isolated PostgreSQL tests passed. The in-process worker remains disabled.
+
+Certificate ledger hardening is delivered by PR #9. Its migration `20261124074628_certificate_ledger_integrity_hardening` is applied after the merged application deployment became live. Production verification confirmed one certificate and one ledger event remain present; the record-aware verification returned `ledger_valid=true` and `record_matches=true`; zero public tables retain application-role TRUNCATE privileges; and `service_role` has SELECT but not INSERT, UPDATE or DELETE on `CertificateLedger`. The migration was adjusted to change default privileges only for its own migration role after PostgreSQL rejected cross-role default-privilege changes; the exact adjusted SQL is committed in the repository. Both background workers remain disabled.
 
 ## Next reconciliation work
 
