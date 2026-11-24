@@ -960,7 +960,9 @@ app.get("/api/organization/certificates/bulk/campaigns",auth,roles("EMPLOYER"),r
     const sum=key=>parts.reduce((total,b)=>total+Number(b[key]||0),0);
     const allocated=parts.reduce((total,b)=>total+Number(b.totalItems||0),0);
     const terminal=parts.length>0&&parts.length===Math.ceil(campaign.totalItems/500)&&parts.every(b=>["COMPLETED","PARTIAL","FAILED","CANCELLED"].includes(b.status));
-    return {...campaign,allocatedItems:allocated,queuedItems:sum("queuedItems"),processingItems:sum("processingItems"),issuedItems:sum("issuedItems"),failedItems:sum("failedItems"),documentFailedItems:sum("documentFailedItems"),processingBatches:parts.length,status:terminal?(sum("failedItems")||sum("documentFailedItems")?"PARTIAL":"COMPLETED"):parts.some(b=>["QUEUED","PROCESSING"].includes(b.status))?"PROCESSING":"UPLOADING",batches:parts};
+    const failed=sum("failedItems"),documentFailed=sum("documentFailedItems"),issued=sum("issuedItems");
+    const terminalStatus=parts.every(b=>b.status==="CANCELLED")?"CANCELLED":failed+documentFailed>0?(issued>0?"PARTIAL":"FAILED"):"COMPLETED";
+    return {...campaign,allocatedItems:allocated,queuedItems:sum("queuedItems"),processingItems:sum("processingItems"),issuedItems:issued,failedItems:failed,documentFailedItems:documentFailed,processingBatches:parts.length,status:terminal?terminalStatus:parts.some(b=>["QUEUED","PROCESSING"].includes(b.status))?"PROCESSING":"UPLOADING",batches:parts};
   }),workerEnabled:bulkWorkerReady(),processingBatchSize:500});
 }));
 
