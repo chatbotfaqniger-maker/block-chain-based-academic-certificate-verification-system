@@ -34,6 +34,11 @@ The capability expansion is being introduced in stages. Until all backend, roste
 7. Once the campaign is submitted, the server-side worker continues processing even if you close the page. Reopen Bulk certificate issuance to review campaign totals and individual processing-batch history, including issued, failed, queued, processing and document-failure counts.
 8. If staging is interrupted before submission, resume the same pending campaign while the current page session and selected source files remain available. Do not start a duplicate campaign for the same rows. If an item requires review after a worker interruption, VERITY checks the certificate ledger before recovery and will not blindly reissue an uncertain certificate.
 
+### Student records and document storage
+- Student identity, roster details and editable certificate fields remain structured records in Supabase PostgreSQL.
+- Existing private Storage buckets continue to hold original certificate PDFs, institution-uploaded artwork and staged documents. Each file remains linked to its existing student, template or certificate record through its storage path and metadata.
+- Do not upload student CSV data as a replacement for the relational roster, make certificate buckets public, or create a second certificate-upload/template system. The existing Certificate Design Studio and student-to-document mapping remain authoritative.
+
 ### Certificate issuance security
 - Each certificate is written to the existing Supabase certificate ledger and follows the standard integrity and audit workflow.
 - Bulk issuance does not create per-certificate blockchain transactions.
