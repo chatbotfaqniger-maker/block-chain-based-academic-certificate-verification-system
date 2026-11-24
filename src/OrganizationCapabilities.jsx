@@ -21,7 +21,8 @@ export default function OrganizationCapabilities({organization,notice}){
   try{const data=await api("/organization/capabilities");setItems(data.capabilities||[]);setError("");}
   catch(e){setError(e.message);}
  }
- useEffect(()=>{load();},[organization?.id]);
+ const capabilitySignature=(organization?.capabilities||[]).map(x=>x.capability+":"+x.status).sort().join("|");
+ useEffect(()=>{load();},[organization?.id,capabilitySignature]);
  async function request(capability){
   setBusy(capability);setError("");
   try{
