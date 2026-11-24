@@ -18,7 +18,7 @@ import { createVerificationRateLimiter } from "./rate-limits.js";
 import { startStudentImportWorker } from "./student-import-worker.js";
 import { startBulkCertificateWorker } from "./bulk-certificate-worker.js";
 import { createBulkCertificateProcessor } from "./bulk-certificate-service.js";
-import { renderCertificatePreview, validateFieldLayout } from "./certificate-renderer.js";
+import { renderCertificateDocument, renderCertificatePreview, validateFieldLayout } from "./certificate-renderer.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -732,6 +732,45 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   // the authoritative Supabase credential from being issued.
   const {data:created,error}=await q.supabase.from("Certificate").insert(record).select().single();
   if(error) throw error;
+  let generatedDocument=null,documentGenerationWarning=null;
+  if(organization){
+    try{
+      const {data:template,error:templateError}=await q.supabase.from("InstitutionCertificateTemplate")
+        .select("id,name,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,pageSize,fieldLayout")
+        .eq("organizationId",organization.id).eq("status","ACTIVE").eq("isDefault",true).maybeSingle();
+      if(templateError)throw templateError;
+      if(template){
+        let artworkBytes=null;
+        if(template.sourceType==="INSTITUTION_ARTWORK"){
+          const {data:file,error:fileError}=await q.supabase.storage.from("verity-certificates").download(template.assetStoragePath);
+          if(fileError)throw fileError;
+          artworkBytes=Buffer.from(await file.arrayBuffer());
+          if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)throw new Error("Active certificate artwork failed its SHA-256 integrity check.");
+        }
+        const verificationUrl=`${process.env.PUBLIC_APP_URL||q.protocol+"://"+q.get("host")}/verify/${encodeURIComponent(verificationKey)}`;
+        const pdf=await renderCertificateDocument({
+          template:{...template,fieldLayout:validateFieldLayout(template.fieldLayout||{})},
+          organizationName:organization.name,
+          data:{...clean,certificateId},
+          artworkBytes,verificationUrl,preview:false
+        });
+        const documentId=crypto.randomUUID(),storagePath=`${organization.id}/${created.id}/${documentId}.pdf`,sha256=digest(pdf);
+        const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,pdf,{contentType:"application/pdf",upsert:false,cacheControl:"3600"});
+        if(uploadError)throw uploadError;
+        const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert({
+          id:documentId,certificateId:created.id,organizationId:organization.id,storagePath,
+          originalName:`VERITY-${certificateId}.pdf`,mimeType:"application/pdf",sizeBytes:pdf.length,
+          sha256,uploadedBy:q.user.id,scanStatus:"NOT_SCANNED"
+        }).select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").single();
+        if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
+        generatedDocument=doc;
+        await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_GENERATED","CertificateDocument",doc.id,{certificateId,organizationId:organization.id,templateId:template.id,sha256,source:"APPROVED_TEMPLATE"});
+      }
+    }catch(renderError){
+      documentGenerationWarning=String(renderError?.message||"Certificate PDF generation failed").slice(0,300);
+      console.error("Certificate credential was issued, but its approved-design PDF could not be generated:",renderError);
+    }
+  }
   let chain={mode:"SUPABASE_LEDGER"},certificate=created,blockchainAnchorPending=false;
   try{
     chain=await issueOnChain(certificateId,hash);
@@ -748,7 +787,7 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   await audit(q.supabase,q.user.id,"CERTIFICATE_ISSUED","Certificate",certificate.id,{certificateId,mode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending,organizationId:organization?.id||null});
   if(graduateId)await createVerityNotification(graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A new certificate is available",body:"A certificate from "+clean.institution+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId}});
   await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Certificate issued",body:certificateId+" was issued by "+(organization?.name||clean.institution)+".",url:"/certificates",metadata:{certificateId}});
-  s.status(201).json({certificate,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
+  s.status(201).json({certificate,document:generatedDocument,documentGenerationWarning,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
 }));
 
 
