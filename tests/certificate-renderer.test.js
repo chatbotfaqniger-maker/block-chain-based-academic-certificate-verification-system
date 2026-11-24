@@ -11,7 +11,7 @@ test("field layout accepts normalized coordinates and rejects unsafe layouts", (
   const layout = validateFieldLayout({ studentName: { x: 0.5, y: 0.48, width: 0.7, fontSize: 22, align: "center" } });
   assert.equal(layout.studentName.x, 0.5);
   assert.throws(() => validateFieldLayout({ secretField: { x: 0.5, y: 0.5 } }), /Unsupported certificate field/);
-  assert.throws(() => validateFieldLayout({ studentName: { x: 1.2, y: 0.5, width: 0.7, fontSize: 20 } }), /outside/);
+  assert.throws(() => validateFieldLayout({ studentName: { x: 1.2, y: 0.5, width: 0.7, fontSize: 20 } }), /outside/);\n  assert.throws(() => validateFieldLayout({ studentName: { x: 0.5, y: 0.5, width: 0.7, fontSize: 20 } }), /outside/);
   assert.throws(() => validateFieldLayout({ studentName: { x: 0.5, y: 0.5, width: 0.7, fontSize: 20, align: "justify" } }), /alignment/);
 });
 
