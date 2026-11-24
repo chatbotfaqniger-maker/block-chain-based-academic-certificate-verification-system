@@ -14,6 +14,7 @@ import { connectChain, chainStatus, issueOnChain, revokeOnChain, verifyOnChain }
 import { STAFF_PERMISSIONS, isValidStaffPermissions, hasStaffPermission } from "./staff-permissions.js";
 import { isCertificateAccessActive } from "./certificate-access.js";
 import { parseRosterCsv } from "./student-roster.js";
+import { normalizeInstitutionIdentifier } from "./institution-identity.js";
 import { createVerificationRateLimiter } from "./rate-limits.js";
 import { startStudentImportWorker } from "./student-import-worker.js";
 import { startBulkCertificateWorker } from "./bulk-certificate-worker.js";
