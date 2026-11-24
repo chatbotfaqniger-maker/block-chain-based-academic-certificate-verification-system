@@ -88,7 +88,7 @@ CREATE POLICY verity_organization_capability_owner_read
       WHERE i."organizationId" = "OrganizationCapability"."organizationId"
         AND i."userId" = (SELECT auth.uid())::text
         AND i.status = 'ACTIVE'
-        AND 'roster:manage' = ANY(i.permissions)
+        AND ('roster:manage' = ANY(i.permissions) OR 'registration:recover' = ANY(i.permissions))
     )
     OR (SELECT private.is_admin())
   );
