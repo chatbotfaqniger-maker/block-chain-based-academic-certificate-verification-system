@@ -93,12 +93,28 @@ BEGIN
   IF r->'batch'->>'campaignId'<>'campaign-large' THEN
     RAISE EXCEPTION 'First processing batch was not linked to its campaign';
   END IF;
+  BEGIN
+    PERFORM public.create_certificate_issuance_campaign_batch(
+      'campaign-large','batch-over-500','11111111-1111-4111-8111-111111111111',
+      'oversized.csv','CSV_GENERATED',501
+    );
+    RAISE EXCEPTION 'A processing batch must reject more than 500 items';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='A processing batch must reject more than 500 items' THEN RAISE; END IF;
+  END;
   r:=public.create_certificate_issuance_campaign_batch(
     'campaign-large','batch-large-2','11111111-1111-4111-8111-111111111111',
     'large-cohort-part-2.csv','CSV_GENERATED',1
   );
   IF (r->>'allocatedItems')::integer<>501 THEN
     RAISE EXCEPTION 'Campaign allocation total is incorrect';
+  END IF;
+  r:=public.create_certificate_issuance_campaign_batch(
+    'campaign-large','batch-large-1','11111111-1111-4111-8111-111111111111',
+    'large-cohort-part-1.csv','CSV_GENERATED',500
+  );
+  IF (r->>'allocatedItems')::integer<>501 THEN
+    RAISE EXCEPTION 'Retrying a batch allocation must not create duplicate capacity';
   END IF;
   BEGIN
     PERFORM public.create_certificate_issuance_campaign_batch(
