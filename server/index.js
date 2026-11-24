@@ -985,6 +985,40 @@ app.post("/api/organization/certificate-design/templates",auth,roles("EMPLOYER")
  if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_CREATED","InstitutionCertificateTemplate",id,{organizationId:access.organization.id,sourceType:"VERITY_TEMPLATE",templateKey:b.templateKey});
  s.status(201).json({template:data});
 }));
+app.patch("/api/organization/certificate-design/templates/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const b=z.object({fieldLayout:z.record(z.any()),pageSize:z.enum(["A4_LANDSCAPE","A4_PORTRAIT","LETTER_LANDSCAPE","LETTER_PORTRAIT"]).optional()}).strict().parse(q.body);
+ let layout=b.fieldLayout;
+ if(layout.fields&&!Object.keys(layout).some(k=>k!=="fields"))layout={};
+ layout=validateFieldLayout(layout);
+ const db=makeServerClient(),{data:current,error:ce}=await db.from("InstitutionCertificateTemplate").select("id,status,version").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(ce)throw ce;if(!current)return s.status(404).json({error:"Certificate design not found."});
+ if(current.status!=="DRAFT")return s.status(409).json({error:"Only draft designs can be edited. Create a new version to change an active design."});
+ const patch={fieldLayout:layout,version:current.version+1,updatedBy:q.user.id,updatedAt:new Date().toISOString(),...(b.pageSize?{pageSize:b.pageSize}:{})};
+ const {data,error}=await db.from("InstitutionCertificateTemplate").update(patch).eq("id",current.id).eq("organizationId",access.organization.id).eq("status","DRAFT").select("id,name,fieldLayout,pageSize,version,status,updatedAt").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_LAYOUT_UPDATED","InstitutionCertificateTemplate",current.id,{organizationId:access.organization.id,version:data.version});
+ s.json({template:data});
+}));
+app.post("/api/organization/certificate-design/templates/:id/activate",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ z.object({confirm:z.literal(true)}).parse(q.body||{});
+ const db=makeServerClient(),{data:template,error:te}=await db.from("InstitutionCertificateTemplate").select("id,name,status,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,fieldLayout,pageSize").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(te)throw te;if(!template)return s.status(404).json({error:"Certificate design not found."});
+ if(template.status!=="DRAFT")return s.status(409).json({error:"Only a draft design can be approved and activated."});
+ if(template.sourceType==="INSTITUTION_ARTWORK"){
+  if(!template.assetStoragePath)return s.status(409).json({error:"The institution artwork is missing."});
+  const {data:file,error}=await db.storage.from("verity-certificates").download(template.assetStoragePath);if(error)throw error;
+  const bytes=Buffer.from(await file.arrayBuffer());if(!template.assetSha256||digest(bytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed."});
+ }
+ const layout=template.fieldLayout?.fields&&!Object.keys(template.fieldLayout).some(k=>k!=="fields")?{}:validateFieldLayout(template.fieldLayout||{});
+ const pdf=await renderCertificatePreview({template:{...template,fieldLayout:layout},organizationName:access.organization.name,data:{studentName:"APPROVAL SAMPLE",studentNumber:"APPROVAL-0001",qualification:"B.Sc.",programme:"Computer Science",faculty:"Faculty",department:"Department",classification:"Sample",awardDate:new Date().toISOString().slice(0,10)} ,...(template.sourceType==="INSTITUTION_ARTWORK"?{artworkBytes:Buffer.from(await (await db.storage.from("verity-certificates").download(template.assetStoragePath)).data.arrayBuffer())}:{})});
+ if(!pdf?.subarray(0,5).toString("ascii").startsWith("%PDF-"))return s.status(422).json({error:"A valid PDF preview could not be rendered."});
+ const {error:deactivateError}=await db.from("InstitutionCertificateTemplate").update({status:"ARCHIVED",isDefault:false,updatedAt:new Date().toISOString(),updatedBy:q.user.id}).eq("organizationId",access.organization.id).eq("status","ACTIVE");
+ if(deactivateError)throw deactivateError;
+ const {data:activated,error}=await db.from("InstitutionCertificateTemplate").update({status:"ACTIVE",isDefault:true,updatedAt:new Date().toISOString(),updatedBy:q.user.id}).eq("id",template.id).eq("organizationId",access.organization.id).eq("status","DRAFT").select("id,name,status,isDefault,version").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_APPROVED_AND_ACTIVATED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,version:activated.version});
+ s.json({template:activated,message:"Design approved and activated for future issuance."});
+}));
 app.post("/api/organization/certificate-design/templates/artwork",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
  const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase(),spec=documentMime.get(mime),bytes=q.body;
