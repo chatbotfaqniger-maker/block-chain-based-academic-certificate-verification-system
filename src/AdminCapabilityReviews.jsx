@@ -25,7 +25,7 @@ export default function AdminCapabilityReviews({notice}){
   }catch(e){setError(e.message);}
   finally{setBusy("");}
  }
- const isBaseline=item=>(item.organization?.type==="INSTITUTION"&&item.capability==="ISSUE_CREDENTIALS")||(item.organization?.type==="EMPLOYER"&&item.capability==="VERIFY_CREDENTIALS");
+ const isBaseline=item=>item.isLegacyBaseline===true;
  const pending=items.filter(x=>x.status==="PENDING"&&!isBaseline(x));
  const reviewed=items.filter(x=>x.status!=="PENDING"&&!isBaseline(x));
  return <section className="panel admin-registry">
