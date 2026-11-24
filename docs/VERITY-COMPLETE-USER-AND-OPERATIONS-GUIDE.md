@@ -455,9 +455,9 @@ Use **Account Settings** to update the administrator display name where availabl
 
 ### 7.7 Marketing showcase export
 
-The in-app VERITY film is a 90-second, nine-scene product showcase. The administrator-only MP4 export endpoint renders a video using available platform statistics, a recent credential reference and audit/verification status. Sensitive certificate references are masked in the exported video.
+The in-app VERITY film is a 120-second (two-minute), nine-scene product showcase. The extended runtime gives the film room to explain student identity registration and ICT recovery, roster import and reviewed bulk issuance, organization registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger. The administrator-only MP4 export endpoint renders a video using available platform statistics, a recent credential reference and audit/verification status. Sensitive certificate references are masked in the exported video.
 
-The showcase is a cinematic data-driven presentation, not a screen recording of every live user interaction. Do not publish an export containing confidential information without reviewing the output and obtaining the appropriate authorization. MP4 generation and playback should be verified in the target deployment before the feature is described as operational.
+The showcase is a cinematic data-driven presentation, not a screen recording of every live user interaction. Do not publish an export containing confidential information without reviewing the output and obtaining the appropriate authorization. The interactive in-app film and administrator MP4 export are both designed for a 120-second runtime. MP4 generation, exact duration and playback should be verified in the target deployment before the feature is described as operational.
 
 ---
 
