@@ -282,13 +282,13 @@ app.post("/api/organization/capabilities",auth,roles("EMPLOYER"),run(async(q,s)=
  const {data:existing,error:lookupError}=await q.supabase.from("OrganizationCapability").select("id,status").eq("organizationId",org.id).eq("capability",b.capability).maybeSingle();
  if(lookupError)throw lookupError;
  const now=new Date().toISOString();
- let capability,error;
+ let capability,capabilityError;
  if(existing?.status==="REJECTED"){
    const result=await q.supabase.from("OrganizationCapability").update({
      status:"PENDING",requestedBy:q.user.id,requestNote:b.requestNote||null,
      decisionNote:null,reviewedBy:null,reviewedAt:null,updatedAt:now
    }).eq("id",existing.id).eq("status","REJECTED").select().single();
-   capability=result.data;error=result.error;
+   capability=result.data;capabilityError=result.error;
  }else if(existing){
    return s.status(409).json({error:existing.status==="APPROVED"?"This capability is already approved.":existing.status==="SUSPENDED"?"This capability is suspended. Contact VERITY support for review.":"A request for this capability is already awaiting administrator review."});
  }else{
@@ -296,9 +296,9 @@ app.post("/api/organization/capabilities",auth,roles("EMPLOYER"),run(async(q,s)=
      id:crypto.randomUUID(),organizationId:org.id,capability:b.capability,status:"PENDING",
      requestedBy:q.user.id,requestNote:b.requestNote||null,createdAt:now,updatedAt:now
    }).select().single();
-   capability=result.data;error=result.error;
+   capability=result.data;capabilityError=result.error;
  }
- if(error)throw error;
+ if(capabilityError)throw capabilityError;
  await audit(q.supabase,q.user.id,"ORGANIZATION_CAPABILITY_REQUESTED","OrganizationCapability",capability.id,{organizationId:org.id,capability:b.capability});
  await notifyVerityAdmins({type:"ORGANIZATION_CAPABILITY_REQUESTED",category:"PLATFORM",title:"Organization capability request",body:org.name+" requested "+b.capability.replaceAll("_"," ").toLowerCase()+".",url:"/organizations",metadata:{organizationId:org.id,capability:b.capability}});
  s.status(201).json({capability,message:"Your capability request has been submitted for separate VERITY administrator review."});
