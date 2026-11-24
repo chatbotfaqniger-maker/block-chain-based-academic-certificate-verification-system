@@ -898,7 +898,7 @@ const BULK_MONTHLY_ISSUANCE_LIMIT=8000;
 const bulkCampaignInput=z.object({
   campaignId:z.string().uuid(),fileName:z.string().trim().min(1).max(180),
   method:z.enum(["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"]),
-  totalItems:z.number().int().min(1).max(BULK_MONTHLY_ISSUANCE_LIMIT)
+  totalItems:z.number().int().min(1).max(50000)
 });
 const bulkBatchInput=z.object({
   fileName:z.string().trim().min(1).max(180),method:z.enum(["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"]),

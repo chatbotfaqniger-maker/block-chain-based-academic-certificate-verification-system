@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {MAX_CAMPAIGN_ITEMS,MAX_MONTHLY_ISSUANCE_ITEMS,PROCESSING_BATCH_SIZE,getIssuanceChunk} from "../src/issuance-campaign.js";
+import {MAX_CAMPAIGN_ITEMS,MAX_MONTHLY_ISSUANCE_ITEMS,MAX_LEGACY_CAMPAIGN_ITEMS,PROCESSING_BATCH_SIZE,getIssuanceChunk} from "../src/issuance-campaign.js";
 
 test("campaign chunks keep the durable worker unit at 500",()=>{
   const items=Array.from({length:501},(_,i)=>i);
@@ -20,6 +20,8 @@ test("campaign planner handles monthly allowance and chunk boundaries",()=>{
 });
 
 test("campaign planner rejects sizes above the 8,000-record boundary",()=>{
-  assert.throws(()=>getIssuanceChunk(new Array(8001),0),/8,000/);
+  assert.equal(getIssuanceChunk(new Array(8001),0).items.length,500);
+  assert.equal(getIssuanceChunk(new Array(50000),0).totalParts,100);
+  assert.throws(()=>getIssuanceChunk(new Array(MAX_LEGACY_CAMPAIGN_ITEMS+1),0),/50,000/);
   assert.throws(()=>getIssuanceChunk([1,2],2),/offset/);assert.throws(()=>getIssuanceChunk([1,2],-1),/offset/);
 });

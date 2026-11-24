@@ -18,7 +18,7 @@ begin
   if p_organization_id is null or p_owner_id is null then raise exception 'Issuing organization and creator are required'; end if;
   if p_file_name is null or char_length(btrim(p_file_name)) not between 1 and 180 then raise exception 'Invalid issuance campaign file name'; end if;
   if p_method not in ('CSV_ZIP','CSV_MULTIPLE_PDFS','CSV_GENERATED') then raise exception 'Invalid issuance campaign method'; end if;
-  if p_total_items is null or p_total_items < 1 or p_total_items > 8000 then raise exception 'An issuance campaign must contain between 1 and 8,000 records'; end if;
+  if p_total_items is null or p_total_items < 1 or p_total_items > 50000 then raise exception 'An issuance campaign must contain between 1 and 50,000 records'; end if;
 
   -- Serialize reservations for one institution to prevent concurrent oversubscription.
   perform 1 from public."Organization" where id=p_organization_id for update;
@@ -44,6 +44,7 @@ begin
       'monthlyUsed',v_used,'monthlyRemaining',greatest(0,8000-v_used),'resetAt',v_month_end);
   end if;
 
+  -- Previously created campaigns above 8,000 remain resumable; only new reservations are capped.
   if v_used+p_total_items>8000 then
     return jsonb_build_object('limitExceeded',true,'monthlyLimit',8000,'monthlyUsed',v_used,
       'monthlyRemaining',greatest(0,8000-v_used),'resetAt',v_month_end);
