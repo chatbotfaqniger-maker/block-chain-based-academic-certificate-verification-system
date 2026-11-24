@@ -60,3 +60,61 @@ BEGIN
   EXCEPTION WHEN check_violation THEN NULL;
   END;
 END $$;
+
+
+-- Historical conversion must be owner-only, approved-only, atomic and idempotent.
+DO $$
+DECLARE
+  v_result jsonb;
+  v_again jsonb;
+  v_certificate_id text := 'VRT-2026-HIST0001';
+  v_case_id text := 'case-approved-conversion';
+BEGIN
+  INSERT INTO public."CertificateDigitizationCase"(
+    id,"organizationId","submittedBy","reviewedBy","studentNumber","claimedStudentName",
+    "credentialData","sourceStoragePath","sourceFileName","sourceMimeType","sourceSizeBytes",
+    "sourceSha256",status,"reviewedAt"
+  ) VALUES (
+    v_case_id,'org-a','11111111-1111-4111-8111-111111111111',
+    '11111111-1111-4111-8111-111111111111','MAT-2020-001','Student Historical',
+    '{"faculty":"Science","department":"Computer Science","programme":"Computing","qualification":"BSc","awardDate":"2020-11-20T00:00:00.000Z"}',
+    'digitization/org-a/case-approved-conversion/source.pdf','source.pdf','application/pdf',100,repeat('b',64),
+    'APPROVED',now()
+  );
+
+  v_result := public.verity_convert_digitization_case(v_case_id,jsonb_build_object(
+    'id','certificate-historical-1','certificateId',v_certificate_id,
+    'verificationKey','VRT-HISTORICAL-KEY-0001','studentName','Student Historical',
+    'studentEmail',null,'studentNumber','MAT-2020-001','institution','Institution A',
+    'faculty','Science','department','Computer Science','programme','Computing',
+    'qualification','BSc','classification',null,'awardDate','2020-11-20T00:00:00.000Z',
+    'issuedAt',now(),'digest',repeat('c',64),'txHash',null,'chainId',null,
+    'contractAddress',null,'status','ACTIVE','revokedAt',null,'revokeReason',null,
+    'graduateId',null,'issuerId','11111111-1111-4111-8111-111111111111',
+    'organizationId','org-a','createdAt',now(),'updatedAt',now()
+  ));
+
+  IF v_result->>'certificateId' <> v_certificate_id THEN
+    RAISE EXCEPTION 'Conversion did not return the created certificate';
+  END IF;
+  IF (SELECT status FROM public."CertificateDigitizationCase" WHERE id=v_case_id) <> 'ISSUED' THEN
+    RAISE EXCEPTION 'Approved case was not transitioned to ISSUED';
+  END IF;
+  IF (SELECT count(*) FROM public."CertificateLedger" WHERE "certificateId"=v_certificate_id) <> 1 THEN
+    RAISE EXCEPTION 'Canonical certificate insert did not append exactly one ledger event';
+  END IF;
+
+  v_again := public.verity_convert_digitization_case(v_case_id,'{}'::jsonb);
+  IF v_again->>'certificateId' <> v_certificate_id THEN
+    RAISE EXCEPTION 'Repeated conversion did not return the original certificate';
+  END IF;
+  IF (SELECT count(*) FROM public."CertificateLedger" WHERE "certificateId"=v_certificate_id) <> 1 THEN
+    RAISE EXCEPTION 'Repeated conversion created a duplicate ledger event';
+  END IF;
+
+  IF has_function_privilege('anon','public.verity_convert_digitization_case(text,jsonb)','EXECUTE')
+     OR has_function_privilege('authenticated','public.verity_convert_digitization_case(text,jsonb)','EXECUTE')
+     OR NOT has_function_privilege('service_role','public.verity_convert_digitization_case(text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'Historical conversion RPC execution grants are incorrect';
+  END IF;
+END $$;
