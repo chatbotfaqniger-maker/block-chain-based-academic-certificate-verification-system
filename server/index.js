@@ -18,6 +18,7 @@ import { createVerificationRateLimiter } from "./rate-limits.js";
 import { startStudentImportWorker } from "./student-import-worker.js";
 import { startBulkCertificateWorker } from "./bulk-certificate-worker.js";
 import { createBulkCertificateProcessor } from "./bulk-certificate-service.js";
+import { renderCertificatePreview, validateFieldLayout } from "./certificate-renderer.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -950,6 +951,26 @@ async function certificateDesignInstitution(q){
  return {organization:org};
 }
 const designName=value=>String(value||"").normalize("NFKC").trim().slice(0,120);
+app.post("/api/organization/certificate-design/templates/:id/preview",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ if(!/^[0-9a-f-]{36}$/i.test(q.params.id))return s.status(400).json({error:"Invalid template identifier."});
+ const b=z.object({studentName:z.string().trim().min(2).max(180).default("Amina Yusuf"),studentNumber:z.string().trim().max(80).default("PREVIEW-0001"),qualification:z.string().trim().max(120).default("B.Sc."),programme:z.string().trim().max(180).default("Computer Science"),faculty:z.string().trim().max(180).default("Faculty of Computing"),department:z.string().trim().max(180).default("Computer Science"),classification:z.string().trim().max(80).default("First Class"),awardDate:z.string().trim().max(40).default("2026-11-24")}).default({}).parse(q.body||{});
+ const db=makeServerClient();
+ const {data:template,error}=await db.from("InstitutionCertificateTemplate").select("id,organizationId,name,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,pageSize,fieldLayout,status").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(error)throw error;if(!template)return s.status(404).json({error:"Certificate design not found in your institution."});
+ let artworkBytes=null;
+ if(template.sourceType==="INSTITUTION_ARTWORK"){
+  if(!template.assetStoragePath)return s.status(409).json({error:"The artwork asset is missing."});
+  const {data:file,error:downloadError}=await db.storage.from("verity-certificates").download(template.assetStoragePath);
+  if(downloadError)throw downloadError;
+  artworkBytes=Buffer.from(await file.arrayBuffer());
+  if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed. The stored file does not match its SHA-256 fingerprint."});
+ }
+ const fieldLayout=template.fieldLayout?.fields&&!Object.keys(template.fieldLayout).some(k=>k!=="fields")?{}:validateFieldLayout(template.fieldLayout||{});
+ const pdf=await renderCertificatePreview({template:{...template,fieldLayout},organizationName:access.organization.name,data:b,artworkBytes});
+ await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_PREVIEW_RENDERED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,sourceType:template.sourceType});
+ s.setHeader("Content-Type","application/pdf");s.setHeader("Content-Disposition",`inline; filename="VERITY-${template.id}-PREVIEW.pdf"`);s.setHeader("Cache-Control","private, no-store");s.send(pdf);
+}));
 app.get("/api/organization/certificate-design/templates",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
  const db=makeServerClient();

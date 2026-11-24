@@ -2,9 +2,9 @@ name: VERITY build and test
 
 on:
   pull_request:
-    branches: [main, feature/verity-durable-bulk-certificate-issuance]
+    branches: [main, feature/verity-durable-bulk-certificate-issuance, feat/institution-certificate-design-system]
   push:
-    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening]
+    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feat/certificate-pdf-rendering-engine]
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Check server syntax
-        run: node --check server/index.js && node --check server/staff-permissions.js && node --check server/student-import-worker.js && node --check server/bulk-certificate-worker.js && node --check server/bulk-certificate-service.js
+        run: node --check server/index.js && node --check server/certificate-renderer.js && node --check server/staff-permissions.js && node --check server/student-import-worker.js && node --check server/bulk-certificate-worker.js && node --check server/bulk-certificate-service.js
       - name: Build frontend
         run: npm run build
       - name: Run automated tests

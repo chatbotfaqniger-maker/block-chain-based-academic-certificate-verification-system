@@ -760,3 +760,7 @@ The institution's design is stored once and reused. Each graduate has an individ
 Scanning a QR code resolves the credential reference. VERITY then checks the issuer, registry record, credential digest/ledger integrity and revocation status. The QR code is only a lookup route; it is not the authenticity proof. Transcript/result verification is a separate credential type and must not be implied by certificate verification.
 
 **Implementation status:** the database migration introduces private template and digitisation-review records. Do not describe the design studio, artwork rendering or digitisation review UI as production-enabled until their authenticated endpoints, UI and end-to-end tests are merged and deployed.
+
+
+### PDF certificate preview (development rollout)
+Approved institution owners can generate a private PDF preview from a saved design in the Certificate Design Studio. The preview uses sample or entered graduate details and includes a visible **PREVIEW — NOT A VALID CREDENTIAL** marking and a non-verifying preview QR. It is for layout inspection only: it does not create a certificate ID, verification key, ledger event or public verification result. The original artwork remains private and its stored SHA-256 fingerprint is checked before rendering. Do not distribute preview PDFs as issued certificates.
