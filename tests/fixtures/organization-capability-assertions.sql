@@ -79,8 +79,7 @@ BEGIN
       WHERE c."organizationId"=o.id
         AND c.capability='VERIFY_CREDENTIALS'
         AND c.status=CASE
-          WHEN o.status='APPROVED' THEN 'APPROVED'
-          WHEN o.status='SUSPENDED' THEN 'SUSPENDED'
+          WHEN o.status IN ('APPROVED','SUSPENDED') THEN 'APPROVED'
           ELSE 'PENDING'
         END
     );
@@ -94,7 +93,7 @@ BEGIN
   WHERE (o.type='INSTITUTION' AND c.capability='ISSUE_CREDENTIALS'
           AND c.status='APPROVED' AND o.status='PENDING')
      OR (o.type='EMPLOYER' AND c.capability='VERIFY_CREDENTIALS'
-          AND c.status='APPROVED' AND o.status<>'APPROVED');
+          AND c.status='APPROVED' AND o.status NOT IN ('APPROVED','SUSPENDED'));
   IF v_invalid>0 THEN
     RAISE EXCEPTION 'A capability is approved while its organization is not approved';
   END IF;
