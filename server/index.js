@@ -409,7 +409,7 @@ app.get("/api/student/registration-options",run(async(q,s)=>{
 app.get("/api/student/registration-context",auth,roles("GRADUATE"),run(async(q,s)=>{
  const metadata=q.authUser.user_metadata||{},organizationId=metadata.studentOrganizationId||null,studentNumber=metadata.studentNumber||null;
  let institution=null;
- if(organizationId&&studentNumber){const {data:issuers,error}=await q.supabase.rpc("verity_student_signup_institutions");if(error)throw error;const issuer=(issuers||[]).find(x=>x.id===organizationId);if(issuer){const {data:eligible,error:precheckError}=await q.supabase.rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;if(eligible)institution={id:issuer.id,name:issuer.name};}}
+ if(organizationId&&studentNumber){const server=makeServerClient();const {data:issuers,error}=await server.rpc("verity_student_signup_institutions");if(error)throw error;const issuer=(issuers||[]).find(x=>x.id===organizationId);if(issuer){const {data:eligible,error:precheckError}=await server.rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;if(eligible===true)institution={id:issuer.id,name:issuer.name};}}
  s.json({institution,studentNumber,needsActivation:!q.user.id?false:true});
 }));
 app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
