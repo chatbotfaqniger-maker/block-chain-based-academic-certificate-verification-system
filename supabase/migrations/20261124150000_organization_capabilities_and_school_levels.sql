@@ -83,6 +83,13 @@ CREATE POLICY verity_organization_capability_owner_read
       WHERE o.id = "OrganizationCapability"."organizationId"
         AND o."ownerId" = (SELECT auth.uid())::text
     )
+    OR EXISTS (
+      SELECT 1 FROM public."InstitutionICTStaff" i
+      WHERE i."organizationId" = "OrganizationCapability"."organizationId"
+        AND i."userId" = (SELECT auth.uid())::text
+        AND i.status = 'ACTIVE'
+        AND 'roster:manage' = ANY(i.permissions)
+    )
     OR (SELECT private.is_admin())
   );
 
