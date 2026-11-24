@@ -4,13 +4,13 @@ A Docker-first academic credential issuance and verification prototype.
 
 ## Supabase setup
 
-Verity uses Supabase Auth and the Supabase Data API. Core authentication and credential workflows do **not** need a PostgreSQL connection string, database password, Prisma setup, Supabase secret key, or service-role key.
+Verity uses Supabase Auth and the Supabase Data API. Browser authentication and user-scoped data access use the Supabase URL and publishable key. The production server also requires a server-only Supabase service-role/secret key for protected internal RPCs, cross-user in-app notifications and other explicitly privileged operations. It is never exposed to browser code.
 
 Configure for the core application:
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 
-Certificate uploads do not require a scanner service or Supabase service-role key. The server uses the Supabase Publishable Key with the signed-in user's access token; never place secret or service-role keys in frontend configuration or committed source code.
+Certificate document uploads use the signed-in user's access token and do not require an antivirus scanner. Protected certificate verification and student-registration precheck RPCs are called server-side with the service-role/secret key. Never place that key in frontend configuration or committed source code.
 
 The database migration creates the Auth-to-profile trigger, access policies, and a restricted public certificate lookup function. Row Level Security protects all credential and audit tables.
 
@@ -92,7 +92,7 @@ Access remains restricted by authenticated role, institution ownership, staff pe
 
 ## Security notes
 
-- Never commit Supabase secret or service-role keys or expose them to browser code. VERITY document workflows use the signed-in user session and do not require a service-role key.
+- Never commit Supabase secret or service-role keys or expose them to browser code. User-scoped document workflows use the signed-in user session; protected internal RPCs and cross-user notification operations require the server-only key.
 - The publishable key is designed for client-facing use and is safe only with the included Row Level Security policies.
 - Email-confirmation behavior is controlled in the Supabase Auth dashboard; Verity does not override that setting.
 - VERITY does not scan uploaded files for malware. File-signature checks and SHA-256 integrity checks are not antivirus protection; accept uploads only from trusted sources and use endpoint protection on the systems handling them.
@@ -163,7 +163,7 @@ The public `POST /api/verify` application endpoint is rate-limited per client IP
 
 Sensitive certificate lookup, ledger integrity verification and student-registration precheck RPCs are executable only by the server-side `service_role` and are called through rate-limited Express endpoints. Public execution remains only for limited approved-issuer, public institution-directory and student signup institution-discovery functions. Student activation, roster access, membership requests, recovery actions and organization settings remain authenticated-only with explicit user/organization permission checks.
 
-Default function privileges for both `postgres` and `supabase_admin` are hardened so new public-schema functions are not automatically executable by `anon` or `authenticated`. Future RPC migrations must explicitly grant only the roles they require. Certificate rows are immutable after issuance: the database validates the SHA-256 digest, permits only ACTIVE-to-REVOKED status changes, prevents deletion, and checks that the current record matches its latest append-only ledger event. The `CertificateLedger` table is read-only to `service_role`; its owner-controlled trigger is the only application write path. RLS-bypassing `TRUNCATE` privileges are revoked from application roles across the public schema. Supabase Auth leaked-password protection is a dashboard-level, plan-dependent control (currently documented for Pro and higher plans). Enable it in the Supabase Auth password-security settings if the existing project plan supports it; do not upgrade solely for this setting. Keep the strongest password length/character policy available on the current plan and retain the application rate limits.
+Default function privileges for the migration owner (`postgres` in the production migration session) are hardened so new public-schema functions are not automatically executable by `anon` or `authenticated`. Cross-role default-privilege changes are not performed by the production migration. Future RPC migrations must explicitly grant only the roles they require. Certificate rows are immutable after issuance: the database validates the SHA-256 digest, permits only ACTIVE-to-REVOKED status changes, prevents deletion, and checks that the current record matches its latest append-only ledger event. The `CertificateLedger` table is read-only to `service_role`; its owner-controlled trigger is the only application write path. RLS-bypassing `TRUNCATE` privileges are revoked from application roles across the public schema. Supabase Auth leaked-password protection is a dashboard-level, plan-dependent control (currently documented for Pro and higher plans). Enable it in the Supabase Auth password-security settings if the existing project plan supports it; do not upgrade solely for this setting. Keep the strongest password length/character policy available on the current plan and retain the application rate limits.
 
 ## Production migration history
 
@@ -195,7 +195,7 @@ The approved release sequence for the durable bulk certificate issuance and cert
 - The existing Render Docker web service remains the application deployment target. No additional worker service or paid infrastructure is required by PR #8.
 - Blockchain remains optional and disabled for normal operation. Existing certificates remain verifiable without a wallet, RPC endpoint, gas, contract or chain transaction.
 - Production changes must be additive and applied one reviewed migration at a time. Do not reset migration history, replay missing historical migrations, or run automated supabase db push against production while reconciliation is incomplete.
-- The production audit currently reports 58 applied migration versions, 24 SQL migration files in the repository, and 43 applied versions without matching repository files. Preserve this history; the discrepancy is not permission to reconstruct or replay migrations blindly.
+- The production audit after PR #9 reports 59 applied migration versions, 24 SQL migration files in the repository, and 43 applied versions without matching repository files; 16 repository migration files now match applied production versions. Preserve this history; the discrepancy is not permission to reconstruct or replay migrations blindly.
 - PR #8 must be merged and its additive queue migration applied before PR #9 is retargeted to main. PR #9 must then be reviewed against the updated main, merged, and its security migration applied as a separate operation.
 - The bulk certificate worker remains disabled until the PR #8 migration is confirmed applied, the matching application deployment is live, and a server-only Supabase service-role/secret key is confirmed configured. Never expose this key to browser code, logs, README content or committed source.
 - The Render integration exposes service and deployment metadata but does not expose environment-variable names or values for inspection. Therefore, do not claim that the required server-only key is configured based solely on the Render service listing. Verify its presence in the Render Dashboard without copying or revealing its value.
@@ -205,8 +205,8 @@ The approved release sequence for the durable bulk certificate issuance and cert
 ### Release record
 
 - **PR #8 — Durable bulk certificate issuance:** merged first; application deployment is live and migration `20261124071328_durable_bulk_certificate_issuance_queue` is applied and verified. CSV/ZIP and multiple-PDF options do not change the underlying institution ownership, certificate ledger, or blockchain policy.
-- **PR #9 — Certificate ledger integrity hardening:** staged second; protects certificate immutability, ledger append-only behavior, RPC privilege boundaries and verification rate limits. It must be reviewed, merged and applied as a separate migration after PR #8 is complete.
-- **Environment verification:** pending manual confirmation in Render Dashboard because the connected Render service metadata API does not return environment-variable configuration.
+- **PR #9 — Certificate ledger integrity hardening:** merged as `419424bb859c7e184769df538527bd34917b2b3b`; Render deployment is live. Migration `20261124074628_certificate_ledger_integrity_hardening` is applied. Production checks confirm the existing certificate and ledger event remain present, the ledger hash-chain and current-record match both pass, application roles have no public-table TRUNCATE privileges, and `service_role` is read-only on `CertificateLedger`.
+- **Environment verification:** the production health endpoint reports `inAppConfigured: true` and `browserPushConfigured: true`; admin email remains unconfigured.
 - **Worker activation:** explicitly not authorized by this release record; keep disabled until its prerequisites and operational checks pass.
 
 This section is the locked implementation and release decision record. Any future change to these decisions must be documented here before implementation.
