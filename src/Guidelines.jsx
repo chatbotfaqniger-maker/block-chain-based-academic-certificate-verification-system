@@ -204,7 +204,8 @@ export default function RoleGuidelines({ user, organization, onOpen, data, certi
   const issuerModules = isIssuer && !isInstitution
     ? institutionGuides.filter(x => !["student-identity","staff"].includes(x.page))
     : institutionGuides;
-  const baseModules = isAdmin ? adminGuides : isIssuer ? issuerModules : isOrganization ? organizationGuides : isStaff
+  const organizationModules = hasVerifierCapability ? organizationGuides : organizationGuides.filter(x => !["verify","access"].includes(x.page));
+  const baseModules = isAdmin ? adminGuides : isIssuer ? issuerModules : isOrganization ? organizationModules : isStaff
     ? staffGuides.filter(x => x.page !== "certificates" || canReadAsStaff)
     : graduateGuides;
   const combinedModules = isIssuer && hasVerifierCapability
