@@ -361,8 +361,9 @@ begin
   end if;
   if exists(select 1 from public."CertificateIssuanceItem" i
       where i."batchId"=v_batch.id
-        and (i."documentStoragePath" is null or i."documentSha256" is null)) then
-    raise exception 'Every issuance item must have a validated private PDF before submission';
+        and ((v_batch.method<>'CSV_GENERATED' and (i."documentStoragePath" is null or i."documentSha256" is null))
+          or (v_batch.method='CSV_GENERATED' and ((i."documentStoragePath" is null)<>(i."documentSha256" is null))))) then
+    raise exception 'Each item must have either a validated private PDF or a generated-PDF batch configuration';
   end if;
 
   update public."CertificateIssuanceItem"
@@ -458,9 +459,10 @@ as $$
 declare
   v_org_id text;
   v_batch_status text;
+  v_batch_method text;
 begin
-  select b."organizationId",b.status
-    into v_org_id,v_batch_status
+  select b."organizationId",b.status,b.method
+    into v_org_id,v_batch_status,v_batch_method
     from public."CertificateIssuanceBatch" b
     where b.id=new."batchId"
     for key share;
@@ -475,9 +477,10 @@ begin
        or new."leaseToken" is not null or new."leasedAt" is not null then
       raise exception 'New issuance items must be staged in an uploading batch';
     end if;
-    if new."documentStoragePath" is null or new."documentStoragePath" !~ '^bulk-staging/'
-       or new."documentName" is null or new."documentSha256" is null then
-      raise exception 'A validated private bulk-staging PDF is required';
+    if new."documentName" is null or
+       (v_batch_method='CSV_GENERATED' and (new."documentStoragePath" is not null or new."documentSha256" is not null)) or
+       (v_batch_method<>'CSV_GENERATED' and (new."documentStoragePath" is null or new."documentStoragePath" !~ '^bulk-staging/' or new."documentSha256" is null)) then
+      raise exception 'A validated staged PDF or a generated-PDF batch item is required';
     end if;
   else
     if new."batchId"<>old."batchId"
