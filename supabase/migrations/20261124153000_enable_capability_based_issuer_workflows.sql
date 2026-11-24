@@ -528,6 +528,7 @@ CREATE OR REPLACE FUNCTION public.verity_student_registration_precheck(
 RETURNS boolean
 LANGUAGE sql
 STABLE
+SECURITY DEFINER
 SET search_path TO ''
 AS $function$
  select exists(
