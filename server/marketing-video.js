@@ -23,7 +23,7 @@ function run(args) {
 }
 
 export async function createVerityMarketingMp4({ stats = {}, certificate = null, auditEvents = [], chain = {}, verification = null } = {}) {
-  const duration = 90;
+  const duration = 120;
   const institution = clean(certificate?.institution, "Approved academic institution");
   const qualification = clean(certificate?.qualification, "Academic qualification");
   const certificateId = mask(certificate?.certificateId);
@@ -34,12 +34,12 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
   const scenes = [
     ["VERITY · DIGITAL CREDENTIAL NETWORK","Trust every credential.","A connected platform for issuing, sharing and verifying academic achievements.","THE FUTURE OF DIGITAL CREDENTIAL VERIFICATION","VERITY / INTRO",["Issue with confidence","Share with control","Verify with evidence",""]],
     ["01 / LIVE PLATFORM OVERVIEW","One network. Four workspaces.","Live platform totals and credential activity, loaded from the authenticated Verity database.","REAL PLATFORM DATA · REFRESHED AT EXPORT","LIVE DASHBOARD",[ "Total credentials  " + (stats.total ?? 0), "Active credentials  " + (stats.active ?? 0), "Revoked credentials  " + (stats.revoked ?? 0), "Verifications  " + (stats.verifications ?? 0) ]],
-    ["02 / INSTITUTION WORKSPACE","From student record to issued award.","An approved institution reviews the graduate and award details before registering the certificate.","INSTITUTION-APPROVED ISSUANCE WORKFLOW","ISSUE CERTIFICATE",[institution, qualification, "Record status  " + clean(certificate?.status, "No live record"), "Award date  " + clean(certificate?.awardDate, "—")]],
+    ["02 / INSTITUTION WORKSPACE","From student record to issued award.","An approved institution registers student identities, reviews academic awards, imports verified student rosters and issues reviewed certificate batches.","STUDENT IDENTITY · ROSTER IMPORT · REVIEWED BULK ISSUANCE","ISSUE CERTIFICATE",[institution, qualification, "Record status  " + clean(certificate?.status, "No live record"), "Award date  " + clean(certificate?.awardDate, "—")]],
     ["03 / VERIFICATION CODE","A unique reference is created.","Verity generates a certificate ID and a separate verification key for QR and reference-based checks.","REAL REFERENCE · MASKED FOR STUDENT PRIVACY","ISSUANCE REFERENCE",[ "Certificate ID  " + certificateId, "Verification key  " + verificationKey, "Fingerprint  " + clean(certificate?.digest ? String(certificate.digest).slice(0, 18) + "…" : "", "Created at issuance"), "QR / verification link  Ready to share" ]],
-    ["04 / GRADUATE WORKSPACE","The achievement belongs to the graduate.","Linked graduates can access their credentials and retrieve the verification reference issued by their institution.","PERSONAL CREDENTIAL ACCESS","MY CREDENTIALS",[qualification, institution, "Credential status  " + clean(certificate?.status, "—"), "Graduate account  " + (certificate?.graduateId ? "Linked" : "Not linked to a graduate account")]],
+    ["04 / GRADUATE WORKSPACE","The achievement belongs to the graduate.","Graduates sign up against an approved institution and student identity. Institution ICT can use controlled recovery when a student record is missing or already claimed.","APPROVED INSTITUTION · STUDENT IDENTITY · ICT RECOVERY","MY CREDENTIALS",[qualification, institution, "Credential status  " + clean(certificate?.status, "—"), "Graduate account  " + (certificate?.graduateId ? "Linked" : "Not linked to a graduate account")]],
     ["05 / SECURE SHARING","Share proof. Protect the original.","Graduates can share a verification link or key. Access to private original documents remains subject to graduate consent.","VERIFICATION LINK · CONSENT-BASED DOCUMENT ACCESS","SHARE CREDENTIAL",[ "Verification reference  " + verificationKey, "Public status check  Available", "Original document  Consent required", "Private access  Time-limited" ]],
-    ["06 / ORGANIZATION WORKSPACE","Verify against the issuer's record.","A real reference lookup and integrity check was performed against a current Verity credential before this film was rendered.","LIVE REGISTRY LOOKUP · ACTUAL VERIFICATION RESPONSE","ORGANIZATION VERIFICATION",[ "Submitted reference  " + verificationKey, "Registry response  " + status, "Credential  " + qualification, "Issuer  " + institution ]],
-    ["07 / ADMINISTRATION","Oversight at every step.","Administrators review organization approvals, credential activity and audit events across the platform.","PLATFORM MANAGEMENT · AUDIT ACTIVITY","ADMIN CONTROL CENTRE",[ "Credential records  " + (stats.total ?? 0), "Verification activity  " + (stats.verifications ?? 0), "Latest audit event  " + audit, "Network status  " + chainLabel ]],
+    ["06 / ORGANIZATION WORKSPACE","Verify against the issuer's record.","Organizations register with legal and contact details, discover registered institutions and organizations, then verify the issuer record, credential status and integrity response.","LEGAL ORGANIZATION PROFILE · DIRECTORY · REGISTRY RESPONSE","ORGANIZATION VERIFICATION",[ "Submitted reference  " + verificationKey, "Registry response  " + status, "Credential  " + qualification, "Issuer  " + institution ]],
+    ["07 / ADMINISTRATION","Oversight at every step.","Administrators oversee organization approvals, system health and audit activity while the Supabase-backed certificate ledger preserves verifiable, append-only issuance history.","SUPABASE SOURCE OF TRUTH · SHA-256 LEDGER · AUDIT · SYSTEM HEALTH","ADMIN CONTROL CENTRE",[ "Credential records  " + (stats.total ?? 0), "Verification activity  " + (stats.verifications ?? 0), "Latest audit event  " + audit, "Ledger  Append-only SHA-256", "Network status  " + chainLabel ]],
     ["VERITY · TRUST, PROVEN","Achievement deserves proof.","Issue responsibly. Share securely. Verify with confidence. One connected credential journey.","VERITY · THE FUTURE OF DIGITAL CREDENTIAL VERIFICATION","THE CREDENTIAL JOURNEY",[ "INSTITUTION  →  ISSUE", "VERITY  →  GENERATE REFERENCE", "GRADUATE  →  SHARE", "ORGANIZATION  →  VERIFY" ]]
   ];
 
@@ -55,8 +55,8 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
       "drawtext=fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf:text='THE FUTURE OF DIGITAL CREDENTIAL VERIFICATION':fontcolor=0x75939b:fontsize=14:x=72:y=680"
     ];
     for (let i = 0; i < scenes.length; i++) {
-      const start = i * 10;
-      const end = start + 10;
+      const start = i * duration / scenes.length;
+      const end = (i + 1) * duration / scenes.length;
       const files = [];
       const textValues = [...scenes[i].slice(0, 5), ...scenes[i][5]];
       for (let j = 0; j < textValues.length; j++) {
@@ -74,7 +74,7 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
       add(files[2], 21, "0xb5cbd0", 72, 330);
       add(files[3], 14, "0x82aeb6", 72, 414);
       add(files[4], 15, "0x9dded5", 724, 174);
-      for (let j = 0; j < 4; j++) add(files[5 + j], 15, "white", 724, 238 + j * 76);
+      for (let j = 0; j < scenes[i][5].length; j++) add(files[5 + j], 15, "white", 724, 214 + j * 70);
       filters.push("drawtext=fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf:text='0" + (i + 1) + " / 09':fontcolor=0x75939b:fontsize=14:x=1140:y=680:enable='between(t," + start + "," + end + ")'");
     }
 
@@ -91,7 +91,7 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
       "[4:a]volume=0.055,lowpass=f=1100[highpad];" +
       "[5:a]volume=0.028,lowpass=f=1800[shimmer];" +
       "[6:a]volume=0.018,highpass=f=1800,lowpass=f=6500[air];" +
-      "[bass][lowpad][midpad][highpad][shimmer][air]amix=inputs=6:duration=longest:normalize=0,afade=t=in:st=0:d=4,afade=t=out:st=84:d=6,alimiter=limit=0.88[aout]",
+      "[bass][lowpad][midpad][highpad][shimmer][air]amix=inputs=6:duration=longest:normalize=0,afade=t=in:st=0:d=4,afade=t=out:st=114:d=6,alimiter=limit=0.88[aout]",
       "-map", "0:v", "-map", "[aout]", "-vf", filters.join(","), "-t", String(duration), "-r", "30",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-movflags", "+faststart", output

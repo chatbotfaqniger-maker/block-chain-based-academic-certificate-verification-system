@@ -210,3 +210,8 @@ The approved release sequence for the durable bulk certificate issuance and cert
 - **Worker activation:** explicitly not authorized by this release record; keep disabled until its prerequisites and operational checks pass.
 
 This section is the locked implementation and release decision record. Any future change to these decisions must be documented here before implementation.
+
+### Documentary runtime and content
+- The VERITY User Guide product documentary is designed for a 120-second (two-minute), nine-scene experience in both the interactive showcase and administrator MP4 export.
+- The extended edition explains student identity registration and institution ICT recovery, roster import and reviewed bulk certificate issuance, organization legal registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger.
+- The MP4 generator and in-app showcase must remain duration-aligned. Verify the generated file's actual duration and playback after deployment; a source-code change alone is not proof of a successfully rendered MP4.
