@@ -126,7 +126,7 @@ jobs:
       - name: Apply durable bulk issuance migration
         env:
           PGPASSWORD: verity-ci-only
-        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261123224500_durable_bulk_certificate_issuance_queue.sql
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261124071328_durable_bulk_certificate_issuance_queue.sql
       - name: Verify retries, leases, reconciliation and privileges
         env:
           PGPASSWORD: verity-ci-only
@@ -155,15 +155,15 @@ jobs:
         run: psql -h localhost -U postgres -d verity_security_test -v ON_ERROR_STOP=1 -f tests/fixtures/certificate-ledger-hardening-bootstrap.sql
       - name: Confirm checkout contains the latest anchor validation
         run: |
-          grep -q 'NEW."chainId" > 0' supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
-          ! grep -q 'length(NEW."chainId")' supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
-          ! grep -q 'translate(NEW."chainId"' supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
+          grep -q 'NEW."chainId" > 0' supabase/migrations/20261124074628_certificate_ledger_integrity_hardening.sql
+          ! grep -q 'length(NEW."chainId")' supabase/migrations/20261124074628_certificate_ledger_integrity_hardening.sql
+          ! grep -q 'translate(NEW."chainId"' supabase/migrations/20261124074628_certificate_ledger_integrity_hardening.sql
           git rev-parse HEAD
-          sha256sum supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
+          sha256sum supabase/migrations/20261124074628_certificate_ledger_integrity_hardening.sql
       - name: Apply certificate ledger hardening migration
         env:
           PGPASSWORD: postgres
-        run: psql -h localhost -U postgres -d verity_security_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261123231500_certificate_ledger_integrity_hardening.sql
+        run: psql -h localhost -U postgres -d verity_security_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261124074628_certificate_ledger_integrity_hardening.sql
       - name: Assert immutability, record-aware verification and least-privilege grants
         env:
           PGPASSWORD: postgres
