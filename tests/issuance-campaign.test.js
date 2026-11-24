@@ -19,7 +19,7 @@ test("campaign planner handles monthly allowance and chunk boundaries",()=>{
   assert.equal(MAX_CAMPAIGN_ITEMS,8000);assert.equal(MAX_MONTHLY_ISSUANCE_ITEMS,8000);
 });
 
-test("campaign planner rejects sizes above the 8,000-record boundary",()=>{
+test("campaign planner keeps legacy campaigns resumable while new uploads use the 8,000-record cap",()=>{
   assert.equal(getIssuanceChunk(new Array(8001),0).items.length,500);
   assert.equal(getIssuanceChunk(new Array(50000),0).totalParts,100);
   assert.throws(()=>getIssuanceChunk(new Array(MAX_LEGACY_CAMPAIGN_ITEMS+1),0),/50,000/);
