@@ -81,7 +81,7 @@ export default function BulkCertificates({api,notice,organization}){
       campaignId:crypto.randomUUID(),campaignCreated:false,campaignFileName:csvFile?.name||"VERITY-bulk-certificates.csv",
       campaignMethod,method,selectedRows:selected,itemIds:selected.map(()=>crypto.randomUUID()),
       batchIds:Array.from({length:Math.ceil(selected.length/PROCESSING_BATCH_SIZE)},()=>crypto.randomUUID()),
-      nextIndex:0,batchId:null,totalItems:selected.length
+      nextIndex:0,batchId:null,batchStart:null,batchEnd:null,totalItems:selected.length
     };
     setPendingUpload(pending);
     setProgress({done:0,total:selected.length});
@@ -99,6 +99,15 @@ export default function BulkCertificates({api,notice,organization}){
       })});
       pending={...pending,campaignCreated:true};setPendingUpload(pending);
     }
+    // If the final item was staged but the completion response timed out,
+    // finish that same durable chunk before moving to the next chunk or exiting.
+    if(pending.batchId&&pending.batchEnd!==null&&pending.nextIndex>=pending.batchEnd){
+      const completedBatchId=pending.batchId;
+      const submitted=await api("/organization/certificates/bulk/batches/"+completedBatchId+"/complete",{method:"POST",body:JSON.stringify({})});
+      lastBatchId=completedBatchId;
+      pending={...pending,nextIndex:pending.batchEnd,batchId:null,batchStart:null,batchEnd:null};setPendingUpload(pending);
+      if(submitted.batch)setHistory(old=>[submitted.batch,...old.filter(x=>x.id!==submitted.batch.id)].slice(0,25));
+    }
     while(pending.nextIndex<pending.selectedRows.length){
       const chunk=getIssuanceChunk(pending.selectedRows,pending.nextIndex);
       const {start:chunkStart,end:chunkEnd,items:chunkRows,partNumber,totalParts}=chunk;
@@ -109,7 +118,7 @@ export default function BulkCertificates({api,notice,organization}){
           fileName:(pending.campaignFileName||"VERITY-bulk-certificates").slice(0,130)+"-part-"+partNumber+"-of-"+totalParts,
           method:pending.campaignMethod,totalItems:chunkRows.length
         })});
-        pending={...pending,batchId};setPendingUpload(pending);
+        pending={...pending,batchId,batchStart:chunkStart,batchEnd:chunkEnd};setPendingUpload(pending);
       }
       for(let i=pending.nextIndex;i<chunkEnd;i++){
         const row=pending.selectedRows[i],itemId=pending.itemIds[i];
@@ -142,7 +151,7 @@ export default function BulkCertificates({api,notice,organization}){
       // Completion is idempotent. If its response is lost, retrying the same chunk is safe.
       const submitted=await api("/organization/certificates/bulk/batches/"+batchId+"/complete",{method:"POST",body:JSON.stringify({})});
       lastBatchId=batchId;
-      pending={...pending,nextIndex:chunkEnd,batchId:null};setPendingUpload(pending);
+      pending={...pending,nextIndex:chunkEnd,batchId:null,batchStart:null,batchEnd:null};setPendingUpload(pending);
       if(submitted.batch)setHistory(old=>[submitted.batch,...old.filter(x=>x.id!==submitted.batch.id)].slice(0,25));
     }
     setActiveBatchId(lastBatchId);setPendingUpload(null);setConfirmed(false);setGenerated(true);
