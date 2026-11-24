@@ -951,6 +951,7 @@ async function certificateDesignInstitution(q){
  return {organization:org};
 }
 const designName=value=>String(value||"").normalize("NFKC").trim().slice(0,120);
+const designFieldLayout=layout=>Object.fromEntries(Object.entries(layout||{}).filter(([key,value])=>["studentName","studentNumber","qualification","programme","faculty","department","classification","awardDate","certificateId"].includes(key)&&value&&typeof value==="object"&&!Array.isArray(value)));
 app.post("/api/organization/certificate-design/templates/:id/preview",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
  if(!/^[0-9a-f-]{36}$/i.test(q.params.id))return s.status(400).json({error:"Invalid template identifier."});
@@ -966,7 +967,7 @@ app.post("/api/organization/certificate-design/templates/:id/preview",auth,roles
   artworkBytes=Buffer.from(await file.arrayBuffer());
   if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed. The stored file does not match its SHA-256 fingerprint."});
  }
- const fieldLayout=template.fieldLayout?.fields&&!Object.keys(template.fieldLayout).some(k=>k!=="fields")?{}:validateFieldLayout(template.fieldLayout||{});
+ const fieldLayout=validateFieldLayout(designFieldLayout(template.fieldLayout));
  const pdf=await renderCertificatePreview({template:{...template,fieldLayout},organizationName:access.organization.name,data:b,artworkBytes});
  await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_PREVIEW_RENDERED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,sourceType:template.sourceType});
  s.setHeader("Content-Type","application/pdf");s.setHeader("Content-Disposition",`inline; filename="VERITY-${template.id}-PREVIEW.pdf"`);s.setHeader("Cache-Control","private, no-store");s.send(pdf);
@@ -1010,8 +1011,9 @@ app.post("/api/organization/certificate-design/templates/:id/activate",auth,role
   const {data:file,error}=await db.storage.from("verity-certificates").download(template.assetStoragePath);if(error)throw error;
   const bytes=Buffer.from(await file.arrayBuffer());if(!template.assetSha256||digest(bytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed."});
  }
- const layout=template.fieldLayout?.fields&&!Object.keys(template.fieldLayout).some(k=>k!=="fields")?{}:validateFieldLayout(template.fieldLayout||{});
- const pdf=await renderCertificatePreview({template:{...template,fieldLayout:layout},organizationName:access.organization.name,data:{studentName:"APPROVAL SAMPLE",studentNumber:"APPROVAL-0001",qualification:"B.Sc.",programme:"Computer Science",faculty:"Faculty",department:"Department",classification:"Sample",awardDate:new Date().toISOString().slice(0,10)} ,...(template.sourceType==="INSTITUTION_ARTWORK"?{artworkBytes:Buffer.from(await (await db.storage.from("verity-certificates").download(template.assetStoragePath)).data.arrayBuffer())}:{})});
+ const layout=validateFieldLayout(designFieldLayout(template.fieldLayout));
+ let artworkBytes=null;if(template.sourceType==="INSTITUTION_ARTWORK"){const {data:file,error}=await db.storage.from("verity-certificates").download(template.assetStoragePath);if(error)throw error;artworkBytes=Buffer.from(await file.arrayBuffer());if(digest(artworkBytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed."});}
+ const pdf=await renderCertificatePreview({template:{...template,fieldLayout:layout},organizationName:access.organization.name,data:{studentName:"APPROVAL SAMPLE",studentNumber:"APPROVAL-0001",qualification:"B.Sc.",programme:"Computer Science",faculty:"Faculty",department:"Department",classification:"Sample",awardDate:new Date().toISOString().slice(0,10)},artworkBytes});
  if(!pdf?.subarray(0,5).toString("ascii").startsWith("%PDF-"))return s.status(422).json({error:"A valid PDF preview could not be rendered."});
  const {error:deactivateError}=await db.from("InstitutionCertificateTemplate").update({status:"ARCHIVED",isDefault:false,updatedAt:new Date().toISOString(),updatedBy:q.user.id}).eq("organizationId",access.organization.id).eq("status","ACTIVE");
  if(deactivateError)throw deactivateError;
