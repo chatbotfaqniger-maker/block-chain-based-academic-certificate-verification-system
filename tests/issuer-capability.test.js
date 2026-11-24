@@ -48,9 +48,10 @@ test("the existing certificate template and bucket-driven bulk methods remain th
  assert.match(bulk,/CSV_MULTIPLE_PDFS/);
  assert.match(bulk,/CSV_GENERATED/);
  assert.match(bulk,/max\(1,Math\.min\(500/);
- assert.match(studio,/InstitutionCertificateTemplate/);
- assert.match(studio,/assetStoragePath/);
+ assert.match(studio,/request\\("\\/organization\\/certificate-design\\/templates"\\)/);
+ assert.match(studio,/Upload your approved PDF or high-resolution PNG\\/JPEG artwork/);
  assert.match(studio,/fieldLayout/);
+ assert.doesNotMatch(workflows,/DROP TABLE public\\.\\"InstitutionCertificateTemplate\\"/);
  assert.match(workflows,/CertificateIssuanceBatch/);
  assert.match(workflows,/CertificateIssuanceItem/);
 });
