@@ -169,13 +169,13 @@ $$;
 
 
 CREATE FUNCTION public.default_privilege_probe() RETURNS integer
-LANGUAGE sql AS $ SELECT 1; $;
+LANGUAGE sql AS $$ SELECT 1; $$;
 SET ROLE supabase_admin;
 CREATE FUNCTION public.default_privilege_probe_admin() RETURNS integer
-LANGUAGE sql AS $ SELECT 1; $;
+LANGUAGE sql AS $$ SELECT 1; $$;
 RESET ROLE;
 
-DO $
+DO $$
 BEGIN
   IF has_function_privilege('anon','public.default_privilege_probe()','EXECUTE')
      OR has_function_privilege('authenticated','public.default_privilege_probe()','EXECUTE')
@@ -186,7 +186,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_FAIL: default public function privileges still expose new RPCs to anon/authenticated';
   END IF;
 END;
-$;
+$$;
 
 DROP FUNCTION public.default_privilege_probe();
 DROP FUNCTION public.default_privilege_probe_admin();
