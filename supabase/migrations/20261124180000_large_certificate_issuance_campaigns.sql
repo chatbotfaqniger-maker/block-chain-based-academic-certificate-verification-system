@@ -80,6 +80,24 @@ begin
   if p_file_name is null or char_length(btrim(p_file_name)) not between 1 and 180 then
     raise exception 'Invalid processing batch file name';
   end if;
+
+  -- Client-generated batch IDs make a timed-out creation request safe to retry.
+  select * into v_batch
+    from public."CertificateIssuanceBatch"
+    where id=p_batch_id;
+  if found then
+    if v_batch."campaignId"<>p_campaign_id
+       or v_batch."createdBy"<>p_owner_id
+       or v_batch."totalItems"<>p_total_items
+       or v_batch.method<>p_method then
+      raise exception 'Processing batch identifier is already bound to a different request';
+    end if;
+    select coalesce(sum("totalItems"),0)::integer into v_allocated
+      from public."CertificateIssuanceBatch"
+      where "campaignId"=p_campaign_id;
+    return jsonb_build_object('batch',to_jsonb(v_batch),'allocatedItems',v_allocated);
+  end if;
+
   select coalesce(sum("totalItems"),0)::integer into v_allocated
     from public."CertificateIssuanceBatch"
     where "campaignId"=p_campaign_id;
