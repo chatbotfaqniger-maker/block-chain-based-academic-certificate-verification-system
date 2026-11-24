@@ -105,8 +105,48 @@ CREATE POLICY verity_organization_capability_owner_request
   );
 
 REVOKE ALL ON public."OrganizationCapability" FROM public, anon, authenticated;
-GRANT SELECT, INSERT ON public."OrganizationCapability" TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public."OrganizationCapability" TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."OrganizationCapability" TO service_role;
+
+-- Only platform administrators may record a capability decision.
+DROP POLICY IF EXISTS verity_organization_capability_admin_review
+  ON public."OrganizationCapability";
+CREATE POLICY verity_organization_capability_admin_review
+  ON public."OrganizationCapability"
+  FOR UPDATE TO authenticated
+  USING ((SELECT private.is_admin()))
+  WITH CHECK (
+    (SELECT private.is_admin())
+    AND status IN ('PENDING','APPROVED','REJECTED','SUSPENDED')
+  );
+
+-- An organization owner may resubmit a previously rejected capability request,
+-- but cannot approve, suspend, or otherwise grant the capability to themselves.
+DROP POLICY IF EXISTS verity_organization_capability_owner_resubmit
+  ON public."OrganizationCapability";
+CREATE POLICY verity_organization_capability_owner_resubmit
+  ON public."OrganizationCapability"
+  FOR UPDATE TO authenticated
+  USING (
+    status = 'REJECTED'
+    AND "requestedBy" = (SELECT auth.uid())::text
+    AND EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id = "OrganizationCapability"."organizationId"
+        AND o."ownerId" = (SELECT auth.uid())::text
+    )
+  )
+  WITH CHECK (
+    status = 'PENDING'
+    AND "requestedBy" = (SELECT auth.uid())::text
+    AND "reviewedBy" IS NULL
+    AND "reviewedAt" IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id = "OrganizationCapability"."organizationId"
+        AND o."ownerId" = (SELECT auth.uid())::text
+    )
+  );
 
 -- Shared authorization primitive for later backend and RLS integration.
 -- Organization-level approval is always required in addition to the capability.
