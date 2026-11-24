@@ -18,6 +18,8 @@ export default function AdminCapabilityReviews({notice}){
  useEffect(()=>{load();},[]);
  async function decide(item,status){
   setBusy(item.id);setError("");
+  if(status==="SUSPENDED"&&!window.confirm("Suspend this organization's "+item.capability.replaceAll("_"," ").toLowerCase()+" permission?"))return;
+  if(status==="APPROVED"&&item.status==="SUSPENDED"&&!window.confirm("Restore this organization's "+item.capability.replaceAll("_"," ").toLowerCase()+" permission?"))return;
   try{
    await api("/admin/organization-capabilities/"+item.id,{method:"PATCH",body:JSON.stringify({status,decisionNote:notes[item.id]||""})});
    notice?.("Capability request "+status.toLowerCase()+".");
@@ -43,7 +45,7 @@ export default function AdminCapabilityReviews({notice}){
     </div></div>
    </article>;
   }):<p className="muted">No capability requests are waiting for review.</p>}
-  {reviewed.length>0&&<details className="directory-profile-details"><summary>View previous capability decisions ({reviewed.length})</summary>{reviewed.map(item=><div className="rowitem" key={item.id}><div><b>{item.organization?.name||"Organization"} · {item.capability.replaceAll("_"," ")}</b><small>{item.status} · {item.decisionNote||"No decision note"}</small></div></div>)}</details>}
+  {reviewed.length>0&&<details className="directory-profile-details"><summary>View previous capability decisions ({reviewed.length})</summary>{reviewed.map(item=><div className="rowitem" key={item.id}><div><b>{item.organization?.name||"Organization"} · {item.capability.replaceAll("_"," ")}</b><small>{item.status} · {item.decisionNote||"No decision note"}</small></div><div className="actions">{item.status==="APPROVED"&&<button type="button" className="btn-danger" disabled={!!busy} onClick={()=>decide(item,"SUSPENDED")}>Suspend permission</button>}{item.status==="SUSPENDED"&&item.organization?.status==="APPROVED"&&<button type="button" className="btn-approve" disabled={!!busy} onClick={()=>decide(item,"APPROVED")}>Restore permission</button>}</div></div>)}</details>}
   {error&&<p className="error">{error}</p>}
  </section>;
 }
