@@ -43,6 +43,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Atomic roster claim prevents duplicate student ownership, marks the token used, activates institution membership and applies the official roster name to the student profile
 - ICT can export per-student activation tokens once, reissue an unused token for an eligible unclaimed record, and open an audited dispute for suspected account misclaims; active-account release requires two different authorized officers, is blocked when the claimant has certificate records for that student identity, and preserves the old account and audit trail
 - The in-app User Guidelines include a step-by-step Student Registration & Institution Activation walkthrough for graduates and a Student Identity & ICT guide for institutions
+- Institution certificate design system: institution-original artwork, VERITY professional templates and institution-reviewed existing-certificate digitisation (rollout gated until UI and server workflows are complete)
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
@@ -71,6 +72,10 @@ The full user and operations manual is available here:
 **[VERITY Complete User and Operations Guide](docs/VERITY-COMPLETE-USER-AND-OPERATIONS-GUIDE.md)**
 
 It covers graduate onboarding and credential access, institution approval and issuance, employer verification and graduate consent, staff permissions, System Administrator workflows, the end-to-end credential lifecycle, document security, troubleshooting, deployment configuration and a production-readiness checklist.
+
+## Certificate design system
+
+VERITY is designed to support institution-approved original artwork, built-in professional templates and controlled digitisation of previously issued certificates. The three paths share the existing certificate registry, unique verification references, SHA-256 integrity checks and append-only ledger. See [Certificate Design System Decision](docs/VERITY-CERTIFICATE-DESIGN-SYSTEM.md) and the [Complete User and Operations Guide](docs/VERITY-COMPLETE-USER-AND-OPERATIONS-GUIDE.md). The database migration is a persistence foundation only; do not enable workflows until authenticated server endpoints, UI rendering and end-to-end tests are complete.
 
 ## Supabase-first, blockchain-ready architecture
 
