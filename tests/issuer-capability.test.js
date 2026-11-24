@@ -16,6 +16,8 @@ test("one school organization can serve primary and secondary education",()=>{
  assert.ok(server.includes('const educationLevels=organizationType==="INSTITUTION"'));
  assert.ok(app.includes('value="PRIMARY"'));
  assert.ok(app.includes('value="SECONDARY"'));
+ assert.ok(app.includes('required={form.educationLevels.includes("TERTIARY")}'));
+ assert.ok(server.includes("requiresTertiaryEvidence=org.type==="));
 });
 
 test("legacy organization categories keep only their existing baseline permission",()=>{
