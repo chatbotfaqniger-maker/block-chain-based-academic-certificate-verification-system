@@ -82,6 +82,21 @@ BEGIN
     RAISE EXCEPTION 'Roster chunk uploads are not protected by issuer capability';
   END IF;
 
+  IF has_function_privilege('anon','public.verity_student_registration_precheck(text,text)','EXECUTE')
+     OR has_function_privilege('authenticated','public.verity_student_registration_precheck(text,text)','EXECUTE')
+     OR NOT has_function_privilege('service_role','public.verity_student_registration_precheck(text,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'Private student roster precheck must be service-role only';
+  END IF;
+
+  IF has_function_privilege('anon','public.lookup_verity_certificate_for_org(text)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.lookup_verity_certificate_for_org(text)','EXECUTE') THEN
+    RAISE EXCEPTION 'External verification RPC execution grants are not restricted to authenticated callers';
+  END IF;
+
+  IF NOT has_function_privilege('anon','public.verity_student_signup_institutions()','EXECUTE') THEN
+    RAISE EXCEPTION 'Public graduate signup cannot list approved credential issuers';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conrelid='public."CertificateIssuanceBatch"'::regclass
