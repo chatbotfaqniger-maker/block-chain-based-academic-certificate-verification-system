@@ -728,3 +728,35 @@ Approved institution owners and active ICT staff with the `roster:manage` permis
 Bulk import adds eligible records to the existing student identity registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
 
 ICT staff can use Bulk student import only when their active institution assignment includes `roster:manage`. Staff with only `registration:recover` can use the recovery workflow but cannot import or browse the full roster. The institution owner remains responsible for assigning and reviewing ICT permissions.
+
+
+## Certificate design and existing-certificate digitisation
+
+VERITY supports three document paths for approved academic institutions. These paths share the same certificate registry and verification infrastructure; they do not create separate verification systems.
+
+### A. Institution original certificate design
+- Upload the institution's approved certificate artwork once, rather than uploading the same background for every graduate.
+- Configure the supported dynamic fields (graduate name, student number, qualification, programme, faculty, department, classification, award date, certificate reference and QR code).
+- Keep the original artwork in private institution-scoped storage. VERITY fingerprints the uploaded asset and uses it as the rendering background.
+- The institution must confirm that it owns or is authorized to use the artwork and that the final layout follows its applicable academic and regulatory requirements.
+
+### B. VERITY professional templates
+- Choose a built-in VERITY layout when the institution does not have a digital artwork file or prefers a standard layout.
+- Configure permitted institution identity elements, such as its name, logo, colours, seal and signatory labels.
+- Preview the result before making the template the institution's default for future issuance.
+- A template update applies to future certificates only. Previously issued files are not silently regenerated.
+
+### C. Existing certificate digitisation
+- Submit an already-issued certificate PDF or image together with the claimed graduate and award details.
+- VERITY stores the source scan privately and calculates its SHA-256 fingerprint.
+- The case remains pending until an authorized officer of the issuing institution checks it against official student and award records.
+- A rejected or pending scan is not a verified credential. An approved case must still be converted into a normal VERITY certificate record through the authorized issuance workflow; the source scan remains evidence of the historical document.
+- VERITY must never infer authenticity from a QR code printed on an uploaded scan, a file name, or a visual resemblance to an institutional template.
+
+### Scale and bulk operations
+The institution's design is stored once and reused. Each graduate has an individual structured certificate record, unique certificate ID, verification key, QR code, SHA-256 digest and ledger event. Bulk issuance remains batch-based (currently up to 500 records per batch); large graduating classes should be split into reviewed batches. A document image is an optional presentation/evidence file, not the primary database record.
+
+### Verification rule
+Scanning a QR code resolves the credential reference. VERITY then checks the issuer, registry record, credential digest/ledger integrity and revocation status. The QR code is only a lookup route; it is not the authenticity proof. Transcript/result verification is a separate credential type and must not be implied by certificate verification.
+
+**Implementation status:** the database migration introduces private template and digitisation-review records. Do not describe the design studio, artwork rendering or digitisation review UI as production-enabled until their authenticated endpoints, UI and end-to-end tests are merged and deployed.
