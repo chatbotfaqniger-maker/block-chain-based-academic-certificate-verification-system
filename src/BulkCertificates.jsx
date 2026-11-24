@@ -115,7 +115,7 @@ export default function BulkCertificates({api,notice,organization}){
       if(!pending.batchId){
         await api("/organization/certificates/bulk/batches",{method:"POST",body:JSON.stringify({
           campaignId:pending.campaignId,batchId,
-          fileName:(pending.campaignFileName||"VERITY-bulk-certificates").slice(0,130)+"-part-"+partNumber+"-of-"+totalParts,
+          fileName:(pending.campaignFileName||"VERITY-bulk-certificates") .slice(0,70)+"-part-"+partNumber+"-of-"+totalParts,
           method:pending.campaignMethod,totalItems:chunkRows.length
         })});
         pending={...pending,batchId,batchStart:chunkStart,batchEnd:chunkEnd};setPendingUpload(pending);
