@@ -22,7 +22,7 @@ The capability expansion is being introduced in stages. Until all backend, roste
 6. Newly registered students enter the existing eligible state. Student accounts and activation tokens are not created automatically.
 
 ### Bulk certificate issuance
-1. Sign in as the approved institution owner. Bulk certificate issuance is not available to verification-only organizations or ICT roster staff.
+1. Sign in as the approved credential-issuer owner. Bulk certificate issuance is not available to verification-only organizations or ICT roster staff.
 2. Download the official VERITY CSV template and complete student number, full name, faculty, department, programme, qualification and award date. Award date is required in YYYY-MM-DD format. Export Excel workbooks as CSV UTF-8.
 3. Choose one of the three methods:
    - CSV + ZIP of PDFs: upload one ZIP containing individual PDF certificates.
@@ -41,14 +41,14 @@ The capability expansion is being introduced in stages. Until all backend, roste
 - A document failure after certificate creation is reported separately so the certificate is not issued again.
 
 ## Graduate module
-- Review credentials issued by your institution.
+- Review credentials issued by your organization.
 - Control access requests and revoke active grants where appropriate.
 - Share credentials only with organizations you trust.
 
 ## Organization module
 - Register and maintain accurate legal identity information.
 - Request graduate consent before accessing private credential documents.
-- Verify credentials and retain the verification outcome for your audit workflow.
+- Organizations with approved `VERIFY_CREDENTIALS` permission can verify credentials and retain the verification outcome for their audit workflow.
 
 ## Admin module
 - Review institutional registrations, platform activity and system health.
@@ -56,4 +56,4 @@ The capability expansion is being introduced in stages. Until all backend, roste
 
 ## Staff module
 - Staff capabilities depend on the permissions granted by the institution owner.
-- Student roster permissions do not automatically grant certificate issuance or document access.
+- Student roster permissions do not automatically grant certificate issuance or external-verification permission. The organization owner must hold the approved `ISSUE_CREDENTIALS` capability.
