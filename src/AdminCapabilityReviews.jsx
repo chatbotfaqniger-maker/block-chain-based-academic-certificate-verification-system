@@ -25,7 +25,9 @@ export default function AdminCapabilityReviews({notice}){
   }catch(e){setError(e.message);}
   finally{setBusy("");}
  }
- const pending=items.filter(x=>x.status==="PENDING");
+ const isBaseline=item=>(item.organization?.type==="INSTITUTION"&&item.capability==="ISSUE_CREDENTIALS")||(item.organization?.type==="EMPLOYER"&&item.capability==="VERIFY_CREDENTIALS");
+ const pending=items.filter(x=>x.status==="PENDING"&&!isBaseline(x));
+ const reviewed=items.filter(x=>x.status!=="PENDING"&&!isBaseline(x));
  return <section className="panel admin-registry">
   <div className="registry-heading"><div><span className="eyebrow">SEPARATE PERMISSION REVIEW</span><h3>Organization capability approvals</h3><p>Review credential issuance and external verification permissions independently of organization identity approval.</p></div><span className="registry-count">{pending.length} awaiting review</span></div>
   {pending.length?pending.map(item=>{
@@ -41,7 +43,7 @@ export default function AdminCapabilityReviews({notice}){
     </div></div>
    </article>;
   }):<p className="muted">No capability requests are waiting for review.</p>}
-  {items.some(x=>x.status!=="PENDING")&&<details className="directory-profile-details"><summary>View previous capability decisions ({items.filter(x=>x.status!=="PENDING").length})</summary>{items.filter(x=>x.status!=="PENDING").map(item=><div className="rowitem" key={item.id}><div><b>{item.organization?.name||"Organization"} · {item.capability.replaceAll("_"," ")}</b><small>{item.status} · {item.decisionNote||"No decision note"}</small></div></div>)}</details>}
+  {reviewed.length>0&&<details className="directory-profile-details"><summary>View previous capability decisions ({reviewed.length})</summary>{reviewed.map(item=><div className="rowitem" key={item.id}><div><b>{item.organization?.name||"Organization"} · {item.capability.replaceAll("_"," ")}</b><small>{item.status} · {item.decisionNote||"No decision note"}</small></div></div>)}</details>}
   {error&&<p className="error">{error}</p>}
  </section>;
 }
