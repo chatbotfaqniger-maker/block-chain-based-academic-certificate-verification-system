@@ -49,7 +49,10 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Graduate credential access
 - Organization staff access limited to the assigned approved organization; currently supports only `certificates:read` and `documents:download` (download requires read access)
 - Unique high-entropy certificate verification keys and QR-based public verification
-- Separate issuer and verifier organization workflows; only approved academic institutions can issue credentials
+- Separate issuer and verifier organization workflows, with an additive organization-capability foundation for independently reviewed credential issuance and external verification permissions
+- Primary, secondary and tertiary education-level metadata; one school organization account can select both primary and secondary levels
+- Organization owners can request additional capabilities in the Organization Identity workspace; VERITY administrators review each capability separately after organization identity approval
+- Existing issuance remains limited to the already-supported approved academic-institution workflow until the capability model is connected to all issuance, roster, template, ledger and verification paths; a capability request alone does not grant operational access
 - Authenticated verification requests attributed to approved verifier organizations
 - Graduate-controlled, time-limited (30-day) consent for verifier organizations to view original certificate documents, with graduate-initiated revocation, clear expiry states and repeat requests after rejection, revocation or expiry
 - SHA-256 canonical credential fingerprint
