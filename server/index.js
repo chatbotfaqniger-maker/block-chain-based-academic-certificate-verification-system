@@ -811,8 +811,8 @@ const bulkItemInput=z.object({
   itemId:z.string().uuid(),
   rowNumber:z.number().int().min(2).max(501),
   payload:issue,
-  documentName:z.string().trim().min(1).max(180),
-  documentSha256:z.string().regex(/^[a-f0-9]{64}$/)
+  documentName:z.string().trim().min(1).max(180).optional(),
+  documentSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()
 });
 const bulkSafeName=value=>String(value||"certificate.pdf").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"certificate.pdf";
 const bulkWorkerReady=()=>BULK_CERTIFICATE_WORKER_ENABLED;
@@ -893,17 +893,28 @@ app.post("/api/organization/certificates/bulk/batches/:batchId/items",auth,roles
   clean.studentEmail=String(clean.studentEmail||"").trim().toLowerCase();
   const normalizedStudentNumber=String(clean.studentNumber||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
   if(normalizedStudentNumber.length<2)return s.status(400).json({error:"Student number is invalid after normalization."});
-  const documentName=bulkSafeName(b.documentName);
-  const documentStoragePath=`bulk-staging/${result.organization.id}/${batch.id}/${b.itemId}.pdf`;
-  const {data:stagedFile,error:stagedError}=await server.storage.from("verity-certificates").download(documentStoragePath);
-  if(stagedError) return s.status(400).json({error:"Upload the matching PDF before staging this certificate row."});
-  const stagedBytes=Buffer.from(await stagedFile.arrayBuffer());
-  if(stagedBytes.subarray(0,5).toString("ascii")!=="%PDF-"||digest(stagedBytes)!==b.documentSha256)return s.status(409).json({error:"The staged PDF failed its SHA-256 or PDF-signature check."});
-  const idempotencyKey=digest(JSON.stringify({batchId:batch.id,rowNumber:b.rowNumber,studentNumber:normalizedStudentNumber,payload:clean,documentSha256:b.documentSha256}));
+  const documentName=bulkSafeName(b.documentName||("VERITY-"+normalizedStudentNumber+".pdf"));
+  const generated=batch.method==="CSV_GENERATED";
+  if(generated&&!b.documentSha256){
+    const {data:template,error:templateError}=await server.from("InstitutionCertificateTemplate")
+      .select("id").eq("organizationId",result.organization.id).eq("status","ACTIVE").eq("isDefault",true).maybeSingle();
+    if(templateError)throw templateError;
+    if(!template)return s.status(409).json({error:"Approve and activate a certificate design before using generated-PDF bulk issuance."});
+  }else if(!b.documentSha256){
+    return s.status(400).json({error:"Upload a PDF for this batch method, or choose CSV_GENERATED with an approved active design."});
+  }
+  const documentStoragePath=generated&&!b.documentSha256?null:`bulk-staging/${result.organization.id}/${batch.id}/${b.itemId}.pdf`;
+  if(documentStoragePath){
+    const {data:stagedFile,error:stagedError}=await server.storage.from("verity-certificates").download(documentStoragePath);
+    if(stagedError)return s.status(400).json({error:"Upload the matching PDF before staging this certificate row."});
+    const stagedBytes=Buffer.from(await stagedFile.arrayBuffer());
+    if(stagedBytes.subarray(0,5).toString("ascii")!=="%PDF-"||digest(stagedBytes)!==b.documentSha256)return s.status(409).json({error:"The staged PDF failed its SHA-256 or PDF-signature check."});
+  }
+  const idempotencyKey=digest(JSON.stringify({batchId:batch.id,rowNumber:b.rowNumber,studentNumber:normalizedStudentNumber,payload:clean,documentSha256:b.documentSha256||"GENERATED_FROM_ACTIVE_TEMPLATE"}));
   const row={
     id:b.itemId,batchId:batch.id,organizationId:result.organization.id,rowNumber:b.rowNumber,
     studentNumber:normalizedStudentNumber,idempotencyKey,payload:clean,
-    documentStoragePath,documentName,documentSha256:b.documentSha256,status:"STAGED",attempts:0
+    documentStoragePath,documentName,documentSha256:b.documentSha256||null,status:"STAGED",attempts:0
   };
   const {data,error}=await server.from("CertificateIssuanceItem").insert(row).select("id,batchId,rowNumber,studentNumber,status,documentName,documentSha256").single();
   if(error){
