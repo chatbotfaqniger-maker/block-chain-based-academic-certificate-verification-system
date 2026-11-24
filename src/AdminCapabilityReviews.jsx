@@ -17,9 +17,9 @@ export default function AdminCapabilityReviews({notice}){
  }
  useEffect(()=>{load();},[]);
  async function decide(item,status){
-  setBusy(item.id);setError("");
   if(status==="SUSPENDED"&&!window.confirm("Suspend this organization's "+item.capability.replaceAll("_"," ").toLowerCase()+" permission?"))return;
   if(status==="APPROVED"&&item.status==="SUSPENDED"&&!window.confirm("Restore this organization's "+item.capability.replaceAll("_"," ").toLowerCase()+" permission?"))return;
+  setBusy(item.id);setError("");
   try{
    await api("/admin/organization-capabilities/"+item.id,{method:"PATCH",body:JSON.stringify({status,decisionNote:notes[item.id]||""})});
    notice?.("Capability request "+status.toLowerCase()+".");
