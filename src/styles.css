@@ -599,3 +599,5 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 .review-status.pending{background:#fff5df;color:#946200}
 .review-status.suspended{background:#fff0ed;color:#a43b2b}
 @media(max-width:640px){.capability-grid{grid-template-columns:1fr}.capability-card{padding:15px}}
+
+.education-level-field{border:1px solid var(--line,#d8e0ea);border-radius:12px;padding:12px;margin:0;min-width:0}.education-level-field legend{font-weight:650;padding:0 5px}.education-level-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0}.education-level-options label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line,#d8e0ea);border-radius:9px;font-weight:550}.education-level-options input{width:auto;margin:0;accent-color:var(--accent,#0d9488)}.education-level-field>small{display:block;color:var(--muted,#64748b);font-size:12px}
