@@ -21,7 +21,7 @@ The current main branch contains:
 - Durable PostgreSQL bulk issuance queue, per-item idempotency, retries, reconciliation, audit events, and the existing Supabase certificate ledger.
 - Roster import, student activation-token registration, ICT permissions, and recovery workflows.
 
-The current bulk-issuance implementation and database migration enforce a maximum of 500 rows per batch. This limit must not be raised by changing only the interface or one database constraint.
+The durable worker deliberately processes no more than 500 items in an individual queue batch. This is an internal reliability boundary, not an institution-wide issuance limit. Large campaigns must be represented by a parent campaign record that safely allocates multiple 500-item processing batches; never remove the worker chunk boundary by changing only the interface or one database constraint.
 
 ## Non-negotiable preservation boundary
 
@@ -133,7 +133,7 @@ Implemented in `feature/issuer-capability-expansion`:
 - Organization approval integration that activates only the existing type's baseline capability; additional permissions still require a separate administrator decision.
 - Capability-aware backend checks for student/graduate membership, roster imports, activation tokens, certificate design, individual/bulk issuance, document upload, QR generation, revocation, internal issuer verification, external verification, graduate-consented document access and registration-code management.
 - Additive RLS and database-function migration for roster, issuance, verifier consent and private document access.
-- Regression assertion fixtures for capability backfill, RLS policies, student onboarding functions, RPC execution privileges and preservation of the existing 500-item bulk-issuance limit.
+- Regression assertion fixtures for capability backfill, RLS policies, student onboarding functions, RPC execution privileges and preservation of the 500-item worker chunk alongside large campaign orchestration.
 - GitHub Actions PostgreSQL integration job applies both expansion migrations to an isolated PostgreSQL 16 database and executes the SQL assertions. The existing application build/test suite also passes on the validated feature-branch commit.
 - README and User Guide updates.
 
@@ -146,7 +146,7 @@ Still required before merge or production use:
 3. Verify the existing template/artwork → bucket mapping → editable student data → PDF generation → ledger/verification path end to end. The existing Certificate Design Studio, uploaded PDF/image assets and editable per-student data remain the source of truth.
 4. Confirm institution ICT delegation and registration-recovery behaviour. Non-academic issuer staff delegation and recovery are intentionally not enabled in this stage; an approved non-academic issuer owner can manage its roster.
 5. Roster imports support large cohorts through the existing chunked import queue. Certificate issuance remains capped at 500 items per batch; cohorts above 500 must use separate batches for now. A parent campaign that orchestrates multiple batches should be considered after load testing.
-6. Perform representative worker, storage and database load tests before changing the existing 500 certificate-per-batch limit.
+6. Perform representative worker, storage and database load tests before increasing the 50,000-record campaign ceiling or changing the 500-item processing chunk.
 7. Review the draft pull request, merge only after staging validation, then deploy migrations before deploying the application code.
 
 No migrations have been applied to the connected production Supabase project and no production deployment has been made. Automated isolated PostgreSQL migration assertions and the existing application CI suite have passed on the validated branch revision; later commits must pass CI again before merge.
