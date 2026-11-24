@@ -193,6 +193,24 @@ CREATE TABLE storage.objects (
  name text NOT NULL
 );
 
+INSERT INTO public."User"(id,role,"fullName",email) VALUES
+ ('user-inst-approved','EMPLOYER','Approved University Owner','inst-approved@example.test'),
+ ('user-inst-suspended','EMPLOYER','Suspended University Owner','inst-suspended@example.test'),
+ ('user-inst-pending','EMPLOYER','Pending School Owner','inst-pending@example.test'),
+ ('user-org-approved','EMPLOYER','Approved Verifier Owner','org-approved@example.test'),
+ ('user-org-suspended','EMPLOYER','Suspended Verifier Owner','org-suspended@example.test'),
+ ('user-org-pending','EMPLOYER','Pending Organization Owner','org-pending@example.test'),
+ ('user-grad','GRADUATE','Test Graduate','graduate@example.test');
+
+INSERT INTO public."Organization"(id,"ownerId",name,type,status,"registrationCode") VALUES
+ ('org-inst-approved','user-inst-approved','Approved University','INSTITUTION','APPROVED','VRT-APPROVED'),
+ ('org-inst-suspended','user-inst-suspended','Suspended University','INSTITUTION','SUSPENDED','VRT-SUSPENDED'),
+ ('org-inst-pending','user-inst-pending','Pending School','INSTITUTION','PENDING','VRT-PENDING'),
+ ('org-org-approved','user-org-approved','Approved Verifier','EMPLOYER','APPROVED','VRT-VERIFIER'),
+ ('org-org-suspended','user-org-suspended','Suspended Verifier','EMPLOYER','SUSPENDED','VRT-VERIFIER-SUSPENDED'),
+ ('org-org-pending','user-org-pending','Pending Organization','EMPLOYER','PENDING','VRT-ORG-PENDING');
+
+
 ALTER TABLE public."StudentRoster" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."StudentRosterImport" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."StudentImportChunk" ENABLE ROW LEVEL SECURITY;
