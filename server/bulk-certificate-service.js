@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { renderCertificateDocument, validateFieldLayout } from "./certificate-renderer.js";
 
 const digest=value=>crypto.createHash("sha256").update(value).digest("hex");
 const canonical=c=>JSON.stringify({
@@ -68,32 +69,54 @@ export function createBulkCertificateProcessor({client,audit,createVerityNotific
       .select("id,sha256,storagePath").eq("certificateId",certificate.id).order("createdAt",{ascending:false}).limit(1);
     if(existingError)throw existingError;
     if(existingDocs?.length){
-      if(existingDocs[0].sha256!==item.documentSha256)throw permanent("A different document is already attached to this certificate.","CERTIFICATE_DOCUMENT_CONFLICT");
-      try{await client.storage.from("verity-certificates").remove([item.documentStoragePath]);}catch{}
+      if(item.documentSha256&&existingDocs[0].sha256!==item.documentSha256)throw permanent("A different document is already attached to this certificate.","CERTIFICATE_DOCUMENT_CONFLICT");
+      if(item.documentStoragePath){try{await client.storage.from("verity-certificates").remove([item.documentStoragePath]);}catch{}}
       return existingDocs[0];
     }
-    const {data:file,error:downloadError}=await client.storage.from("verity-certificates").download(item.documentStoragePath);
-    if(downloadError)throw downloadError;
-    if(!file)throw permanent("The staged certificate PDF is missing.","STAGED_DOCUMENT_MISSING");
-    const bytes=Buffer.from(await file.arrayBuffer());
-    if(!bytes.length||bytes.length>10*1024*1024||bytes.subarray(0,5).toString("ascii")!=="%PDF-"){
-      throw permanent("The staged document is not a valid PDF within the 10 MB limit.","INVALID_STAGED_PDF");
-    }
-    if(digest(bytes)!==item.documentSha256)throw permanent("The staged PDF SHA-256 fingerprint does not match.","STAGED_DOCUMENT_HASH_MISMATCH");
-    const storagePath=`${organization.id}/${certificate.id}/bulk-${item.id}.pdf`;
     const storage=client.storage.from("verity-certificates");
+    let bytes,documentName=item.documentName||("VERITY-"+certificate.certificateId+".pdf"),expectedHash=item.documentSha256||null;
+    if(item.documentStoragePath){
+      const {data:file,error:downloadError}=await storage.download(item.documentStoragePath);
+      if(downloadError)throw downloadError;
+      if(!file)throw permanent("The staged certificate PDF is missing.","STAGED_DOCUMENT_MISSING");
+      bytes=Buffer.from(await file.arrayBuffer());
+      if(!bytes.length||bytes.length>10*1024*1024||bytes.subarray(0,5).toString("ascii")!=="%PDF-")throw permanent("The staged document is not a valid PDF within the 10 MB limit.","INVALID_STAGED_PDF");
+      if(!expectedHash||digest(bytes)!==expectedHash)throw permanent("The staged PDF SHA-256 fingerprint does not match.","STAGED_DOCUMENT_HASH_MISMATCH");
+    }else{
+      const {data:template,error:templateError}=await client.from("InstitutionCertificateTemplate")
+        .select("id,name,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,pageSize,fieldLayout")
+        .eq("organizationId",organization.id).eq("status","ACTIVE").eq("isDefault",true).maybeSingle();
+      if(templateError)throw templateError;
+      if(!template)throw permanent("No approved active certificate design is available for generated bulk issuance.","ACTIVE_TEMPLATE_REQUIRED");
+      let artworkBytes=null;
+      if(template.sourceType==="INSTITUTION_ARTWORK"){
+        const {data:file,error:fileError}=await storage.download(template.assetStoragePath);
+        if(fileError)throw fileError;
+        artworkBytes=Buffer.from(await file.arrayBuffer());
+        if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)throw permanent("The active certificate artwork failed its SHA-256 integrity check.","TEMPLATE_ARTWORK_HASH_MISMATCH");
+      }
+      const verificationUrl=`${process.env.PUBLIC_APP_URL||"https://verity.invalid"}/verify/${encodeURIComponent(certificate.verificationKey)}`;
+      bytes=await renderCertificateDocument({
+        template:{...template,fieldLayout:validateFieldLayout(template.fieldLayout||{})},
+        organizationName:organization.name,
+        data:{...certificate,certificateId:certificate.certificateId},
+        artworkBytes,verificationUrl,preview:false
+      });
+      if(!bytes?.length||bytes.length>10*1024*1024||bytes.subarray(0,5).toString("ascii")!=="%PDF-")throw permanent("The approved template did not produce a valid PDF within 10 MB.","GENERATED_PDF_INVALID");
+      expectedHash=digest(bytes);
+      documentName="VERITY-"+certificate.certificateId+".pdf";
+    }
+    const storagePath=`${organization.id}/${certificate.id}/bulk-${item.id}.pdf`;
     const {error:uploadError}=await storage.upload(storagePath,bytes,{contentType:"application/pdf",upsert:false,cacheControl:"3600"});
     if(uploadError){
       const {data:existingFile,error:existingFileError}=await storage.download(storagePath);
       if(existingFileError)throw uploadError;
       const existingBytes=Buffer.from(await existingFile.arrayBuffer());
-      if(digest(existingBytes)!==item.documentSha256)throw permanent("A conflicting file already exists at the certificate storage path.","CERTIFICATE_STORAGE_CONFLICT");
+      if(digest(existingBytes)!==expectedHash)throw permanent("A conflicting file already exists at the certificate storage path.","CERTIFICATE_STORAGE_CONFLICT");
     }
-    const fileId=crypto.randomUUID();
     const metadata={
-      id:fileId,certificateId:certificate.id,organizationId:organization.id,storagePath,
-      originalName:safeFileName(item.documentName||("certificate-"+certificate.certificateId+".pdf")),
-      mimeType:"application/pdf",sizeBytes:bytes.length,sha256:item.documentSha256,
+      id:crypto.randomUUID(),certificateId:certificate.id,organizationId:organization.id,storagePath,
+      originalName:safeFileName(documentName),mimeType:"application/pdf",sizeBytes:bytes.length,sha256:expectedHash,
       uploadedBy:batch.createdBy,scanStatus:"NOT_SCANNED"
     };
     const {data:document,error:documentError}=await client.from("CertificateDocument").insert(metadata).select().single();
@@ -101,14 +124,13 @@ export function createBulkCertificateProcessor({client,audit,createVerityNotific
       if(documentError.code==="23505"){
         const {data:existing,error:lookupError}=await client.from("CertificateDocument").select("id,sha256,storagePath").eq("certificateId",certificate.id).order("createdAt",{ascending:false}).limit(1);
         if(lookupError)throw lookupError;
-        if(existing?.[0]?.sha256===item.documentSha256)return existing[0];
+        if(existing?.[0]?.sha256===expectedHash)return existing[0];
       }
       throw documentError;
     }
-    try{await audit(client,batch.createdBy,"CERTIFICATE_DOCUMENT_UPLOADED","CertificateDocument",document.id,{certificateId:certificate.certificateId,organizationId:organization.id,sha256:item.documentSha256,scanStatus:"NOT_SCANNED",malwareScanning:false,bulkIssuanceBatchId:batch.id});}
+    try{await audit(client,batch.createdBy,"CERTIFICATE_DOCUMENT_GENERATED","CertificateDocument",document.id,{certificateId:certificate.certificateId,organizationId:organization.id,sha256:expectedHash,scanStatus:"NOT_SCANNED",bulkIssuanceBatchId:batch.id,source:item.documentStoragePath?"UPLOADED_PDF":"APPROVED_TEMPLATE"});}
     catch(error){logger.error?.("Bulk certificate document audit event failed",{itemId:item.id,error:error?.message||String(error)});}
-    try{await storage.remove([item.documentStoragePath]);}
-    catch(error){logger.warn?.("Private bulk staging document cleanup will need retry",{itemId:item.id,error:error?.message||String(error)});}
+    if(item.documentStoragePath){try{await storage.remove([item.documentStoragePath]);}catch(error){logger.warn?.("Private bulk staging document cleanup will need retry",{itemId:item.id,error:error?.message||String(error)});}}
     return document;
   }
 
