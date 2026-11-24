@@ -169,27 +169,34 @@ END;
 $$;
 
 
+-- Supabase migrations execute as the postgres migration owner. PostgreSQL
+-- default privileges are owner-specific, so this assertion deliberately tests
+-- functions created by that owner. It does not pretend a migration can rewrite
+-- the independent supabase_admin role's defaults without membership in it.
 CREATE FUNCTION public.default_privilege_probe() RETURNS integer
-LANGUAGE sql AS $$ SELECT 1; $$;
-SET ROLE supabase_admin;
-CREATE FUNCTION public.default_privilege_probe_admin() RETURNS integer
-LANGUAGE sql AS $$ SELECT 1; $$;
-RESET ROLE;
+LANGUAGE sql AS $ SELECT 1; $;
 
-DO $$
+DO $
+DECLARE
+  v_owner oid;
 BEGIN
+  SELECT p.proowner INTO v_owner
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public' AND p.proname='default_privilege_probe';
+
+  IF v_owner <> (SELECT oid FROM pg_roles WHERE rolname=current_user) THEN
+    RAISE EXCEPTION 'TEST_FAIL: default privilege probe was not created by the migration owner';
+  END IF;
+
   IF has_function_privilege('anon','public.default_privilege_probe()','EXECUTE')
      OR has_function_privilege('authenticated','public.default_privilege_probe()','EXECUTE')
-     OR NOT has_function_privilege('service_role','public.default_privilege_probe()','EXECUTE')
-     OR has_function_privilege('anon','public.default_privilege_probe_admin()','EXECUTE')
-     OR has_function_privilege('authenticated','public.default_privilege_probe_admin()','EXECUTE')
-     OR NOT has_function_privilege('service_role','public.default_privilege_probe_admin()','EXECUTE') THEN
-    RAISE EXCEPTION 'TEST_FAIL: default public function privileges still expose new RPCs to anon/authenticated';
+     OR NOT has_function_privilege('service_role','public.default_privilege_probe()','EXECUTE') THEN
+    RAISE EXCEPTION 'TEST_FAIL: migration-owner default function privileges expose new RPCs to anon/authenticated';
   END IF;
 END;
-$$;
+$;
 
 DROP FUNCTION public.default_privilege_probe();
-DROP FUNCTION public.default_privilege_probe_admin();
 
 SELECT 'certificate ledger integrity and permission hardening assertions passed' AS result;
