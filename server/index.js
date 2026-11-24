@@ -332,7 +332,7 @@ app.patch("/api/admin/organization-capabilities/:id",auth,roles("ADMIN"),run(asy
 app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional()}).parse(q.body);
  const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."});
- const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;
+ const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status,educationLevels").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;
  if(!org)return s.status(404).json({error:"Organization not found."});
  if(org.status!=="PENDING"){
    const submittedKeys=Object.keys(q.body||{});
@@ -343,7 +343,7 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
    return s.json({organization:data,message:"Public location updated. The directory labels it as organization-reported."});
  }
  const patch={registrationNumber:b.registrationNumber?.trim()||null,officialWebsite:b.officialWebsite?.trim()||null,officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||null,accreditationBody:b.accreditationBody?.trim()||null,locationCity:b.locationCity?.trim()||null,locationState:b.locationState?.trim()||null,locationCountry:b.locationCountry?.trim()||null,updatedAt:new Date().toISOString()};
- if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.officialWebsite||!patch.accreditationBody))return s.status(400).json({error:"Institutions must provide a registration number, official website and accreditation body."});
+ const requiresTertiaryEvidence=org.type==="INSTITUTION"&&(org.educationLevels||[]).includes("TERTIARY");if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.accreditationBody||(requiresTertiaryEvidence&&!patch.officialWebsite)))return s.status(400).json({error:requiresTertiaryEvidence?"Tertiary institutions must provide a registration number, official website and accreditation body.":"Primary/secondary schools must provide their official school registration number and supervising or accreditation body."});
  if(patch.officialWebsite&&!/^https?:\/\//i.test(patch.officialWebsite))return s.status(400).json({error:"Enter the official website with https:// or http://."});
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("*").single();if(error)throw error;
  await audit(q.supabase,q.user.id,"ORGANIZATION_IDENTITY_UPDATED","Organization",org.id,{organizationId:org.id});
@@ -745,9 +745,9 @@ app.get("/api/admin/certificates/:id/document-preview",auth,roles("ADMIN"),run(a
 app.get("/api/admin/organizations",auth,roles("ADMIN"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").order("createdAt",{ascending:false});if(error)throw error;const ids=(data||[]).map(o=>o.id);const {data:evidence,error:ee}=ids.length?await q.supabase.from("OrganizationEvidence").select("id,organizationId,evidenceType,originalName,scanStatus,createdAt").in("organizationId",ids).order("createdAt",{ascending:false}):{data:[],error:null};if(ee)throw ee;s.json({organizations:(data||[]).map(o=>({...o,evidence:(evidence||[]).filter(e=>e.organizationId===o.id)}))});}));
 app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  const b=z.object({status:z.enum(["APPROVED","SUSPENDED"]),verificationNotes:z.string().max(1000).optional()}).parse(q.body);
- const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody").eq("id",q.params.id).maybeSingle();if(oe)throw oe;if(!org)return s.status(404).json({error:"Organization not found."});
+ const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,educationLevels,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody").eq("id",q.params.id).maybeSingle();if(oe)throw oe;if(!org)return s.status(404).json({error:"Organization not found."});
  if(b.status==="APPROVED"){
-   if(org.type==="INSTITUTION"&&(!org.registrationNumber||!org.officialWebsite||!org.accreditationBody))return s.status(400).json({error:"Institution approval requires its registration number, official website and accreditation body."});
+   const requiresTertiaryEvidence=org.type==="INSTITUTION"&&(org.educationLevels||[]).includes("TERTIARY");if(org.type==="INSTITUTION"&&(!org.registrationNumber||!org.accreditationBody||(requiresTertiaryEvidence&&!org.officialWebsite)))return s.status(400).json({error:requiresTertiaryEvidence?"Tertiary institution approval requires its registration number, official website and accreditation body.":"Primary/secondary school approval requires its official school registration number and supervising or accreditation body."});
    const {data:evidence,error:ee}=await q.supabase.from("OrganizationEvidence").select("id,evidenceType").eq("organizationId",org.id).limit(1);if(ee)throw ee;
    if(!evidence?.length)return s.status(400).json({error:"Review at least one official registration or accreditation evidence document before approval."});
  }
