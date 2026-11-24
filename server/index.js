@@ -282,6 +282,65 @@ app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
 app.get("/api/organization",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;s.json({organization:data});}));
 
+app.get("/api/organization/capabilities",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
+ if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});
+ s.json({organization:org,capabilities:await organizationCapabilities(q.supabase,org.id)});
+}));
+app.post("/api/organization/capabilities",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({capability:z.enum(ORGANIZATION_CAPABILITIES),requestNote:z.string().trim().max(1000).optional()}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,name,status,type").eq("ownerId",q.user.id).maybeSingle();
+ if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});
+ const {data:existing,error:lookupError}=await q.supabase.from("OrganizationCapability").select("id,status").eq("organizationId",org.id).eq("capability",b.capability).maybeSingle();
+ if(lookupError)throw lookupError;
+ const now=new Date().toISOString();
+ let capability,error;
+ if(existing?.status==="REJECTED"){
+   const result=await q.supabase.from("OrganizationCapability").update({
+     status:"PENDING",requestedBy:q.user.id,requestNote:b.requestNote||null,
+     decisionNote:null,reviewedBy:null,reviewedAt:null,updatedAt:now
+   }).eq("id",existing.id).eq("status","REJECTED").select().single();
+   capability=result.data;error=result.error;
+ }else if(existing){
+   return s.status(409).json({error:existing.status==="APPROVED"?"This capability is already approved.":existing.status==="SUSPENDED"?"This capability is suspended. Contact VERITY support for review.":"A request for this capability is already awaiting administrator review."});
+ }else{
+   const result=await q.supabase.from("OrganizationCapability").insert({
+     id:crypto.randomUUID(),organizationId:org.id,capability:b.capability,status:"PENDING",
+     requestedBy:q.user.id,requestNote:b.requestNote||null,createdAt:now,updatedAt:now
+   }).select().single();
+   capability=result.data;error=result.error;
+ }
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"ORGANIZATION_CAPABILITY_REQUESTED","OrganizationCapability",capability.id,{organizationId:org.id,capability:b.capability});
+ await notifyVerityAdmins({type:"ORGANIZATION_CAPABILITY_REQUESTED",category:"PLATFORM",title:"Organization capability request",body:org.name+" requested "+b.capability.replaceAll("_"," ").toLowerCase()+".",url:"/organizations",metadata:{organizationId:org.id,capability:b.capability}});
+ s.status(201).json({capability,message:"Your capability request has been submitted for separate VERITY administrator review."});
+}));
+
+app.get("/api/admin/organization-capabilities",auth,roles("ADMIN"),run(async(q,s)=>{
+ const {data:rows,error}=await q.supabase.from("OrganizationCapability").select("*").order("createdAt",{ascending:false});
+ if(error)throw error;
+ const ids=[...new Set((rows||[]).map(x=>x.organizationId))];
+ const {data:organizations,error:orgError}=ids.length?await q.supabase.from("Organization").select("id,name,type,status,ownerId").in("id",ids):{data:[],error:null};
+ if(orgError)throw orgError;
+ s.json({requests:(rows||[]).map(row=>({...row,organization:(organizations||[]).find(org=>org.id===row.organizationId)||null}))});
+}));
+app.patch("/api/admin/organization-capabilities/:id",auth,roles("ADMIN"),run(async(q,s)=>{
+ const b=z.object({status:z.enum(["APPROVED","REJECTED","SUSPENDED"]),decisionNote:z.string().trim().max(1000).optional()}).parse(q.body);
+ const {data:current,error:lookupError}=await q.supabase.from("OrganizationCapability").select("id,organizationId,capability,status").eq("id",q.params.id).maybeSingle();
+ if(lookupError)throw lookupError;if(!current)return s.status(404).json({error:"Capability request not found."});
+ const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,status,ownerId").eq("id",current.organizationId).single();
+ if(orgError)throw orgError;
+ if(b.status==="APPROVED"&&org.status!=="APPROVED")return s.status(409).json({error:"Approve the organization's identity application before approving its requested capability."});
+ const now=new Date().toISOString();
+ const {data:updated,error}=await q.supabase.from("OrganizationCapability").update({
+   status:b.status,decisionNote:b.decisionNote||null,reviewedBy:q.user.id,reviewedAt:now,updatedAt:now
+ }).eq("id",current.id).select().single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"ORGANIZATION_CAPABILITY_"+b.status,"OrganizationCapability",updated.id,{organizationId:org.id,capability:current.capability,decisionNote:b.decisionNote||null});
+ if(org.ownerId)await createVerityNotification(org.ownerId,{type:"ORGANIZATION_CAPABILITY_STATUS",category:"ACCOUNT",title:"Organization capability review updated",body:"Your "+current.capability.replaceAll("_"," ").toLowerCase()+" request was "+b.status.toLowerCase()+".",url:"/identity",metadata:{organizationId:org.id,capability:current.capability,status:b.status}});
+ s.json({capability:updated});
+}));
+
 app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional()}).parse(q.body);
  const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."});
@@ -706,6 +765,14 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  }
  const patch={status:b.status,updatedAt:new Date().toISOString(),verificationNotes:b.verificationNotes||null,verifiedAt:b.status==="APPROVED"?new Date().toISOString():null,verifiedBy:b.status==="APPROVED"?q.user.id:null};
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",q.params.id).select().single();if(error)throw error;
+ if(b.status==="APPROVED"){
+   const defaultCapability=org.type==="INSTITUTION"?"ISSUE_CREDENTIALS":org.type==="EMPLOYER"?"VERIFY_CREDENTIALS":null;
+   if(defaultCapability){
+     const {error:capabilityError}=await q.supabase.from("OrganizationCapability").update({status:"APPROVED",reviewedBy:q.user.id,reviewedAt:new Date().toISOString(),decisionNote:"Baseline capability preserved from the approved VERITY organization category.",updatedAt:new Date().toISOString()})
+       .eq("organizationId",org.id).eq("capability",defaultCapability).eq("status","PENDING");
+     if(capabilityError)throw capabilityError;
+   }
+ }
  await audit(q.supabase,q.user.id,"ORGANIZATION_"+b.status,"Organization",data.id,{organizationId:data.id,verificationNotes:b.verificationNotes||null});
  const {data:owner}=await q.supabase.from("Organization").select("ownerId,name").eq("id",data.id).maybeSingle();
  if(owner?.ownerId)await createVerityNotification(owner.ownerId,{type:"ORGANIZATION_STATUS",category:"ACCOUNT",title:b.status==="APPROVED"?"Organization approved":"Organization status updated",body:b.status==="APPROVED"?data.name+" has been approved on VERITY.":"The status of "+data.name+" has changed to "+b.status+".",url:"/identity",metadata:{organizationId:data.id,status:b.status}});
