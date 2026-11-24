@@ -166,6 +166,12 @@ async function auth(req,res,next) {
 const roles=(...allowed)=>(req,res,next)=>allowed.includes(req.user.role)?next():res.status(403).json({error:"Permission denied."});
 
 const ORGANIZATION_CAPABILITIES=["ISSUE_CREDENTIALS","VERIFY_CREDENTIALS"];
+async function hasApprovedOrganizationCapability(client,organizationId,capability) {
+ const {data,error}=await client.from("OrganizationCapability").select("id")
+   .eq("organizationId",organizationId).eq("capability",capability).eq("status","APPROVED").maybeSingle();
+ if(error)throw error;
+ return Boolean(data);
+}
 async function organizationCapabilities(client,organizationId) {
  const {data,error}=await client.from("OrganizationCapability")
    .select("id,capability,status,requestNote,decisionNote,createdAt,updatedAt,reviewedAt")
@@ -437,7 +443,7 @@ app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
 }));
 app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
  const {data:students,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName").eq("organizationId",org.id).eq("status","ELIGIBLE").is("claimedUserId",null).order("studentNumber").limit(10000);if(error)throw error;
  const {data:existing,error:te}=await q.supabase.from("StudentActivationToken").select("rosterId,usedAt,revokedAt").eq("organizationId",org.id);if(te)throw te;
  const tokenByRoster=new Map((existing||[]).map(t=>[t.rosterId,t]));
@@ -458,7 +464,7 @@ app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
 }));
 app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!(hasInstitutionPermission(org,"roster:manage",q.user.id)||hasInstitutionPermission(org,"registration:recover",q.user.id)))return s.status(403).json({error:"An approved institution owner or authorized ICT recovery officer is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!(hasInstitutionPermission(org,"roster:manage",q.user.id)||hasInstitutionPermission(org,"registration:recover",q.user.id)))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT recovery officer is required."});
  const {data:student,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName,status,claimedUserId").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();if(error)throw error;
  if(!student)return s.status(404).json({error:"Student roster record not found."});
  if(student.status!=="ELIGIBLE"||student.claimedUserId)return s.status(409).json({error:"A new activation token cannot be issued for an already claimed, disputed or blocked student record. Use the identity-recovery review process."});
@@ -470,14 +476,14 @@ app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
 }));
 app.get("/api/institution/roster",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
  const term=String(q.query.search||"").trim().slice(0,120);
  const {data,error}=await q.supabase.rpc("list_verity_student_roster",{p_organization_id:org.id,p_search:term||null});if(error)throw error;
  s.json(data||{organization:null,students:[],counts:{}});
 }));
 app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","text/plain","application/vnd.ms-excel"],limit:"5mb"}),run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
  if(!Buffer.isBuffer(q.body)||!q.body.length)return s.status(400).json({error:"Upload a non-empty CSV roster file."});
  const fileName=String(q.headers["x-file-name"]||"student-roster.csv").normalize("NFKC").slice(0,180);
  if(!/\.csv$/i.test(fileName))return s.status(415).json({error:"The first roster-import release accepts CSV files. Excel workbook import will be added as a compatible format."});
@@ -510,8 +516,8 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
 
 const rosterImportAccess=async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id)){
-  s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id)){
+  s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
   return null;
  }
  return org;
@@ -813,7 +819,7 @@ app.get("/api/certificates",auth,run(async(q,s)=>{
 
 const issue=z.object({studentName:z.string().min(2),studentEmail:z.string().email().optional().or(z.literal("")),studentNumber:z.string().min(2),institution:z.string().min(2),faculty:z.string().min(2),department:z.string().min(2),programme:z.string().min(2),qualification:z.string().min(2),classification:z.string().optional(),awardDate:z.string().datetime()});
 app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
-  const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});if(organization.type!=="INSTITUTION")return s.status(403).json({error:"Only approved academic institutions can issue academic certificates. Verification organizations cannot issue credentials."});}
+  const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});if(!(await hasApprovedOrganizationCapability(q.supabase,organization.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Your organization does not have an approved credential-issuance capability."});}
   const certificateId=`VRT-${new Date().getFullYear()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
   const verificationKey=`VRT-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
   const clean=Object.fromEntries(Object.entries(b).map(([k,v])=>[k,typeof v==="string"?v.trim():v]));
@@ -898,8 +904,8 @@ async function bulkInstitutionFor(q,requireApproved=true){
     .select("id,name,type,status,ownerId").eq("ownerId",q.user.id).maybeSingle();
   if(error)throw error;
   if(!org)return {error:"Institution organization not found.",status:404};
-  if(org.type!=="INSTITUTION")return {error:"Only academic institutions can issue certificates.",status:403};
-  if(requireApproved&&org.status!=="APPROVED")return {error:"Your institution must be approved before bulk certificate issuance.",status:403};
+  if(requireApproved&&org.status!=="APPROVED")return {error:"Your organization must be approved before bulk certificate issuance.",status:403};
+  if(!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return {error:"Your organization does not have an approved credential-issuance capability.",status:403};
   return {organization:org};
 }
 const bulkBatchInput=z.object({
@@ -1061,7 +1067,7 @@ app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async
   if(q.user.role==="EMPLOYER"){
     const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
     if(orgError)throw orgError;
-    if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only the approved issuing institution can revoke its own certificates."});
+    if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can revoke its own certificates."});
     query=query.eq("organizationId",org.id);
   }
   const {data:c,error}=await query.maybeSingle();
@@ -1096,8 +1102,9 @@ const documentMime = new Map([
 async function certificateDesignInstitution(q){
  const {data:org,error}=await q.supabase.from("Organization").select("id,name,type,status,ownerId").eq("ownerId",q.user.id).maybeSingle();
  if(error)throw error;
- if(!org||org.type!=="INSTITUTION")return {error:"Only an institution owner can manage certificate designs.",status:403};
- if(org.status!=="APPROVED")return {error:"Your institution must be approved before managing certificate designs.",status:403};
+ if(!org)return {error:"Organization not found.",status:404};
+ if(org.status!=="APPROVED")return {error:"Your organization must be approved before managing certificate designs.",status:403};
+ if(!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return {error:"Your organization does not have an approved credential-issuance capability.",status:403};
  return {organization:org};
 }
 const designName=value=>String(value||"").normalize("NFKC").trim().slice(0,120);
@@ -1314,7 +1321,7 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   if(!spec.magic(bytes))return s.status(415).json({error:"The file content does not match its declared type."});
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only an approved academic institution can upload official certificate documents."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can upload official certificate documents."});
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId").eq("certificateId",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(certError)throw certError;
   if(!cert)return s.status(404).json({error:"Certificate not found in your organization."});
@@ -1421,7 +1428,7 @@ app.post("/api/organization/verify",createVerificationRateLimiter({windowMs:60_0
   const b=z.object({certificateId:z.string().min(4)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can verify credentials through its workspace."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Your organization does not have an approved external-verification capability."});
   const {data,error}=await q.supabase.rpc("lookup_verity_certificate_for_org",{p_certificate_id:b.certificateId.trim()});
   if(error)throw error;
   if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the VERITY registry."});
@@ -1447,7 +1454,7 @@ app.post("/api/organization/student-lookup",createVerificationRateLimiter({windo
   const b=z.object({studentName:z.string().min(2).max(120),studentNumber:z.string().min(2).max(80),institution:z.string().min(2).max(160),department:z.string().min(2).max(160)}).parse(q.body);
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return res.status(403).json({error:"Only an approved verification organization can search student records."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return res.status(403).json({error:"Your organization does not have an approved external-verification capability."});
   const {data,error}=await q.supabase.from("Certificate").select("certificateId,studentName,studentNumber,institution,department,status,graduateId").eq("studentNumber",b.studentNumber.trim()).eq("studentName",b.studentName.trim()).eq("institution",b.institution.trim()).eq("department",b.department.trim()).limit(5);
   if(error)throw error;
   const matches=(data||[]).map(c=>({certificateId:c.certificateId,studentName:c.studentName,studentNumber:c.studentNumber,institution:c.institution,department:c.department,status:c.status,requestable:!!c.graduateId}));
@@ -1458,7 +1465,7 @@ app.post("/api/organization/student-lookup",createVerificationRateLimiter({windo
 app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4),purpose:z.string().min(5).max(300).optional()}).parse(q.body);
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can request certificate access."});
+  if(oe)throw oe;if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Your organization does not have an approved external-verification capability."});
   const {data:cert,error:ce}=await q.supabase.from("Certificate").select("id,certificateId,graduateId").or("certificateId.eq."+b.certificateId+",verificationKey.eq."+b.certificateId.toUpperCase()).maybeSingle();
   if(ce)throw ce;if(!cert)return s.status(404).json({error:"Certificate not found."});
   if(!cert.graduateId)return s.status(409).json({error:"The graduate must link their Verity account to this certificate before private document access can be requested."});
