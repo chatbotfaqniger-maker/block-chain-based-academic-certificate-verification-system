@@ -753,6 +753,7 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  }
  const patch={status:b.status,updatedAt:new Date().toISOString(),verificationNotes:b.verificationNotes||null,verifiedAt:b.status==="APPROVED"?new Date().toISOString():null,verifiedBy:b.status==="APPROVED"?q.user.id:null};
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",q.params.id).select().single();if(error)throw error;
+ let preservedBaselineCapability=null;
  if(b.status==="APPROVED"){
    const legacyBaseline="Existing organization capability preserved during additive VERITY expansion.";
    const defaultCapability=org.type==="INSTITUTION"?"ISSUE_CREDENTIALS":org.type==="EMPLOYER"?"VERIFY_CREDENTIALS":null;
@@ -760,9 +761,10 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
      const {error:capabilityError}=await q.supabase.from("OrganizationCapability").update({status:"APPROVED",reviewedBy:q.user.id,reviewedAt:new Date().toISOString(),decisionNote:"Legacy baseline capability preserved after the existing organization identity was approved.",updatedAt:new Date().toISOString()})
        .eq("organizationId",org.id).eq("capability",defaultCapability).eq("status","PENDING").eq("requestNote",legacyBaseline);
      if(capabilityError)throw capabilityError;
+     preservedBaselineCapability=defaultCapability;
    }
  }
- await audit(q.supabase,q.user.id,"ORGANIZATION_"+b.status,"Organization",data.id,{organizationId:data.id,verificationNotes:b.verificationNotes||null});
+ await audit(q.supabase,q.user.id,"ORGANIZATION_"+b.status,"Organization",data.id,{organizationId:data.id,verificationNotes:b.verificationNotes||null,preservedBaselineCapability});
  const {data:owner}=await q.supabase.from("Organization").select("ownerId,name").eq("id",data.id).maybeSingle();
  if(owner?.ownerId)await createVerityNotification(owner.ownerId,{type:"ORGANIZATION_STATUS",category:"ACCOUNT",title:b.status==="APPROVED"?"Organization approved":"Organization status updated",body:b.status==="APPROVED"?data.name+" has been approved on VERITY.":"The status of "+data.name+" has changed to "+b.status+".",url:"/identity",metadata:{organizationId:data.id,status:b.status}});
  s.json({organization:data});
