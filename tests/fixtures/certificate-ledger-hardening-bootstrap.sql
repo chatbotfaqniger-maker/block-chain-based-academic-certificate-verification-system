@@ -23,7 +23,7 @@ CREATE TABLE public."Certificate" (
   "issuedAt" timestamp without time zone NOT NULL,
   digest text NOT NULL,
   "txHash" text,
-  "chainId" text,
+  "chainId" integer,
   "contractAddress" text,
   status public."CertificateStatus" NOT NULL DEFAULT 'ACTIVE',
   "revokedAt" timestamptz,

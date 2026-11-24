@@ -59,8 +59,7 @@ BEGIN
         AND left(NEW."txHash", 2) = '0x'
         AND translate(substr(NEW."txHash", 3), '0123456789abcdefABCDEF', '') = ''
         AND NEW."chainId" IS NOT NULL
-        AND length(NEW."chainId") > 0
-        AND translate(NEW."chainId", '0123456789', '') = ''
+        AND NEW."chainId" > 0
         AND NEW."contractAddress" IS NOT NULL
         AND length(NEW."contractAddress") = 42
         AND left(NEW."contractAddress", 2) = '0x'
@@ -147,8 +146,7 @@ BEGIN
       AND left(NEW."txHash", 2) = '0x'
       AND translate(substr(NEW."txHash", 3), '0123456789abcdefABCDEF', '') = ''
       AND NEW."chainId" IS NOT NULL
-      AND length(NEW."chainId") > 0
-      AND translate(NEW."chainId", '0123456789', '') = ''
+      AND NEW."chainId" > 0
       AND NEW."contractAddress" IS NOT NULL
       AND length(NEW."contractAddress") = 42
       AND left(NEW."contractAddress", 2) = '0x'
