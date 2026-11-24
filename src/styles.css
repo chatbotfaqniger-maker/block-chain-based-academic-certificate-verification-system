@@ -584,3 +584,18 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 .design-editor-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:15px}
 .design-editor-controls>span{font-size:10px;color:#72858d}
 @media(max-width:700px){.design-editor-layout{grid-template-columns:1fr}.design-field-palette{grid-template-columns:1fr 1fr}.design-editor-canvas{min-height:250px}.design-editor-controls{align-items:flex-start;flex-direction:column}}
+
+
+/* Organization capability request and administrator review panels */
+.capability-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:18px 0}
+.capability-card{display:flex;flex-direction:column;gap:12px;padding:18px;border:1px solid #dce5ec;border-radius:14px;background:#fbfdff;min-width:0}
+.capability-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.capability-card-head>b{font-size:15px;color:#172b43}
+.capability-card>p{margin:0;color:#64748b;font-size:13px;line-height:1.55}
+.capability-card .btn-outline{align-self:flex-start;display:inline-flex;align-items:center;gap:7px}
+.capability-approved,.capability-suspended{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:650}
+.capability-approved{color:#16734c}
+.capability-suspended{color:#a65b20}
+.review-status.pending{background:#fff5df;color:#946200}
+.review-status.suspended{background:#fff0ed;color:#a43b2b}
+@media(max-width:640px){.capability-grid{grid-template-columns:1fr}.capability-card{padding:15px}}
