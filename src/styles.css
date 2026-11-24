@@ -601,3 +601,11 @@ button:hover:not(:disabled),.btn-outline:hover:not(:disabled){transform:translat
 @media(max-width:640px){.capability-grid{grid-template-columns:1fr}.capability-card{padding:15px}}
 
 .education-level-field{border:1px solid var(--line,#d8e0ea);border-radius:12px;padding:12px;margin:0;min-width:0}.education-level-field legend{font-weight:650;padding:0 5px}.education-level-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0}.education-level-options label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line,#d8e0ea);border-radius:9px;font-weight:550}.education-level-options input{width:auto;margin:0;accent-color:var(--accent,#0d9488)}.education-level-field>small{display:block;color:var(--muted,#64748b);font-size:12px}
+
+/* Large issuance campaign summary rows */
+.bulk-campaign-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border,#e5e7eb)}
+.bulk-campaign-row:last-child{border-bottom:0}
+.bulk-campaign-row>span:first-child{display:grid;gap:5px;min-width:0}
+.bulk-campaign-row>span:first-child>b{overflow-wrap:anywhere}
+.bulk-campaign-row small{color:var(--muted,#64748b);line-height:1.5}
+@media(max-width:640px){.bulk-campaign-row{flex-direction:column;gap:8px}}
