@@ -33,7 +33,7 @@ export function validateFieldLayout(layout = {}) {
     if (!value || typeof value !== "object") throw new TypeError(`Invalid layout for ${key}.`);
     const x = Number(value.x), y = Number(value.y), width = Number(value.width ?? 0.72);
     const fontSize = Number(value.fontSize ?? 16);
-    if (![x, y, width, fontSize].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1 || width <= 0 || width > 1 || fontSize < 6 || fontSize > 64) {
+    if (![x, y, width, fontSize].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1 || width <= 0 || width > 1 || x + width > 1.001 || fontSize < 6 || fontSize > 64) {
       throw new RangeError(`Layout for ${key} is outside the supported page bounds.`);
     }
     const align = value.align ?? "center";
