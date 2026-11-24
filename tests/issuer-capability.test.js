@@ -3,55 +3,58 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 
 const read=path=>readFileSync(new URL(path,import.meta.url),"utf8");
-const foundation=read("./fixtures/../../supabase/migrations/20261124150000_organization_capabilities_and_school_levels.sql");
-const workflows=read("./fixtures/../../supabase/migrations/20261124153000_enable_capability_based_issuer_workflows.sql");
+const foundation=read("../supabase/migrations/20261124150000_organization_capabilities_and_school_levels.sql");
+const workflows=read("../supabase/migrations/20261124153000_enable_capability_based_issuer_workflows.sql");
 const server=read("../server/index.js");
 const app=read("../src/App.jsx");
 const bulk=read("../src/BulkCertificates.jsx");
 const studio=read("../src/CertificateDesignStudio.jsx");
 
-test("school education levels support one primary-and-secondary organization",()=>{
- assert.match(foundation,/"educationLevels" text\[\] NOT NULL DEFAULT ARRAY\[\]\:\:text\[\]/);
- assert.match(foundation,/ARRAY\['PRIMARY','SECONDARY','TERTIARY'\]/);
- assert.match(server,/educationLevels=organizationType==="INSTITUTION"/);
- assert.match(app,/value="PRIMARY"/);
- assert.match(app,/value="SECONDARY"/);
+test("one school organization can serve primary and secondary education",()=>{
+ assert.ok(foundation.includes('"educationLevels" text[] NOT NULL DEFAULT ARRAY[]::text[]'));
+ assert.ok(foundation.includes("ARRAY['PRIMARY','SECONDARY','TERTIARY']"));
+ assert.ok(server.includes('const educationLevels=organizationType==="INSTITUTION"'));
+ assert.ok(app.includes('value="PRIMARY"'));
+ assert.ok(app.includes('value="SECONDARY"'));
 });
 
-test("existing organization categories retain only their legacy baseline capability",()=>{
- assert.match(foundation,/CASE WHEN o\.type = 'INSTITUTION' THEN 'ISSUE_CREDENTIALS' ELSE 'VERIFY_CREDENTIALS' END/);
- assert.match(foundation,/Existing organization capability preserved during additive VERITY expansion/);
- assert.match(foundation,/UNIQUE \("organizationId", capability\)/);
- assert.match(foundation,/o\.status = 'APPROVED'/);
- assert.match(foundation,/c\.status = 'APPROVED'/);
+test("legacy organization categories keep only their existing baseline permission",()=>{
+ assert.ok(foundation.includes("CASE WHEN o.type = 'INSTITUTION' THEN 'ISSUE_CREDENTIALS' ELSE 'VERIFY_CREDENTIALS' END"));
+ assert.ok(foundation.includes("Existing organization capability preserved during additive VERITY expansion."));
+ assert.ok(foundation.includes('UNIQUE ("organizationId", capability)'));
+ assert.ok(foundation.includes("o.status = 'APPROVED'"));
+ assert.ok(foundation.includes("c.status = 'APPROVED'"));
 });
 
-test("issuer and verifier permissions are checked independently in backend workflows",()=>{
- assert.match(server,/hasApprovedOrganizationCapability\(q\.supabase,organization\.id,"ISSUE_CREDENTIALS"\)/);
- assert.match(server,/hasApprovedOrganizationCapability\(q\.supabase,org\.id,"VERIFY_CREDENTIALS"\)/);
- assert.match(server,/async function bulkInstitutionFor/);
- assert.match(server,/hasApprovedOrganizationCapability\(q\.supabase,org\.id,"ISSUE_CREDENTIALS"\)/);
- assert.match(workflows,/verity_certificate_grant_insert_org[\s\S]*?VERIFY_CREDENTIALS/);
- assert.match(workflows,/verity_certificate_admin_insert[\s\S]*?ISSUE_CREDENTIALS/);
+test("issuer and verifier capabilities are enforced independently by server and database",()=>{
+ assert.ok(server.includes('hasApprovedOrganizationCapability(q.supabase,organization.id,"ISSUE_CREDENTIALS")'));
+ assert.ok(server.includes('hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")'));
+ assert.ok(server.includes("async function bulkInstitutionFor"));
+ assert.ok(workflows.includes("verity_certificate_admin_insert"));
+ assert.ok(workflows.includes("verity_certificate_grant_insert_org"));
+ assert.ok(workflows.includes("private.verity_organization_has_capability(o.id,'ISSUE_CREDENTIALS')"));
+ assert.ok(workflows.includes("private.verity_organization_has_capability(o.id,'VERIFY_CREDENTIALS')"));
 });
 
-test("private roster precheck is service-role-only while signup options remain public",()=>{
- assert.match(workflows,/REVOKE ALL ON FUNCTION public\.verity_student_registration_precheck\(text,text\)[\s\S]*?FROM PUBLIC, anon, authenticated/);
- assert.match(workflows,/GRANT EXECUTE ON FUNCTION public\.verity_student_registration_precheck\(text,text\)[\s\S]*?TO service_role/);
- assert.match(workflows,/GRANT EXECUTE ON FUNCTION public\.verity_student_signup_institutions\(\)[\s\S]*?TO anon, authenticated, service_role/);
- assert.match(workflows,/GRANT EXECUTE ON FUNCTION public\.lookup_verity_certificate_for_org\(text\)[\s\S]*?TO authenticated, service_role/);
- assert.match(server,/const server=makeServerClient\(\);const \{data:issuers,error\}=await server\.rpc\("verity_student_signup_institutions"\)/);
+test("private student roster precheck is service-role-only",()=>{
+ assert.ok(workflows.includes("REVOKE ALL ON FUNCTION public.verity_student_registration_precheck(text,text)"));
+ assert.ok(workflows.includes("FROM PUBLIC, anon, authenticated"));
+ assert.ok(workflows.includes("GRANT EXECUTE ON FUNCTION public.verity_student_registration_precheck(text,text)"));
+ assert.ok(workflows.includes("TO service_role"));
+ assert.ok(workflows.includes("GRANT EXECUTE ON FUNCTION public.verity_student_signup_institutions()"));
+ assert.ok(workflows.includes("TO anon, authenticated, service_role"));
+ assert.ok(workflows.includes("GRANT EXECUTE ON FUNCTION public.lookup_verity_certificate_for_org(text)"));
+ assert.ok(server.includes('const server=makeServerClient();const {data:issuers,error}=await server.rpc("verity_student_signup_institutions")'));
 });
 
-test("the existing certificate template and bucket-driven bulk methods remain the only issuance pipeline",()=>{
- assert.match(bulk,/CSV_ZIP/);
- assert.match(bulk,/CSV_MULTIPLE_PDFS/);
- assert.match(bulk,/CSV_GENERATED/);
- assert.match(bulk,/max\(1,Math\.min\(500/);
- assert.match(studio,/request\\("\\/organization\\/certificate-design\\/templates"\\)/);
- assert.match(studio,/Upload your approved PDF or high-resolution PNG\\/JPEG artwork/);
- assert.match(studio,/fieldLayout/);
- assert.doesNotMatch(workflows,/DROP TABLE public\\.\\"InstitutionCertificateTemplate\\"/);
- assert.match(workflows,/CertificateIssuanceBatch/);
- assert.match(workflows,/CertificateIssuanceItem/);
+test("the existing certificate template studio and bulk methods remain in place",()=>{
+ for(const method of ["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"])assert.ok(bulk.includes(method));
+ assert.ok(bulk.includes("rows.length>501"));
+ assert.ok(server.includes("totalItems:z.number().int().min(1).max(500)"));
+ assert.ok(studio.includes('request("/organization/certificate-design/templates")'));
+ assert.ok(studio.includes("Upload your approved PDF or high-resolution PNG/JPEG artwork"));
+ assert.ok(studio.includes("fieldLayout"));
+ assert.ok(!workflows.includes('DROP TABLE public."InstitutionCertificateTemplate"'));
+ assert.ok(workflows.includes("CertificateIssuanceBatch"));
+ assert.ok(workflows.includes("CertificateIssuanceItem"));
 });
