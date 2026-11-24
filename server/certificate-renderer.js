@@ -99,10 +99,9 @@ export async function renderCertificateDocument({ template, organizationName, da
     throw new TypeError("A supported certificate design is required.");
   }
   const dimensions = PAGE_SIZES[template.pageSize] || PAGE_SIZES.A4_LANDSCAPE;
-  const pdf = template.sourceType === "INSTITUTION_ARTWORK" && template.assetMimeType === "application/pdf" && artworkBytes
-    ? await PDFDocument.load(artworkBytes)
-    : await PDFDocument.create();
-  let page = pdf.getPages()[0] || pdf.addPage(dimensions);
+  const isPdfArtwork = template.sourceType === "INSTITUTION_ARTWORK" && template.assetMimeType === "application/pdf" && artworkBytes;
+  const pdf = isPdfArtwork ? await PDFDocument.load(artworkBytes) : await PDFDocument.create();
+  let page;
   if (template.sourceType === "INSTITUTION_ARTWORK" && artworkBytes) {
     if (template.assetMimeType === "image/png" || template.assetMimeType === "image/jpeg") {
       const image = template.assetMimeType === "image/png" ? await pdf.embedPng(artworkBytes) : await pdf.embedJpg(artworkBytes);
@@ -110,7 +109,9 @@ export async function renderCertificateDocument({ template, organizationName, da
       const scale = Math.min(dimensions[0] / image.width, dimensions[1] / image.height);
       const w = image.width * scale, h = image.height * scale;
       page.drawImage(image, { x: (dimensions[0] - w) / 2, y: (dimensions[1] - h) / 2, width: w, height: h });
-    } else if (template.assetMimeType !== "application/pdf") {
+    } else if (template.assetMimeType === "application/pdf") {
+      page = pdf.getPages()[0] || pdf.addPage(dimensions);
+    } else {
       throw new TypeError("Unsupported artwork type.");
     }
   } else {
