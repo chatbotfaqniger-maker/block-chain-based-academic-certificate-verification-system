@@ -5,7 +5,7 @@
 1. During institution registration, choose the education levels served by the organization. A school that operates both primary and secondary sections should select **Primary** and **Secondary** together under the same organization account. Universities and colleges can retain **Tertiary**.
 2. After signing in, open **Organization identity** and complete the organization's legal identity details and supporting evidence.
 3. Open **Organization service permissions** to review the separate **Issue credentials** and **Verify credentials** permissions.
-4. An organization owner may request an additional permission, but cannot approve it. A VERITY administrator reviews each request independently.
+4. An organization owner may request either permission or both, but cannot approve a request. A VERITY administrator reviews each request independently.
 5. Organization identity approval is required before a requested capability can be approved. Requesting a permission does not activate it.
 6. Existing university issuance, verifier-only access, certificate templates, uploaded PDF/image artwork, editable student-specific fields, storage buckets and bulk issuance methods remain on their existing workflows.
 
