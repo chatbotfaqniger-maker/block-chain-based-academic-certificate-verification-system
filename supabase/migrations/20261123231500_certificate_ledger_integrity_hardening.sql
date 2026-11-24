@@ -2,23 +2,17 @@
 -- RLS does not apply to TRUNCATE; remove that privilege from all application roles.
 REVOKE TRUNCATE, TRIGGER, REFERENCES ON ALL TABLES IN SCHEMA public FROM anon, authenticated, service_role;
 
--- Keep future public tables from inheriting RLS-bypassing TRUNCATE privileges.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+-- Keep future public tables created by the migration owner from inheriting
+-- RLS-bypassing TRUNCATE privileges. This migration runs as postgres.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
   REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated, service_role;
 
--- Revoke the built-in global PUBLIC EXECUTE default as well as role-specific
--- defaults. Without this, anon/authenticated inherit EXECUTE through PUBLIC.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+-- Revoke the migration owner's global PUBLIC EXECUTE default and its
+-- public-schema defaults. Cross-role default-privilege changes are not
+-- permitted to this migration session; explicit grants below cover the RPCs.
+ALTER DEFAULT PRIVILEGES
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin
-  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
--- New public-schema functions created by either migration owner must not
--- inherit EXECUTE access for anon/authenticated. Service-side RPC grants are explicit.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
   REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;
 
 -- The ledger is written only by its owner-controlled certificate trigger.
