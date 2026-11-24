@@ -18,6 +18,7 @@ import { createVerificationRateLimiter } from "./rate-limits.js";
 import { startStudentImportWorker } from "./student-import-worker.js";
 import { startBulkCertificateWorker } from "./bulk-certificate-worker.js";
 import { createBulkCertificateProcessor } from "./bulk-certificate-service.js";
+import { renderCertificateDocument, renderCertificatePreview, validateFieldLayout } from "./certificate-renderer.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -731,6 +732,45 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   // the authoritative Supabase credential from being issued.
   const {data:created,error}=await q.supabase.from("Certificate").insert(record).select().single();
   if(error) throw error;
+  let generatedDocument=null,documentGenerationWarning=null;
+  if(organization){
+    try{
+      const {data:template,error:templateError}=await q.supabase.from("InstitutionCertificateTemplate")
+        .select("id,name,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,pageSize,fieldLayout")
+        .eq("organizationId",organization.id).eq("status","ACTIVE").eq("isDefault",true).maybeSingle();
+      if(templateError)throw templateError;
+      if(template){
+        let artworkBytes=null;
+        if(template.sourceType==="INSTITUTION_ARTWORK"){
+          const {data:file,error:fileError}=await q.supabase.storage.from("verity-certificates").download(template.assetStoragePath);
+          if(fileError)throw fileError;
+          artworkBytes=Buffer.from(await file.arrayBuffer());
+          if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)throw new Error("Active certificate artwork failed its SHA-256 integrity check.");
+        }
+        const verificationUrl=`${process.env.PUBLIC_APP_URL||q.protocol+"://"+q.get("host")}/verify/${encodeURIComponent(verificationKey)}`;
+        const pdf=await renderCertificateDocument({
+          template:{...template,fieldLayout:validateFieldLayout(template.fieldLayout||{})},
+          organizationName:organization.name,
+          data:{...clean,certificateId},
+          artworkBytes,verificationUrl,preview:false
+        });
+        const documentId=crypto.randomUUID(),storagePath=`${organization.id}/${created.id}/${documentId}.pdf`,sha256=digest(pdf);
+        const {error:uploadError}=await q.supabase.storage.from("verity-certificates").upload(storagePath,pdf,{contentType:"application/pdf",upsert:false,cacheControl:"3600"});
+        if(uploadError)throw uploadError;
+        const {data:doc,error:docError}=await q.supabase.from("CertificateDocument").insert({
+          id:documentId,certificateId:created.id,organizationId:organization.id,storagePath,
+          originalName:`VERITY-${certificateId}.pdf`,mimeType:"application/pdf",sizeBytes:pdf.length,
+          sha256,uploadedBy:q.user.id,scanStatus:"NOT_SCANNED"
+        }).select("id,originalName,mimeType,sizeBytes,sha256,scanStatus,createdAt").single();
+        if(docError){await q.supabase.storage.from("verity-certificates").remove([storagePath]);throw docError;}
+        generatedDocument=doc;
+        await audit(q.supabase,q.user.id,"CERTIFICATE_DOCUMENT_GENERATED","CertificateDocument",doc.id,{certificateId,organizationId:organization.id,templateId:template.id,sha256,source:"APPROVED_TEMPLATE"});
+      }
+    }catch(renderError){
+      documentGenerationWarning=String(renderError?.message||"Certificate PDF generation failed").slice(0,300);
+      console.error("Certificate credential was issued, but its approved-design PDF could not be generated:",renderError);
+    }
+  }
   let chain={mode:"SUPABASE_LEDGER"},certificate=created,blockchainAnchorPending=false;
   try{
     chain=await issueOnChain(certificateId,hash);
@@ -747,7 +787,7 @@ app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
   await audit(q.supabase,q.user.id,"CERTIFICATE_ISSUED","Certificate",certificate.id,{certificateId,mode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending,organizationId:organization?.id||null});
   if(graduateId)await createVerityNotification(graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A new certificate is available",body:"A certificate from "+clean.institution+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId}});
   await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Certificate issued",body:certificateId+" was issued by "+(organization?.name||clean.institution)+".",url:"/certificates",metadata:{certificateId}});
-  s.status(201).json({certificate,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
+  s.status(201).json({certificate,document:generatedDocument,documentGenerationWarning,chainMode:chain.mode||"SUPABASE_LEDGER",blockchainAnchorPending});
 }));
 
 
@@ -771,8 +811,8 @@ const bulkItemInput=z.object({
   itemId:z.string().uuid(),
   rowNumber:z.number().int().min(2).max(501),
   payload:issue,
-  documentName:z.string().trim().min(1).max(180),
-  documentSha256:z.string().regex(/^[a-f0-9]{64}$/)
+  documentName:z.string().trim().min(1).max(180).optional(),
+  documentSha256:z.string().regex(/^[a-f0-9]{64}$/).optional()
 });
 const bulkSafeName=value=>String(value||"certificate.pdf").normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,120)||"certificate.pdf";
 const bulkWorkerReady=()=>BULK_CERTIFICATE_WORKER_ENABLED;
@@ -853,17 +893,28 @@ app.post("/api/organization/certificates/bulk/batches/:batchId/items",auth,roles
   clean.studentEmail=String(clean.studentEmail||"").trim().toLowerCase();
   const normalizedStudentNumber=String(clean.studentNumber||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
   if(normalizedStudentNumber.length<2)return s.status(400).json({error:"Student number is invalid after normalization."});
-  const documentName=bulkSafeName(b.documentName);
-  const documentStoragePath=`bulk-staging/${result.organization.id}/${batch.id}/${b.itemId}.pdf`;
-  const {data:stagedFile,error:stagedError}=await server.storage.from("verity-certificates").download(documentStoragePath);
-  if(stagedError) return s.status(400).json({error:"Upload the matching PDF before staging this certificate row."});
-  const stagedBytes=Buffer.from(await stagedFile.arrayBuffer());
-  if(stagedBytes.subarray(0,5).toString("ascii")!=="%PDF-"||digest(stagedBytes)!==b.documentSha256)return s.status(409).json({error:"The staged PDF failed its SHA-256 or PDF-signature check."});
-  const idempotencyKey=digest(JSON.stringify({batchId:batch.id,rowNumber:b.rowNumber,studentNumber:normalizedStudentNumber,payload:clean,documentSha256:b.documentSha256}));
+  const documentName=bulkSafeName(b.documentName||("VERITY-"+normalizedStudentNumber+".pdf"));
+  const generated=batch.method==="CSV_GENERATED";
+  if(generated&&!b.documentSha256){
+    const {data:template,error:templateError}=await server.from("InstitutionCertificateTemplate")
+      .select("id").eq("organizationId",result.organization.id).eq("status","ACTIVE").eq("isDefault",true).maybeSingle();
+    if(templateError)throw templateError;
+    if(!template)return s.status(409).json({error:"Approve and activate a certificate design before using generated-PDF bulk issuance."});
+  }else if(!b.documentSha256){
+    return s.status(400).json({error:"Upload a PDF for this batch method, or choose CSV_GENERATED with an approved active design."});
+  }
+  const documentStoragePath=generated&&!b.documentSha256?null:`bulk-staging/${result.organization.id}/${batch.id}/${b.itemId}.pdf`;
+  if(documentStoragePath){
+    const {data:stagedFile,error:stagedError}=await server.storage.from("verity-certificates").download(documentStoragePath);
+    if(stagedError)return s.status(400).json({error:"Upload the matching PDF before staging this certificate row."});
+    const stagedBytes=Buffer.from(await stagedFile.arrayBuffer());
+    if(stagedBytes.subarray(0,5).toString("ascii")!=="%PDF-"||digest(stagedBytes)!==b.documentSha256)return s.status(409).json({error:"The staged PDF failed its SHA-256 or PDF-signature check."});
+  }
+  const idempotencyKey=digest(JSON.stringify({batchId:batch.id,rowNumber:b.rowNumber,studentNumber:normalizedStudentNumber,payload:clean,documentSha256:b.documentSha256||"GENERATED_FROM_ACTIVE_TEMPLATE"}));
   const row={
     id:b.itemId,batchId:batch.id,organizationId:result.organization.id,rowNumber:b.rowNumber,
     studentNumber:normalizedStudentNumber,idempotencyKey,payload:clean,
-    documentStoragePath,documentName,documentSha256:b.documentSha256,status:"STAGED",attempts:0
+    documentStoragePath,documentName,documentSha256:b.documentSha256||null,status:"STAGED",attempts:0
   };
   const {data,error}=await server.from("CertificateIssuanceItem").insert(row).select("id,batchId,rowNumber,studentNumber,status,documentName,documentSha256").single();
   if(error){
@@ -950,6 +1001,27 @@ async function certificateDesignInstitution(q){
  return {organization:org};
 }
 const designName=value=>String(value||"").normalize("NFKC").trim().slice(0,120);
+const designFieldLayout=layout=>Object.fromEntries(Object.entries(layout||{}).filter(([key,value])=>["studentName","studentNumber","qualification","programme","faculty","department","classification","awardDate","certificateId"].includes(key)&&value&&typeof value==="object"&&!Array.isArray(value)));
+app.post("/api/organization/certificate-design/templates/:id/preview",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ if(!/^[0-9a-f-]{36}$/i.test(q.params.id))return s.status(400).json({error:"Invalid template identifier."});
+ const b=z.object({studentName:z.string().trim().min(2).max(180).default("Amina Yusuf"),studentNumber:z.string().trim().max(80).default("PREVIEW-0001"),qualification:z.string().trim().max(120).default("B.Sc."),programme:z.string().trim().max(180).default("Computer Science"),faculty:z.string().trim().max(180).default("Faculty of Computing"),department:z.string().trim().max(180).default("Computer Science"),classification:z.string().trim().max(80).default("First Class"),awardDate:z.string().trim().max(40).default("2026-11-24")}).default({}).parse(q.body||{});
+ const db=makeServerClient();
+ const {data:template,error}=await db.from("InstitutionCertificateTemplate").select("id,organizationId,name,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,pageSize,fieldLayout,status").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(error)throw error;if(!template)return s.status(404).json({error:"Certificate design not found in your institution."});
+ let artworkBytes=null;
+ if(template.sourceType==="INSTITUTION_ARTWORK"){
+  if(!template.assetStoragePath)return s.status(409).json({error:"The artwork asset is missing."});
+  const {data:file,error:downloadError}=await db.storage.from("verity-certificates").download(template.assetStoragePath);
+  if(downloadError)throw downloadError;
+  artworkBytes=Buffer.from(await file.arrayBuffer());
+  if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed. The stored file does not match its SHA-256 fingerprint."});
+ }
+ const fieldLayout=validateFieldLayout(designFieldLayout(template.fieldLayout));
+ const pdf=await renderCertificatePreview({template:{...template,fieldLayout},organizationName:access.organization.name,data:b,artworkBytes});
+ await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_PREVIEW_RENDERED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,sourceType:template.sourceType});
+ s.setHeader("Content-Type","application/pdf");s.setHeader("Content-Disposition",`inline; filename="VERITY-${template.id}-PREVIEW.pdf"`);s.setHeader("Cache-Control","private, no-store");s.send(pdf);
+}));
 app.get("/api/organization/certificate-design/templates",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
  const db=makeServerClient();
@@ -963,6 +1035,41 @@ app.post("/api/organization/certificate-design/templates",auth,roles("EMPLOYER")
  const {data,error}=await db.from("InstitutionCertificateTemplate").insert({id,organizationId:access.organization.id,name:b.name,sourceType:b.sourceType,templateKey:b.templateKey,pageSize:b.pageSize,fieldLayout:b.fieldLayout,version:1,isDefault:false,status:"DRAFT",createdBy:q.user.id,updatedBy:q.user.id,createdAt:now,updatedAt:now}).select("id,name,sourceType,templateKey,pageSize,fieldLayout,version,isDefault,status,createdAt").single();
  if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_CREATED","InstitutionCertificateTemplate",id,{organizationId:access.organization.id,sourceType:"VERITY_TEMPLATE",templateKey:b.templateKey});
  s.status(201).json({template:data});
+}));
+app.patch("/api/organization/certificate-design/templates/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const b=z.object({fieldLayout:z.record(z.any()),pageSize:z.enum(["A4_LANDSCAPE","A4_PORTRAIT","LETTER_LANDSCAPE","LETTER_PORTRAIT"]).optional()}).strict().parse(q.body);
+ let layout=b.fieldLayout;
+ if(layout.fields&&!Object.keys(layout).some(k=>k!=="fields"))layout={};
+ layout=validateFieldLayout(layout);
+ const db=makeServerClient(),{data:current,error:ce}=await db.from("InstitutionCertificateTemplate").select("id,status,version").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(ce)throw ce;if(!current)return s.status(404).json({error:"Certificate design not found."});
+ if(current.status!=="DRAFT")return s.status(409).json({error:"Only draft designs can be edited. Create a new version to change an active design."});
+ const patch={fieldLayout:layout,version:current.version+1,updatedBy:q.user.id,updatedAt:new Date().toISOString(),...(b.pageSize?{pageSize:b.pageSize}:{})};
+ const {data,error}=await db.from("InstitutionCertificateTemplate").update(patch).eq("id",current.id).eq("organizationId",access.organization.id).eq("status","DRAFT").select("id,name,fieldLayout,pageSize,version,status,updatedAt").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_LAYOUT_UPDATED","InstitutionCertificateTemplate",current.id,{organizationId:access.organization.id,version:data.version});
+ s.json({template:data});
+}));
+app.post("/api/organization/certificate-design/templates/:id/activate",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ z.object({confirm:z.literal(true)}).parse(q.body||{});
+ const db=makeServerClient(),{data:template,error:te}=await db.from("InstitutionCertificateTemplate").select("id,name,status,sourceType,templateKey,assetStoragePath,assetMimeType,assetSha256,fieldLayout,pageSize").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(te)throw te;if(!template)return s.status(404).json({error:"Certificate design not found."});
+ if(template.status!=="DRAFT")return s.status(409).json({error:"Only a draft design can be approved and activated."});
+ if(template.sourceType==="INSTITUTION_ARTWORK"){
+  if(!template.assetStoragePath)return s.status(409).json({error:"The institution artwork is missing."});
+  const {data:file,error}=await db.storage.from("verity-certificates").download(template.assetStoragePath);if(error)throw error;
+  const bytes=Buffer.from(await file.arrayBuffer());if(!template.assetSha256||digest(bytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed."});
+ }
+ const layout=validateFieldLayout(designFieldLayout(template.fieldLayout));
+ let artworkBytes=null;if(template.sourceType==="INSTITUTION_ARTWORK"){const {data:file,error}=await db.storage.from("verity-certificates").download(template.assetStoragePath);if(error)throw error;artworkBytes=Buffer.from(await file.arrayBuffer());if(digest(artworkBytes)!==template.assetSha256)return s.status(409).json({error:"Artwork integrity check failed."});}
+ const pdf=await renderCertificatePreview({template:{...template,fieldLayout:layout},organizationName:access.organization.name,data:{studentName:"APPROVAL SAMPLE",studentNumber:"APPROVAL-0001",qualification:"B.Sc.",programme:"Computer Science",faculty:"Faculty",department:"Department",classification:"Sample",awardDate:new Date().toISOString().slice(0,10)},artworkBytes});
+ if(!pdf?.subarray(0,5).toString("ascii").startsWith("%PDF-"))return s.status(422).json({error:"A valid PDF preview could not be rendered."});
+ const {error:deactivateError}=await db.from("InstitutionCertificateTemplate").update({status:"ARCHIVED",isDefault:false,updatedAt:new Date().toISOString(),updatedBy:q.user.id}).eq("organizationId",access.organization.id).eq("status","ACTIVE");
+ if(deactivateError)throw deactivateError;
+ const {data:activated,error}=await db.from("InstitutionCertificateTemplate").update({status:"ACTIVE",isDefault:true,updatedAt:new Date().toISOString(),updatedBy:q.user.id}).eq("id",template.id).eq("organizationId",access.organization.id).eq("status","DRAFT").select("id,name,status,isDefault,version").single();
+ if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_APPROVED_AND_ACTIVATED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,version:activated.version});
+ s.json({template:activated,message:"Design approved and activated for future issuance."});
 }));
 app.post("/api/organization/certificate-design/templates/artwork",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
@@ -983,7 +1090,7 @@ app.post("/api/organization/certificate-design/templates/artwork",auth,roles("EM
 }));
 app.get("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
- const db=makeServerClient(),{data,error}=await db.from("CertificateDigitizationCase").select("id,studentNumber,claimedStudentName,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewNote,createdAt,reviewedAt,issuedAt").eq("organizationId",access.organization.id).order("createdAt",{ascending:false}).limit(100);
+ const db=makeServerClient(),{data,error}=await db.from("CertificateDigitizationCase").select("id,studentNumber,claimedStudentName,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewNote,certificateId,createdAt,reviewedAt,issuedAt").eq("organizationId",access.organization.id).order("createdAt",{ascending:false}).limit(100);
  if(error)throw error;s.json({cases:data||[]});
 }));
 app.post("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
@@ -1013,6 +1120,92 @@ app.patch("/api/organization/certificate-design/digitization/:id",auth,roles("EM
  if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_DIGITIZATION_"+b.status,"CertificateDigitizationCase",current.id,{organizationId:access.organization.id});
  s.json({case:data,message:b.status==="APPROVED"?"Validated. Issue a matching VERITY credential through the normal issuance workflow.":"Digitisation case rejected."});
 }));
+app.post("/api/organization/certificate-design/digitization/:id/convert",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const db=makeServerClient();
+ const {data:caseRow,error:caseError}=await db.from("CertificateDigitizationCase")
+  .select("id,organizationId,submittedBy,studentNumber,claimedStudentName,credentialData,sourceStoragePath,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewedBy,certificateId")
+  .eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(caseError)throw caseError;if(!caseRow)return s.status(404).json({error:"Historical certificate case not found."});
+ let alreadyIssuedCertificate=null;
+ if(caseRow.status==="ISSUED"&&caseRow.certificateId){
+  const {data:existing,error:existingError}=await db.from("Certificate").select("*").eq("certificateId",caseRow.certificateId).maybeSingle();
+  if(existingError)throw existingError;if(!existing)return s.status(409).json({error:"The issued historical case is missing its credential record."});
+  alreadyIssuedCertificate=existing;
+ }else if(caseRow.status!=="APPROVED")return s.status(409).json({error:"Only an institution-approved historical certificate can be converted."});
+ if(!caseRow.reviewedBy)return s.status(409).json({error:"The historical record has no recorded institutional reviewer."});
+ const {data:source,error:sourceError}=await db.storage.from("verity-certificates").download(caseRow.sourceStoragePath);
+ if(sourceError)throw sourceError;
+ const sourceBytes=Buffer.from(await source.arrayBuffer());
+ const spec=documentMime.get(caseRow.sourceMimeType);
+ if(!spec||sourceBytes.length!==caseRow.sourceSizeBytes||digest(sourceBytes)!==caseRow.sourceSha256||!spec.magic(sourceBytes))
+  return s.status(409).json({error:"The original historical scan failed its stored size, file-type or SHA-256 integrity check. No credential was issued."});
+ const academic=caseRow.credentialData||{};
+ const clean={
+  studentName:String(caseRow.claimedStudentName||"").trim(),
+  studentEmail:String(academic.studentEmail||"").trim().toLowerCase()||null,
+  studentNumber:String(caseRow.studentNumber||"").trim(),
+  institution:access.organization.name,
+  faculty:String(academic.faculty||"").trim(),
+  department:String(academic.department||"").trim(),
+  programme:String(academic.programme||"").trim(),
+  qualification:String(academic.qualification||"").trim(),
+  classification:String(academic.classification||"").trim()||null,
+  awardDate:academic.awardDate
+ };
+ if(!clean.studentName||!clean.studentNumber||!clean.faculty||!clean.department||!clean.programme||!clean.qualification||!clean.awardDate)
+  return s.status(422).json({error:"The approved case is missing required academic details. Update the case details through the institution review process before conversion."});
+ const awardDate=new Date(clean.awardDate);
+ if(Number.isNaN(awardDate.getTime()))return s.status(422).json({error:"The historical award date is invalid."});
+ clean.awardDate=awardDate.toISOString();
+ if(clean.studentEmail){
+  const {data:graduate,error:graduateError}=await db.from("User").select("id").eq("email",clean.studentEmail).maybeSingle();
+  if(graduateError)throw graduateError;
+  clean.graduateId=graduate?.id||null;
+ }else clean.graduateId=null;
+ const certificateId=`VRT-${new Date().getFullYear()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+ const verificationKey=`VRT-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
+ const canonicalRecord={
+  certificateId,studentName:clean.studentName.trim(),studentNumber:clean.studentNumber.trim(),
+  institution:clean.institution.trim(),faculty:clean.faculty.trim(),department:clean.department.trim(),
+  programme:clean.programme.trim(),qualification:clean.qualification.trim(),
+  classification:clean.classification||"",awardDate:clean.awardDate
+ };
+ const hash=digest(JSON.stringify(canonicalRecord)),now=new Date().toISOString();
+ const record={
+  id:crypto.randomUUID(),...clean,certificateId,verificationKey,organizationId:access.organization.id,
+  digest:hash,txHash:null,chainId:null,contractAddress:null,status:"ACTIVE",
+  issuerId:caseRow.reviewedBy,createdAt:now,updatedAt:now,issuedAt:now
+ };
+ let certificate=alreadyIssuedCertificate;
+ if(!certificate){
+  const {data:converted,error:convertError}=await db.rpc("verity_convert_digitization_case",{p_case_id:caseRow.id,p_certificate:record});
+  if(convertError){
+   if(String(convertError.message||"").includes("Only institution-approved"))return s.status(409).json({error:convertError.message});
+   throw convertError;
+  }
+  certificate=converted;
+ }
+ const {data:existingEvidence,error:evidenceLookupError}=await db.from("CertificateDocument")
+  .select("id,sha256").eq("certificateId",certificate.id).eq("sha256",caseRow.sourceSha256).maybeSingle();
+ if(evidenceLookupError)throw evidenceLookupError;
+ if(!existingEvidence){
+  const evidenceId=crypto.randomUUID();
+  const {error:evidenceInsertError}=await db.from("CertificateDocument").insert({
+   id:evidenceId,certificateId:certificate.id,organizationId:access.organization.id,
+   storagePath:caseRow.sourceStoragePath,originalName:caseRow.sourceFileName,
+   mimeType:caseRow.sourceMimeType,sizeBytes:caseRow.sourceSizeBytes,sha256:caseRow.sourceSha256,
+   uploadedBy:caseRow.submittedBy||q.user.id,scanStatus:"NOT_SCANNED"
+  });
+  if(evidenceInsertError)throw evidenceInsertError;
+  try{await audit(q.supabase,q.user.id,"HISTORICAL_CERTIFICATE_EVIDENCE_ATTACHED","CertificateDocument",evidenceId,{certificateId:certificate.certificateId,caseId:caseRow.id,sha256:caseRow.sourceSha256,originalEvidenceRetained:true});}catch(auditError){console.error("Historical evidence audit failed:",auditError);}
+ }
+ await audit(q.supabase,q.user.id,"HISTORICAL_CERTIFICATE_CONVERTED","Certificate",certificate.id,{certificateId:certificate.certificateId,caseId:caseRow.id,organizationId:access.organization.id,sourceSha256:caseRow.sourceSha256,mode:"SUPABASE_LEDGER"});
+ if(certificate.graduateId)try{await createVerityNotification(certificate.graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A historical certificate is now available",body:"A validated historical certificate from "+access.organization.name+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId:certificate.certificateId}});}catch(notificationError){console.error("Historical certificate graduate notification failed:",notificationError);}
+ try{await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Historical certificate converted",body:certificate.certificateId+" was issued from an approved historical record.",url:"/certificates",metadata:{certificateId:certificate.certificateId,caseId:caseRow.id}});}catch(notificationError){console.error("Historical conversion admin notification failed:",notificationError);}
+ s.status(alreadyIssuedCertificate?200:201).json({certificate,idempotent:!!alreadyIssuedCertificate,sourceEvidence:{sha256:caseRow.sourceSha256,originalName:caseRow.sourceFileName,retained:true},message:"Historical certificate converted through the canonical VERITY issuance and ledger workflow. The original scan remains private and unchanged."});
+}));
+ 
 app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
   const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
   const spec=documentMime.get(mime), bytes=q.body;
