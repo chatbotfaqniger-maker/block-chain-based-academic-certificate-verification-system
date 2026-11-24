@@ -154,3 +154,53 @@ BEGIN
     RAISE EXCEPTION 'service_role must allocate campaign processing batches';
   END IF;
 END $$;
+
+-- Monthly institution-wide allowance: an exact 8,000 reservation succeeds,
+-- replaying its UUID is idempotent, and another campaign cannot exceed the quota.
+INSERT INTO public."Organization"(id,"ownerId",type,status)
+VALUES ('org-monthly-test','11111111-1111-4111-8111-111111111111','INSTITUTION','APPROVED');
+SET ROLE service_role;
+DO $$
+DECLARE r jsonb;
+BEGIN
+  r:=public.create_certificate_issuance_campaign_with_monthly_limit(
+    'campaign-monthly-8000','org-monthly-test','11111111-1111-4111-8111-111111111111',
+    'monthly-8000.csv','CSV_GENERATED',8000
+  );
+  IF coalesce((r->>'limitExceeded')::boolean,false) THEN RAISE EXCEPTION 'An 8,000-record monthly reservation should fit'; END IF;
+  IF (r->>'monthlyUsed')::integer<>8000 OR (r->>'monthlyRemaining')::integer<>0 THEN
+    RAISE EXCEPTION 'The monthly allowance accounting is incorrect';
+  END IF;
+
+  r:=public.create_certificate_issuance_campaign_with_monthly_limit(
+    'campaign-monthly-8000','org-monthly-test','11111111-1111-4111-8111-111111111111',
+    'monthly-8000.csv','CSV_GENERATED',8000
+  );
+  IF coalesce((r->>'alreadyCreated')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'Retrying the same campaign must be idempotent';
+  END IF;
+  IF (r->>'monthlyUsed')::integer<>8000 THEN RAISE EXCEPTION 'An idempotent retry must not reserve quota twice'; END IF;
+
+  r:=public.create_certificate_issuance_campaign_with_monthly_limit(
+    'campaign-monthly-overflow','org-monthly-test','11111111-1111-4111-8111-111111111111',
+    'monthly-overflow.csv','CSV_GENERATED',1
+  );
+  IF coalesce((r->>'limitExceeded')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'A second campaign must not bypass the institution monthly allowance';
+  END IF;
+  IF (r->>'monthlyRemaining')::integer<>0 THEN RAISE EXCEPTION 'Monthly remaining quota should be zero'; END IF;
+END $$;
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF has_function_privilege('anon','public.create_certificate_issuance_campaign_with_monthly_limit(text,text,text,text,text,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'anon must not reserve certificate issuance quota';
+  END IF;
+  IF has_function_privilege('authenticated','public.create_certificate_issuance_campaign_with_monthly_limit(text,text,text,text,text,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated must not reserve certificate issuance quota directly';
+  END IF;
+  IF NOT has_function_privilege('service_role','public.create_certificate_issuance_campaign_with_monthly_limit(text,text,text,text,text,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must be able to reserve certificate issuance quota';
+  END IF;
+END $$;
