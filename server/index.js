@@ -942,7 +942,7 @@ app.get("/api/organization/certificates/bulk/campaigns",auth,roles("EMPLOYER"),r
   const result=await bulkInstitutionFor(q,false);if(result.error)return s.status(result.status).json({error:result.error});
   const {data:campaigns,error}=await q.supabase.from("CertificateIssuanceCampaign")
     .select("id,fileName,method,totalItems,createdAt,updatedAt")
-    .eq("organizationId",result.organization.id).order("createdAt",{ascending:false}).limit(25);
+    .eq("organizationId",result.organization.id).order("createdAt",{ascending:false}).limit(10);
   if(error)throw error;
   const ids=(campaigns||[]).map(x=>x.id);
   let batches=[];
