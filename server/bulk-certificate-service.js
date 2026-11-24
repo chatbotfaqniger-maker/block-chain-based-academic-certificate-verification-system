@@ -95,7 +95,9 @@ export function createBulkCertificateProcessor({client,audit,createVerityNotific
         artworkBytes=Buffer.from(await file.arrayBuffer());
         if(!template.assetSha256||digest(artworkBytes)!==template.assetSha256)throw permanent("The active certificate artwork failed its SHA-256 integrity check.","TEMPLATE_ARTWORK_HASH_MISMATCH");
       }
-      const verificationUrl=`${process.env.PUBLIC_APP_URL||"https://verity.invalid"}/verify/${encodeURIComponent(certificate.verificationKey)}`;
+      const publicBaseUrl=process.env.PUBLIC_APP_URL||process.env.RENDER_EXTERNAL_URL;
+      if(!publicBaseUrl)throw permanent("Set PUBLIC_APP_URL to the public VERITY address before generating certificate PDFs.","PUBLIC_APP_URL_REQUIRED");
+      const verificationUrl=`${publicBaseUrl.replace(/\/$/,"")}/verify/${encodeURIComponent(certificate.verificationKey)}`;
       bytes=await renderCertificateDocument({
         template:{...template,fieldLayout:validateFieldLayout(template.fieldLayout||{})},
         organizationName:organization.name,
