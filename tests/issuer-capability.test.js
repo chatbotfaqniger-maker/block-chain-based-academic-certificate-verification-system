@@ -51,8 +51,16 @@ test("private student roster precheck is service-role-only",()=>{
 
 test("the existing certificate template studio and bulk methods remain in place",()=>{
  for(const method of ["CSV_ZIP","CSV_MULTIPLE_PDFS","CSV_GENERATED"])assert.ok(bulk.includes(method));
- assert.ok(bulk.includes("rows.length>501"));
+ assert.ok(bulk.includes("rows.length>MAX_CAMPAIGN_ITEMS+1"));
+ assert.ok(bulk.includes("MAX_CAMPAIGN_ITEMS,PROCESSING_BATCH_SIZE,getIssuanceChunk"));
+ assert.ok(bulk.includes('"/organization/certificates/bulk/campaigns"'));
  assert.ok(server.includes("totalItems:z.number().int().min(1).max(500)"));
+ assert.ok(server.includes("totalItems:z.number().int().min(1).max(50000)"));
+ assert.ok(server.includes("create_certificate_issuance_campaign_batch"));
+ const campaign=read("../supabase/migrations/20261124180000_large_certificate_issuance_campaigns.sql");
+ assert.ok(campaign.includes('"totalItems" integer not null check ("totalItems" between 1 and 50000)'));
+ assert.ok(campaign.includes("p_total_items > 500"));
+ assert.ok(campaign.includes('CertificateIssuanceBatch" ("campaignId"'));
  assert.ok(studio.includes('request("/organization/certificate-design/templates")'));
  assert.ok(studio.includes("Upload your approved PDF or high-resolution PNG/JPEG artwork"));
  assert.ok(studio.includes("fieldLayout"));
