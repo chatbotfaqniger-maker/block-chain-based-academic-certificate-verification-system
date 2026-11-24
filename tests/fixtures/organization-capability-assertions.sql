@@ -25,6 +25,34 @@ BEGIN
     RAISE EXCEPTION 'Capability authorization function was not created';
   END IF;
 
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public."OrganizationCapability"'::regclass) THEN
+    RAISE EXCEPTION 'OrganizationCapability must have row-level security enabled';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='OrganizationCapability'
+      AND policyname='verity_organization_capability_admin_review'
+      AND cmd='UPDATE'
+  ) THEN
+    RAISE EXCEPTION 'Administrator capability review policy is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='OrganizationCapability'
+      AND policyname='verity_organization_capability_owner_resubmit'
+      AND cmd='UPDATE'
+  ) THEN
+    RAISE EXCEPTION 'Owner resubmission policy is missing';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated','public."OrganizationCapability"','SELECT')
+     OR NOT has_table_privilege('authenticated','public."OrganizationCapability"','INSERT')
+     OR NOT has_table_privilege('authenticated','public."OrganizationCapability"','UPDATE') THEN
+    RAISE EXCEPTION 'Authenticated table grants are incomplete';
+  END IF;
+
   SELECT count(*) INTO v_missing
   FROM public."Organization" o
   WHERE o.type='INSTITUTION'
