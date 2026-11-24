@@ -73,7 +73,12 @@ async function ensureOrganization(client, authUser, profile) {
      return data;
    }
  }
- const org={id:crypto.randomUUID(),name,type:m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION",ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null,locationCity:m.locationCity||null,locationState:m.locationState||null,locationCountry:m.locationCountry||null};
+ const organizationType=m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION";
+ const allowedLevels=["PRIMARY","SECONDARY","TERTIARY"];
+ const educationLevels=organizationType==="INSTITUTION"&&Array.isArray(m.educationLevels)
+   ?[...new Set(m.educationLevels.filter(level=>allowedLevels.includes(level)))]
+   :organizationType==="INSTITUTION"?["TERTIARY"]:[];
+ const org={id:crypto.randomUUID(),name,type:organizationType,educationLevels,ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null,locationCity:m.locationCity||null,locationState:m.locationState||null,locationCountry:m.locationCountry||null};
  const {data,error:e}=await client.from("Organization").insert(org).select().single();
  if(e && e.code==="23505" && /organization_registration_number_unique/.test(e.message||"")) throw new Error("This registration number is already registered in Verity. Sign in with the original organization account or contact the System Administrator. No duplicate organization was created.");
  if(e) throw e;
@@ -157,6 +162,22 @@ async function auth(req,res,next) {
   } catch(e) { res.status(401).json({error:e.message||"Authentication failed."}); }
 }
 const roles=(...allowed)=>(req,res,next)=>allowed.includes(req.user.role)?next():res.status(403).json({error:"Permission denied."});
+
+const ORGANIZATION_CAPABILITIES=["ISSUE_CREDENTIALS","VERIFY_CREDENTIALS"];
+async function hasApprovedOrganizationCapability(client,organizationId,capability) {
+ const {data,error}=await client.from("OrganizationCapability").select("id")
+   .eq("organizationId",organizationId).eq("capability",capability).eq("status","APPROVED").maybeSingle();
+ if(error)throw error;
+ return Boolean(data);
+}
+async function organizationCapabilities(client,organizationId) {
+ const {data,error}=await client.from("OrganizationCapability")
+   .select("id,capability,status,requestNote,decisionNote,createdAt,updatedAt,reviewedAt")
+   .eq("organizationId",organizationId)
+   .order("createdAt",{ascending:true});
+ if(error)throw error;
+ return data||[];
+}
 async function activeStaffFor(client,userId) {
  const {data:staff,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE");
  if(error) throw error;
@@ -212,17 +233,17 @@ app.get("/api/directory/organizations",run(async(q,s)=>{
 }));
 
 app.post("/api/auth/register",run(async(q,s)=>{
-  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional(),studentOrganizationId:z.string().optional()}).parse(q.body); const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."}); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
+  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),educationLevels:z.array(z.enum(["PRIMARY","SECONDARY","TERTIARY"])).max(3).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional(),studentOrganizationId:z.string().optional()}).parse(q.body);if(b.role==="EMPLOYER"&&b.organizationType==="INSTITUTION"&&Array.isArray(b.educationLevels)&&b.educationLevels.length===0)return s.status(400).json({error:"Select at least one education level served by this school."}); const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."}); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
   if(b.role==="GRADUATE"){
    const studentNumber=String(b.studentNumber||"").trim(),organizationId=String(b.studentOrganizationId||"").trim();
-   if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your institution and enter your matriculation number before creating a student account."});
+   if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your school or issuer organization and enter your student or employee number before creating a graduate account."});
    const {data:eligible,error:precheckError}=await makeServerClient().rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;
-   if(eligible!==true)return s.status(400).json({error:"Your student record could not be prepared for activation. Check the matriculation number with your institution ICT office."});
+   if(eligible!==true)return s.status(400).json({error:"Your record could not be prepared for activation. Check the student or employee number with the organization administrator."});
   }
   const client=makeClient();
   const {data,error}=await client.auth.signUp({
     email:b.email.trim().toLowerCase(),password:b.password,
-    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||"",studentOrganizationId:b.studentOrganizationId?.trim()||""}}
+    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",educationLevels:b.educationLevels||["TERTIARY"],registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||"",studentOrganizationId:b.studentOrganizationId?.trim()||""}}
   });
   if(error) {
     const duplicate=/already registered|already exists|user exists/i.test(error.message||"");
@@ -243,16 +264,75 @@ app.post("/api/auth/login",run(async(q,s)=>{
   const profile=await profileFor(client,data.user); const organization=await ensureOrganization(client,data.user,profile); await ensureStudentMembership(client,data.user,profile);
   s.json({token:data.session.access_token,user:safe(profile),organization});
 }));
-app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];const {data:institutionICT,error:ictError}=q.user.role==="GRADUATE"?await q.supabase.from("InstitutionICTStaff").select("id,organizationId,permissions,status").eq("userId",q.user.id).eq("status","ACTIVE"): {data:[],error:null};if(ictError)throw ictError;const studentRegistration=q.user.role==="GRADUATE"?{organizationId:q.authUser.user_metadata?.studentOrganizationId||null,studentNumber:q.authUser.user_metadata?.studentNumber||null}:null;const rosterOrganization=q.user.role==="GRADUATE"&&institutionICT?.some(x=>x.status==="ACTIVE"&&x.permissions?.some(p=>["roster:manage","registration:recover"].includes(p)))?await institutionRosterContext(q.supabase,q.user.id):null;const workspaceOrganization=organization||(rosterOrganization?{id:rosterOrganization.id,name:rosterOrganization.name,type:rosterOrganization.type,status:rosterOrganization.status,ownerId:rosterOrganization.ownerId}:null);s.json({user:{...safe(q.user),organizationStaff,institutionICT:institutionICT||[],studentRegistration},organization:workspaceOrganization});}));
+app.get("/api/auth/me",auth,run(async(q,s)=>{const organization=await ensureOrganization(q.supabase,q.authUser,q.user);await ensureStudentMembership(q.supabase,q.authUser,q.user);const organizationStaff=q.user.role==="GRADUATE"?await activeStaffFor(q.supabase,q.user.id):[];const {data:institutionICT,error:ictError}=q.user.role==="GRADUATE"?await q.supabase.from("InstitutionICTStaff").select("id,organizationId,permissions,status").eq("userId",q.user.id).eq("status","ACTIVE"): {data:[],error:null};if(ictError)throw ictError;const studentRegistration=q.user.role==="GRADUATE"?{organizationId:q.authUser.user_metadata?.studentOrganizationId||null,studentNumber:q.authUser.user_metadata?.studentNumber||null}:null;const rosterOrganization=q.user.role==="GRADUATE"&&institutionICT?.some(x=>x.status==="ACTIVE"&&x.permissions?.some(p=>["roster:manage","registration:recover"].includes(p)))?await institutionRosterContext(q.supabase,q.user.id):null;const workspaceOrganization=organization||(rosterOrganization?{id:rosterOrganization.id,name:rosterOrganization.name,type:rosterOrganization.type,status:rosterOrganization.status,ownerId:rosterOrganization.ownerId}:null);const organizationWithCapabilities=organization?{...organization,capabilities:await organizationCapabilities(q.supabase,organization.id)}:workspaceOrganization;s.json({user:{...safe(q.user),organizationStaff,institutionICT:institutionICT||[],studentRegistration},organization:organizationWithCapabilities});}));
 app.patch("/api/admin/profile",auth,roles("ADMIN"),run(async(q,s)=>{const b=z.object({fullName:z.string().trim().min(2).max(100)}).parse(q.body);const {data,error}=await q.supabase.from("User").update({fullName:b.fullName}).eq("id",q.user.id).select("id,fullName,email,role,institution").single();if(error)throw error;await audit(q.supabase,q.user.id,"ADMIN_PROFILE_NAME_UPDATED","User",q.user.id,{fullName:b.fullName});s.json({user:safe(data),message:"Administrator display name updated."});}));
 app.post("/api/organization/request-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const b=z.object({registrationCode:z.string().min(6),studentNumber:z.string().optional()}).parse(q.body);const {data,error}=await q.supabase.rpc("request_verity_membership",{p_registration_code:b.registrationCode.trim().toUpperCase(),p_student_number:b.studentNumber||null});if(error)return s.status(400).json({error:error.message});s.status(201).json({membership:data});}));
 app.get("/api/organization/my-membership",auth,roles("GRADUATE"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Membership").select("id,status,studentNumber,createdAt,Organization:organizationId(name,type,status)").eq("userId",q.user.id).order("createdAt",{ascending:false});if(error)throw error;s.json({memberships:data||[]});}));
 app.get("/api/organization",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;s.json({organization:data});}));
 
+app.get("/api/organization/capabilities",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const {data:org,error}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
+ if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});
+ s.json({organization:org,capabilities:await organizationCapabilities(q.supabase,org.id)});
+}));
+app.post("/api/organization/capabilities",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const b=z.object({capability:z.enum(ORGANIZATION_CAPABILITIES),requestNote:z.string().trim().max(1000).optional()}).parse(q.body);
+ const {data:org,error}=await q.supabase.from("Organization").select("id,name,status,type").eq("ownerId",q.user.id).maybeSingle();
+ if(error)throw error;if(!org)return s.status(404).json({error:"Organization not found."});
+ const {data:existing,error:lookupError}=await q.supabase.from("OrganizationCapability").select("id,status").eq("organizationId",org.id).eq("capability",b.capability).maybeSingle();
+ if(lookupError)throw lookupError;
+ const now=new Date().toISOString();
+ let capability,capabilityError;
+ if(existing?.status==="REJECTED"){
+   const result=await q.supabase.from("OrganizationCapability").update({
+     status:"PENDING",requestedBy:q.user.id,requestNote:b.requestNote||null,
+     decisionNote:null,reviewedBy:null,reviewedAt:null,updatedAt:now
+   }).eq("id",existing.id).eq("status","REJECTED").select().single();
+   capability=result.data;capabilityError=result.error;
+ }else if(existing){
+   return s.status(409).json({error:existing.status==="APPROVED"?"This capability is already approved.":existing.status==="SUSPENDED"?"This capability is suspended. Contact VERITY support for review.":"A request for this capability is already awaiting administrator review."});
+ }else{
+   const result=await q.supabase.from("OrganizationCapability").insert({
+     id:crypto.randomUUID(),organizationId:org.id,capability:b.capability,status:"PENDING",
+     requestedBy:q.user.id,requestNote:b.requestNote||null,createdAt:now,updatedAt:now
+   }).select().single();
+   capability=result.data;capabilityError=result.error;
+ }
+ if(capabilityError)throw capabilityError;
+ await audit(q.supabase,q.user.id,"ORGANIZATION_CAPABILITY_REQUESTED","OrganizationCapability",capability.id,{organizationId:org.id,capability:b.capability});
+ await notifyVerityAdmins({type:"ORGANIZATION_CAPABILITY_REQUESTED",category:"PLATFORM",title:"Organization capability request",body:org.name+" requested "+b.capability.replaceAll("_"," ").toLowerCase()+".",url:"/organizations",metadata:{organizationId:org.id,capability:b.capability}});
+ s.status(201).json({capability,message:"Your capability request has been submitted for separate VERITY administrator review."});
+}));
+
+app.get("/api/admin/organization-capabilities",auth,roles("ADMIN"),run(async(q,s)=>{
+ const {data:rows,error}=await q.supabase.from("OrganizationCapability").select("*").order("createdAt",{ascending:false});
+ if(error)throw error;
+ const ids=[...new Set((rows||[]).map(x=>x.organizationId))];
+ const {data:organizations,error:orgError}=ids.length?await q.supabase.from("Organization").select("id,name,type,status,ownerId").in("id",ids):{data:[],error:null};
+ if(orgError)throw orgError;
+ s.json({requests:(rows||[]).map(row=>({...row,isLegacyBaseline:row.requestNote==="Existing organization capability preserved during additive VERITY expansion.",organization:(organizations||[]).find(org=>org.id===row.organizationId)||null}))});
+}));
+app.patch("/api/admin/organization-capabilities/:id",auth,roles("ADMIN"),run(async(q,s)=>{
+ const b=z.object({status:z.enum(["APPROVED","REJECTED","SUSPENDED"]),decisionNote:z.string().trim().max(1000).optional()}).parse(q.body);
+ const {data:current,error:lookupError}=await q.supabase.from("OrganizationCapability").select("id,organizationId,capability,status").eq("id",q.params.id).maybeSingle();
+ if(lookupError)throw lookupError;if(!current)return s.status(404).json({error:"Capability request not found."});
+ const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,status,ownerId").eq("id",current.organizationId).single();
+ if(orgError)throw orgError;
+ if(b.status==="APPROVED"&&org.status!=="APPROVED")return s.status(409).json({error:"Approve the organization's identity application before approving its requested capability."});
+ const now=new Date().toISOString();
+ const {data:updated,error}=await q.supabase.from("OrganizationCapability").update({
+   status:b.status,decisionNote:b.decisionNote||null,reviewedBy:q.user.id,reviewedAt:now,updatedAt:now
+ }).eq("id",current.id).select().single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"ORGANIZATION_CAPABILITY_"+b.status,"OrganizationCapability",updated.id,{organizationId:org.id,capability:current.capability,decisionNote:b.decisionNote||null});
+ if(org.ownerId)await createVerityNotification(org.ownerId,{type:"ORGANIZATION_CAPABILITY_STATUS",category:"ACCOUNT",title:"Organization capability review updated",body:"Your "+current.capability.replaceAll("_"," ").toLowerCase()+" request was "+b.status.toLowerCase()+".",url:"/identity",metadata:{organizationId:org.id,capability:current.capability,status:b.status}});
+ s.json({capability:updated});
+}));
+
 app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional()}).parse(q.body);
  const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."});
- const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;
+ const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status,educationLevels").eq("ownerId",q.user.id).maybeSingle();if(oe)throw oe;
  if(!org)return s.status(404).json({error:"Organization not found."});
  if(org.status!=="PENDING"){
    const submittedKeys=Object.keys(q.body||{});
@@ -263,7 +343,7 @@ app.patch("/api/organization/identity",auth,roles("EMPLOYER"),run(async(q,s)=>{
    return s.json({organization:data,message:"Public location updated. The directory labels it as organization-reported."});
  }
  const patch={registrationNumber:b.registrationNumber?.trim()||null,officialWebsite:b.officialWebsite?.trim()||null,officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||null,accreditationBody:b.accreditationBody?.trim()||null,locationCity:b.locationCity?.trim()||null,locationState:b.locationState?.trim()||null,locationCountry:b.locationCountry?.trim()||null,updatedAt:new Date().toISOString()};
- if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.officialWebsite||!patch.accreditationBody))return s.status(400).json({error:"Institutions must provide a registration number, official website and accreditation body."});
+ const requiresTertiaryEvidence=org.type==="INSTITUTION"&&(org.educationLevels||[]).includes("TERTIARY");if(org.type==="INSTITUTION"&&(!patch.registrationNumber||!patch.accreditationBody||(requiresTertiaryEvidence&&!patch.officialWebsite)))return s.status(400).json({error:requiresTertiaryEvidence?"Tertiary institutions must provide a registration number, official website and accreditation body.":"Primary/secondary schools must provide their official school registration number and supervising or accreditation body."});
  if(patch.officialWebsite&&!/^https?:\/\//i.test(patch.officialWebsite))return s.status(400).json({error:"Enter the official website with https:// or http://."});
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("*").single();if(error)throw error;
  await audit(q.supabase,q.user.id,"ORGANIZATION_IDENTITY_UPDATED","Organization",org.id,{organizationId:org.id});
@@ -305,7 +385,7 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
 app.patch("/api/organization/registration-code-policy",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({enabled:z.boolean(),expiresAt:z.string().datetime().optional()}).parse(q.body);
  const {data:org,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can configure its registration-code policy."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can configure its registration-code policy."});
  if(b.enabled&&(!b.expiresAt||new Date(b.expiresAt)<=new Date()))return s.status(400).json({error:"Choose a future expiry date, or leave expiry disabled."});
  const patch={registrationCodeExpiryEnabled:b.enabled,registrationCodeExpiresAt:b.enabled?b.expiresAt:null,updatedAt:new Date().toISOString()};
  const {data,error:saveError}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("id,registrationCodeExpiryEnabled,registrationCodeExpiresAt").single();if(saveError)throw saveError;
@@ -314,7 +394,7 @@ app.patch("/api/organization/registration-code-policy",auth,roles("EMPLOYER"),ru
 }));
 app.post("/api/organization/registration-code/rotate",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can rotate its registration code."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can rotate its registration code."});
  const code="VRT-"+crypto.randomBytes(8).toString("hex").toUpperCase();
  const {data,error:saveError}=await q.supabase.from("Organization").update({registrationCode:code,updatedAt:new Date().toISOString()}).eq("id",org.id).eq("ownerId",q.user.id).select("registrationCode").single();if(saveError)throw saveError;
  await audit(q.supabase,q.user.id,"INSTITUTION_REGISTRATION_CODE_ROTATED","Organization",org.id,{});
@@ -329,7 +409,7 @@ app.get("/api/student/registration-options",run(async(q,s)=>{
 app.get("/api/student/registration-context",auth,roles("GRADUATE"),run(async(q,s)=>{
  const metadata=q.authUser.user_metadata||{},organizationId=metadata.studentOrganizationId||null,studentNumber=metadata.studentNumber||null;
  let institution=null;
- if(organizationId){const {data,error}=await q.supabase.from("Organization").select("id,name,type,status").eq("id",organizationId).maybeSingle();if(error)throw error;if(data?.type==="INSTITUTION"&&data.status==="APPROVED")institution={id:data.id,name:data.name};}
+ if(organizationId&&studentNumber){const server=makeServerClient();const {data:issuers,error}=await server.rpc("verity_student_signup_institutions");if(error)throw error;const issuer=(issuers||[]).find(x=>x.id===organizationId);if(issuer){const {data:eligible,error:precheckError}=await server.rpc("verity_student_registration_precheck",{p_organization_id:organizationId,p_student_number:studentNumber});if(precheckError)throw precheckError;if(eligible===true)institution={id:issuer.id,name:issuer.name};}}
  s.json({institution,studentNumber,needsActivation:!q.user.id?false:true});
 }));
 app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
@@ -345,7 +425,7 @@ app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
 }));
 app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
  const {data:students,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName").eq("organizationId",org.id).eq("status","ELIGIBLE").is("claimedUserId",null).order("studentNumber").limit(10000);if(error)throw error;
  const {data:existing,error:te}=await q.supabase.from("StudentActivationToken").select("rosterId,usedAt,revokedAt").eq("organizationId",org.id);if(te)throw te;
  const tokenByRoster=new Map((existing||[]).map(t=>[t.rosterId,t]));
@@ -366,7 +446,7 @@ app.post("/api/institution/activation-tokens/export",auth,run(async(q,s)=>{
 }));
 app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!(hasInstitutionPermission(org,"roster:manage",q.user.id)||hasInstitutionPermission(org,"registration:recover",q.user.id)))return s.status(403).json({error:"An approved institution owner or authorized ICT recovery officer is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!(hasInstitutionPermission(org,"roster:manage",q.user.id)||hasInstitutionPermission(org,"registration:recover",q.user.id)))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT recovery officer is required."});
  const {data:student,error}=await q.supabase.from("StudentRoster").select("id,studentNumber,fullName,status,claimedUserId").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();if(error)throw error;
  if(!student)return s.status(404).json({error:"Student roster record not found."});
  if(student.status!=="ELIGIBLE"||student.claimedUserId)return s.status(409).json({error:"A new activation token cannot be issued for an already claimed, disputed or blocked student record. Use the identity-recovery review process."});
@@ -378,14 +458,14 @@ app.post("/api/institution/roster/:id/activation-token",auth,run(async(q,s)=>{
 }));
 app.get("/api/institution/roster",auth,run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
  const term=String(q.query.search||"").trim().slice(0,120);
  const {data,error}=await q.supabase.rpc("list_verity_student_roster",{p_organization_id:org.id,p_search:term||null});if(error)throw error;
  s.json(data||{organization:null,students:[],counts:{}});
 }));
 app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","text/plain","application/vnd.ms-excel"],limit:"5mb"}),run(async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id))return s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
  if(!Buffer.isBuffer(q.body)||!q.body.length)return s.status(400).json({error:"Upload a non-empty CSV roster file."});
  const fileName=String(q.headers["x-file-name"]||"student-roster.csv").normalize("NFKC").slice(0,180);
  if(!/\.csv$/i.test(fileName))return s.status(415).json({error:"The first roster-import release accepts CSV files. Excel workbook import will be added as a compatible format."});
@@ -418,8 +498,8 @@ app.post("/api/institution/roster/import",auth,express.raw({type:["text/csv","te
 
 const rosterImportAccess=async(q,s)=>{
  const org=await institutionRosterContext(q.supabase,q.user.id);
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED"||!hasInstitutionPermission(org,"roster:manage",q.user.id)){
-  s.status(403).json({error:"An approved institution owner or authorized ICT roster manager is required."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS"))||!hasInstitutionPermission(org,"roster:manage",q.user.id)){
+  s.status(403).json({error:"An approved credential issuer owner or authorized ICT roster manager is required."});
   return null;
  }
  return org;
@@ -613,8 +693,8 @@ app.post("/api/institution/recoveries/:id/complete",auth,run(async(q,s)=>{
  if(data.claimedUserId)await createVerityNotification(data.claimedUserId,{type:"STUDENT_REGISTRATION_CLAIM_RELEASED",category:"ACCOUNT",title:"Institution student-record review completed",body:"Your institution completed a two-person review of a disputed student registration. Contact the institution if you believe this was an error.",url:"/join",metadata:{organizationId:org.id,recoveryId:q.params.id}});
  s.json({recovery:data,activationToken:raw,message:"Two-person recovery completed. The old unused claim was released and a fresh single-use token is ready for the verified student."});
 }));
-app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
-app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved first."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
+app.get("/api/organization/members",auth,roles("EMPLOYER"),run(async(q,s)=>{const {data:org,error}=await q.supabase.from("Organization").select("id,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org)return s.json({members:[]});if(org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can manage its graduate and employee memberships."});const {data,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber,status,createdAt").eq("organizationId",org.id).order("createdAt",{ascending:false});if(e)throw e;const ids=(data||[]).map(x=>x.userId);const {data:people,error:pe}=ids.length?await q.supabase.from("User").select("id,fullName,email,institution").in("id",ids):{data:[],error:null};if(pe)throw pe;s.json({members:(data||[]).map(m=>({...m,user:(people||[]).find(p=>p.id===m.userId)||null}))});}));
+app.patch("/api/organization/members/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{const b=z.object({status:z.enum(["ACTIVE","REJECTED"])}).parse(q.body);const {data:org,error}=await q.supabase.from("Organization").select("id,status,name,type").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can manage its graduate and employee memberships."});const {data:errorRow,error:e}=await q.supabase.from("Membership").select("id,userId,studentNumber").eq("id",q.params.id).eq("organizationId",org.id).single();if(e)throw e;const {data,error:updateError}=await q.supabase.from("Membership").update({status:b.status,updatedAt:new Date().toISOString()}).eq("id",q.params.id).eq("organizationId",org.id).select().single();if(updateError)throw updateError;if(b.status==="ACTIVE"){const {data:student}=await q.supabase.from("User").select("email").eq("id",errorRow.userId).maybeSingle();if(student?.email){const {error:certError}=await q.supabase.from("Certificate").update({graduateId:errorRow.userId,organizationId:org.id,updatedAt:new Date().toISOString()}).eq("studentEmail",student.email).eq("institution",org.name);if(certError)throw certError;}}await audit(q.supabase,q.user.id,"STUDENT_MEMBERSHIP_"+b.status,"Membership",data.id,{organizationId:org.id});s.json({membership:data});}));
 app.post("/api/organization/evidence",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
  const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase(),spec=documentMime.get(mime),bytes=q.body;
  if(!spec||!Buffer.isBuffer(bytes)||!bytes.length||!spec.magic(bytes))return s.status(415).json({error:"Upload a valid PDF, JPEG or PNG evidence file."});
@@ -665,15 +745,26 @@ app.get("/api/admin/certificates/:id/document-preview",auth,roles("ADMIN"),run(a
 app.get("/api/admin/organizations",auth,roles("ADMIN"),run(async(q,s)=>{const {data,error}=await q.supabase.from("Organization").select("*").order("createdAt",{ascending:false});if(error)throw error;const ids=(data||[]).map(o=>o.id);const {data:evidence,error:ee}=ids.length?await q.supabase.from("OrganizationEvidence").select("id,organizationId,evidenceType,originalName,scanStatus,createdAt").in("organizationId",ids).order("createdAt",{ascending:false}):{data:[],error:null};if(ee)throw ee;s.json({organizations:(data||[]).map(o=>({...o,evidence:(evidence||[]).filter(e=>e.organizationId===o.id)}))});}));
 app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
  const b=z.object({status:z.enum(["APPROVED","SUSPENDED"]),verificationNotes:z.string().max(1000).optional()}).parse(q.body);
- const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody").eq("id",q.params.id).maybeSingle();if(oe)throw oe;if(!org)return s.status(404).json({error:"Organization not found."});
+ const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,educationLevels,registrationNumber,officialWebsite,officialEmailDomain,accreditationBody").eq("id",q.params.id).maybeSingle();if(oe)throw oe;if(!org)return s.status(404).json({error:"Organization not found."});
  if(b.status==="APPROVED"){
-   if(org.type==="INSTITUTION"&&(!org.registrationNumber||!org.officialWebsite||!org.accreditationBody))return s.status(400).json({error:"Institution approval requires its registration number, official website and accreditation body."});
+   const requiresTertiaryEvidence=org.type==="INSTITUTION"&&(org.educationLevels||[]).includes("TERTIARY");if(org.type==="INSTITUTION"&&(!org.registrationNumber||!org.accreditationBody||(requiresTertiaryEvidence&&!org.officialWebsite)))return s.status(400).json({error:requiresTertiaryEvidence?"Tertiary institution approval requires its registration number, official website and accreditation body.":"Primary/secondary school approval requires its official school registration number and supervising or accreditation body."});
    const {data:evidence,error:ee}=await q.supabase.from("OrganizationEvidence").select("id,evidenceType").eq("organizationId",org.id).limit(1);if(ee)throw ee;
    if(!evidence?.length)return s.status(400).json({error:"Review at least one official registration or accreditation evidence document before approval."});
  }
  const patch={status:b.status,updatedAt:new Date().toISOString(),verificationNotes:b.verificationNotes||null,verifiedAt:b.status==="APPROVED"?new Date().toISOString():null,verifiedBy:b.status==="APPROVED"?q.user.id:null};
  const {data,error}=await q.supabase.from("Organization").update(patch).eq("id",q.params.id).select().single();if(error)throw error;
- await audit(q.supabase,q.user.id,"ORGANIZATION_"+b.status,"Organization",data.id,{organizationId:data.id,verificationNotes:b.verificationNotes||null});
+ let preservedBaselineCapability=null;
+ if(b.status==="APPROVED"){
+   const legacyBaseline="Existing organization capability preserved during additive VERITY expansion.";
+   const defaultCapability=org.type==="INSTITUTION"?"ISSUE_CREDENTIALS":org.type==="EMPLOYER"?"VERIFY_CREDENTIALS":null;
+   if(defaultCapability){
+     const {error:capabilityError}=await q.supabase.from("OrganizationCapability").update({status:"APPROVED",reviewedBy:q.user.id,reviewedAt:new Date().toISOString(),decisionNote:"Legacy baseline capability preserved after the existing organization identity was approved.",updatedAt:new Date().toISOString()})
+       .eq("organizationId",org.id).eq("capability",defaultCapability).eq("status","PENDING").eq("requestNote",legacyBaseline);
+     if(capabilityError)throw capabilityError;
+     preservedBaselineCapability=defaultCapability;
+   }
+ }
+ await audit(q.supabase,q.user.id,"ORGANIZATION_"+b.status,"Organization",data.id,{organizationId:data.id,verificationNotes:b.verificationNotes||null,preservedBaselineCapability});
  const {data:owner}=await q.supabase.from("Organization").select("ownerId,name").eq("id",data.id).maybeSingle();
  if(owner?.ownerId)await createVerityNotification(owner.ownerId,{type:"ORGANIZATION_STATUS",category:"ACCOUNT",title:b.status==="APPROVED"?"Organization approved":"Organization status updated",body:b.status==="APPROVED"?data.name+" has been approved on VERITY.":"The status of "+data.name+" has changed to "+b.status+".",url:"/identity",metadata:{organizationId:data.id,status:b.status}});
  s.json({organization:data});
@@ -681,8 +772,9 @@ app.patch("/api/admin/organizations/:id",auth,roles("ADMIN"),run(async(q,s)=>{
 
 app.get("/api/dashboard",auth,run(async(q,s)=>{
   const admin=q.user.role==="ADMIN", graduate=q.user.role==="GRADUATE";
-  const {data:ownedOrg,error:orgError}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode").eq("ownerId",q.user.id).maybeSingle():{data:null,error:null};
+  const {data:ownedOrg,error:orgError}=q.user.role==="EMPLOYER"?await q.supabase.from("Organization").select("id,status,name,type,registrationCode,educationLevels").eq("ownerId",q.user.id).maybeSingle():{data:null,error:null};
   if(orgError)throw orgError;
+  const ownedCapabilities=ownedOrg?await organizationCapabilities(q.supabase,ownedOrg.id):[];
   const base=()=>q.supabase.from("Certificate").select("id",{count:"exact",head:true});
   const scoped=()=>graduate?base().eq("graduateId",q.user.id):q.user.role==="EMPLOYER"?base().eq("organizationId",ownedOrg?.id||""):base();
   const recentQuery=()=>{let query=q.supabase.from("Certificate").select("certificateId,studentName,qualification,institution,issuedAt,status").order("issuedAt",{ascending:false}).limit(6);if(graduate)query=query.eq("graduateId",q.user.id);if(q.user.role==="EMPLOYER")query=query.eq("organizationId",ownedOrg?.id||"");return query;};
@@ -696,7 +788,7 @@ app.get("/api/dashboard",auth,run(async(q,s)=>{
     admin?q.supabase.from("Verification").select("id,result,createdAt,certificateId").order("createdAt",{ascending:false}).limit(6):Promise.resolve({data:[],error:null})
   ]);
   for(const x of [total,active,revoked,verifications,recent,recentChecks]) if(x.error) throw x.error;
-  s.json({stats:{total:total.count||0,active:active.count||0,revoked:revoked.count||0,verifications:verifications.count||0},recent:recent.data||[],recentChecks:recentChecks.data||[],organization:ownedOrg,blockchain:chainStatus(),generatedAt:new Date().toISOString()});
+  s.json({stats:{total:total.count||0,active:active.count||0,revoked:revoked.count||0,verifications:verifications.count||0},recent:recent.data||[],recentChecks:recentChecks.data||[],organization:ownedOrg?{...ownedOrg,capabilities:ownedCapabilities}:null,blockchain:chainStatus(),generatedAt:new Date().toISOString()});
 }));
 
 app.get("/api/certificates",auth,run(async(q,s)=>{
@@ -713,7 +805,7 @@ app.get("/api/certificates",auth,run(async(q,s)=>{
 
 const issue=z.object({studentName:z.string().min(2),studentEmail:z.string().email().optional().or(z.literal("")),studentNumber:z.string().min(2),institution:z.string().min(2),faculty:z.string().min(2),department:z.string().min(2),programme:z.string().min(2),qualification:z.string().min(2),classification:z.string().optional(),awardDate:z.string().datetime()});
 app.post("/api/certificates",auth,roles("EMPLOYER"),run(async(q,s)=>{
-  const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});if(organization.type!=="INSTITUTION")return s.status(403).json({error:"Only approved academic institutions can issue academic certificates. Verification organizations cannot issue credentials."});}
+  const b=issue.parse(q.body); let organization=null;if(q.user.role==="EMPLOYER"){const {data,error}=await q.supabase.from("Organization").select("*").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;organization=data;if(!organization||organization.status!=="APPROVED")return s.status(403).json({error:"Your organization must be approved by the Verity System Admin before issuing certificates."});if(!(await hasApprovedOrganizationCapability(q.supabase,organization.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Your organization does not have an approved credential-issuance capability."});}
   const certificateId=`VRT-${new Date().getFullYear()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
   const verificationKey=`VRT-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
   const clean=Object.fromEntries(Object.entries(b).map(([k,v])=>[k,typeof v==="string"?v.trim():v]));
@@ -798,8 +890,8 @@ async function bulkInstitutionFor(q,requireApproved=true){
     .select("id,name,type,status,ownerId").eq("ownerId",q.user.id).maybeSingle();
   if(error)throw error;
   if(!org)return {error:"Institution organization not found.",status:404};
-  if(org.type!=="INSTITUTION")return {error:"Only academic institutions can issue certificates.",status:403};
-  if(requireApproved&&org.status!=="APPROVED")return {error:"Your institution must be approved before bulk certificate issuance.",status:403};
+  if(requireApproved&&org.status!=="APPROVED")return {error:"Your organization must be approved before bulk certificate issuance.",status:403};
+  if(!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return {error:"Your organization does not have an approved credential-issuance capability.",status:403};
   return {organization:org};
 }
 const bulkBatchInput=z.object({
@@ -945,7 +1037,7 @@ app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
   if(q.user.role==="EMPLOYER"){
     const {data:org,error:oe}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
     if(oe)throw oe;
-    if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only the approved issuing institution can generate its certificate QR."});
+    if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only the approved credential issuer can generate its certificate QR."});
   }
   if(q.user.role==="GRADUATE"&&c.graduateId!==q.user.id){
     const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),c.organizationId);
@@ -961,7 +1053,7 @@ app.post("/api/certificates/:id/revoke",auth,roles("ADMIN","EMPLOYER"),run(async
   if(q.user.role==="EMPLOYER"){
     const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
     if(orgError)throw orgError;
-    if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only the approved issuing institution can revoke its own certificates."});
+    if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can revoke its own certificates."});
     query=query.eq("organizationId",org.id);
   }
   const {data:c,error}=await query.maybeSingle();
@@ -996,8 +1088,9 @@ const documentMime = new Map([
 async function certificateDesignInstitution(q){
  const {data:org,error}=await q.supabase.from("Organization").select("id,name,type,status,ownerId").eq("ownerId",q.user.id).maybeSingle();
  if(error)throw error;
- if(!org||org.type!=="INSTITUTION")return {error:"Only an institution owner can manage certificate designs.",status:403};
- if(org.status!=="APPROVED")return {error:"Your institution must be approved before managing certificate designs.",status:403};
+ if(!org)return {error:"Organization not found.",status:404};
+ if(org.status!=="APPROVED")return {error:"Your organization must be approved before managing certificate designs.",status:403};
+ if(!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return {error:"Your organization does not have an approved credential-issuance capability.",status:403};
  return {organization:org};
 }
 const designName=value=>String(value||"").normalize("NFKC").trim().slice(0,120);
@@ -1214,7 +1307,7 @@ app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({ty
   if(!spec.magic(bytes))return s.status(415).json({error:"The file content does not match its declared type."});
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only an approved academic institution can upload official certificate documents."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can upload official certificate documents."});
   const {data:cert,error:certError}=await q.supabase.from("Certificate").select("id,certificateId,organizationId").eq("certificateId",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(certError)throw certError;
   if(!cert)return s.status(404).json({error:"Certificate not found in your organization."});
@@ -1279,14 +1372,14 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4).max(200)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved academic institution can verify its own issued certificates."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can verify its own issued certificates."});
   const reference=b.certificateId.trim();
   let query=q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id);
   let {data:c,error}=await query.eq("certificateId",reference).maybeSingle();
   if(error)throw error;
   if(!c){const result=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
   if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This certificate reference was not found in your institution's own issuance records."});
-  const recomputed=org.type==="INSTITUTION"?digest(canonical(c)):null,dbOk=org.type!=="INSTITUTION"||recomputed===c.digest,chain=await verifyCertificateChain(c);
+  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyCertificateChain(c);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
@@ -1301,7 +1394,7 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4).max(200)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved academic institution can verify its own issued certificates."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can verify its own issued certificates."});
   const reference=b.certificateId.trim();
   const fields="id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId";
   let {data:c,error}=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("certificateId",reference).maybeSingle();
@@ -1321,7 +1414,7 @@ app.post("/api/organization/verify",createVerificationRateLimiter({windowMs:60_0
   const b=z.object({certificateId:z.string().min(4)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can verify credentials through its workspace."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Your organization does not have an approved external-verification capability."});
   const {data,error}=await q.supabase.rpc("lookup_verity_certificate_for_org",{p_certificate_id:b.certificateId.trim()});
   if(error)throw error;
   if(!data?.found)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"No credential with this ID or verification key exists in the VERITY registry."});
@@ -1347,7 +1440,7 @@ app.post("/api/organization/student-lookup",createVerificationRateLimiter({windo
   const b=z.object({studentName:z.string().min(2).max(120),studentNumber:z.string().min(2).max(80),institution:z.string().min(2).max(160),department:z.string().min(2).max(160)}).parse(q.body);
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return res.status(403).json({error:"Only an approved verification organization can search student records."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return res.status(403).json({error:"Your organization does not have an approved external-verification capability."});
   const {data,error}=await q.supabase.from("Certificate").select("certificateId,studentName,studentNumber,institution,department,status,graduateId").eq("studentNumber",b.studentNumber.trim()).eq("studentName",b.studentName.trim()).eq("institution",b.institution.trim()).eq("department",b.department.trim()).limit(5);
   if(error)throw error;
   const matches=(data||[]).map(c=>({certificateId:c.certificateId,studentName:c.studentName,studentNumber:c.studentNumber,institution:c.institution,department:c.department,status:c.status,requestable:!!c.graduateId}));
@@ -1358,7 +1451,7 @@ app.post("/api/organization/student-lookup",createVerificationRateLimiter({windo
 app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4),purpose:z.string().min(5).max(300).optional()}).parse(q.body);
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can request certificate access."});
+  if(oe)throw oe;if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Your organization does not have an approved external-verification capability."});
   const {data:cert,error:ce}=await q.supabase.from("Certificate").select("id,certificateId,graduateId").or("certificateId.eq."+b.certificateId+",verificationKey.eq."+b.certificateId.toUpperCase()).maybeSingle();
   if(ce)throw ce;if(!cert)return s.status(404).json({error:"Certificate not found."});
   if(!cert.graduateId)return s.status(409).json({error:"The graduate must link their Verity account to this certificate before private document access can be requested."});
@@ -1376,7 +1469,7 @@ app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,
 
 app.get("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can view its access requests."});
+  if(oe)throw oe;if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Only an organization with approved verifier permission can view its access requests."});
   const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,graduateId,purpose,status,createdAt,approvedAt,expiresAt,revokedAt").eq("organizationId",org.id).order("createdAt",{ascending:false});
   if(error)throw error;
   const ids=(data||[]).map(x=>x.certificateId);
@@ -1412,7 +1505,7 @@ app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q
 app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Only an organization with approved verifier permission can access shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
   if(!isCertificateAccessActive(grant))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
@@ -1439,7 +1532,7 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
 app.get("/api/organization/access-requests/:id/document/download",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can download shared documents."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Only an organization with approved verifier permission can download shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
   if(!isCertificateAccessActive(grant))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
