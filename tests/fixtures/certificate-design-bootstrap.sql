@@ -53,12 +53,12 @@ CREATE TABLE public."CertificateLedger"(
   created_at timestamptz not null default now()
 );
 CREATE OR REPLACE FUNCTION public.test_append_certificate_ledger()
-RETURNS trigger LANGUAGE plpgsql AS $
+RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO public."CertificateLedger"("certificateId",event) VALUES (NEW."certificateId",'ISSUED');
   RETURN NEW;
 END;
-$;
+$$;
 CREATE TRIGGER test_certificate_ledger_after_insert
 AFTER INSERT ON public."Certificate"
 FOR EACH ROW EXECUTE FUNCTION public.test_append_certificate_ledger();
