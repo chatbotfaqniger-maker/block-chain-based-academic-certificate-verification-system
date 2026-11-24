@@ -1090,7 +1090,7 @@ app.post("/api/organization/certificate-design/templates/artwork",auth,roles("EM
 }));
 app.get("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
- const db=makeServerClient(),{data,error}=await db.from("CertificateDigitizationCase").select("id,studentNumber,claimedStudentName,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewNote,createdAt,reviewedAt,issuedAt").eq("organizationId",access.organization.id).order("createdAt",{ascending:false}).limit(100);
+ const db=makeServerClient(),{data,error}=await db.from("CertificateDigitizationCase").select("id,studentNumber,claimedStudentName,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewNote,certificateId,createdAt,reviewedAt,issuedAt").eq("organizationId",access.organization.id).order("createdAt",{ascending:false}).limit(100);
  if(error)throw error;s.json({cases:data||[]});
 }));
 app.post("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
