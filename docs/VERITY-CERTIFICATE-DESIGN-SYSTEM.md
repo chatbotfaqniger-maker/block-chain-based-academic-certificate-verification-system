@@ -34,6 +34,6 @@ Reuse the existing private verity-certificates bucket. Use organization-scoped p
 
 Validate actual PDF/JPEG/PNG signatures, cap each file at 10 MB, calculate SHA-256 server-side and remove the uploaded object if its metadata insert fails. VERITY does not claim antivirus scanning.
 
-## Rollout boundary
+## Current implementation boundary
 
-This migration establishes the private persistence contract only. UI, authenticated upload/review endpoints, PDF field rendering, and end-to-end digitisation acceptance tests must be delivered and verified before enabling the workflows in production. Do not apply this migration directly to production ahead of the reviewed application release.
+The institution workspace now provides the design-studio interface and authenticated endpoints to save VERITY template drafts, upload original artwork privately, submit historical certificate scans, and approve/reject pending digitisation cases. The PostgreSQL migration and access-boundary assertions pass CI. The PDF field-position editor, final PDF renderer, template activation, normal issuance integration, and conversion of an approved digitisation case into a VERITY credential are still pending. Saved designs remain drafts and cannot yet be used to render or issue certificates. Do not apply this migration directly to production ahead of the reviewed application release.
