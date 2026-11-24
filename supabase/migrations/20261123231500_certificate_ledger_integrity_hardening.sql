@@ -8,6 +8,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
   REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated, service_role;
 
+-- Revoke the built-in global PUBLIC EXECUTE default as well as role-specific
+-- defaults. Without this, anon/authenticated inherit EXECUTE through PUBLIC.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 -- New public-schema functions created by either migration owner must not
 -- inherit EXECUTE access for anon/authenticated. Service-side RPC grants are explicit.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public

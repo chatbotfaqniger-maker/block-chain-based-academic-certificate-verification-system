@@ -47,6 +47,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_FAIL: incorrect certificate fingerprint was accepted';
   EXCEPTION WHEN raise_exception THEN
     GET STACKED DIAGNOSTICS v_message = MESSAGE_TEXT;
+    IF v_message LIKE 'TEST_FAIL:%' OR v_message NOT LIKE '%fingerprint%' THEN RAISE; END IF;
     IF v_message NOT LIKE '%fingerprint%' THEN RAISE; END IF;
   END;
 
