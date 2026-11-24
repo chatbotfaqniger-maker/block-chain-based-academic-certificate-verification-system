@@ -1,10 +1,9 @@
 // Capability-gated bulk credential issuance; all methods reuse the existing VERITY pipeline. Each credential reuses the existing server-side issue and document endpoints.
 import React,{useEffect,useMemo,useState} from "react";
+import {MAX_CAMPAIGN_ITEMS,PROCESSING_BATCH_SIZE,getIssuanceChunk} from "./issuance-campaign.js";
 import {FileSpreadsheet,FileArchive,Files,FileText,Upload,AlertTriangle,CheckCircle2,ShieldCheck,ArrowRight,Download} from "lucide-react";
 
 const TEMPLATE="student_number,full_name,email,faculty,department,programme,qualification,classification,award_date\n2021/CS/001,Example Student,student@example.edu.ng,Science,Computer Science,Computer Science,Bachelor of Science,Second Class Upper,2026-10-15\n";
-const MAX_CAMPAIGN_ITEMS=50000;
-const PROCESSING_BATCH_SIZE=500;
 const normalizeNumber=value=>String(value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 function parseCsv(source){
  source=source.replace(/^\uFEFF/,"");const rows=[];let row=[],cell="",quoted=false;
@@ -90,13 +89,10 @@ export default function BulkCertificates({api,notice,organization}){
   let lastBatchId=null;
   try{
     while(pending.nextIndex<pending.selectedRows.length){
-      const chunkStart=Math.floor(pending.nextIndex/PROCESSING_BATCH_SIZE)*PROCESSING_BATCH_SIZE;
-      const chunkEnd=Math.min(chunkStart+PROCESSING_BATCH_SIZE,pending.selectedRows.length);
-      const chunkRows=pending.selectedRows.slice(chunkStart,chunkEnd);
+      const chunk=getIssuanceChunk(pending.selectedRows,pending.nextIndex);
+      const {start:chunkStart,end:chunkEnd,items:chunkRows,partNumber,totalParts}=chunk;
       let batchId=pending.batchId;
       if(!batchId){
-        const partNumber=Math.floor(chunkStart/PROCESSING_BATCH_SIZE)+1;
-        const totalParts=Math.ceil(pending.selectedRows.length/PROCESSING_BATCH_SIZE);
         const created=await api("/organization/certificates/bulk/batches",{method:"POST",body:JSON.stringify({
           campaignId:pending.campaignId,
           fileName:(csvFile?.name||"VERITY-bulk-certificates").slice(0,130)+"-part-"+partNumber+"-of-"+totalParts,
