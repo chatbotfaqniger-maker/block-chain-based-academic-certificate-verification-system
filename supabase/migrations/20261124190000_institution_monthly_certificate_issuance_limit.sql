@@ -17,7 +17,7 @@ begin
   if p_campaign_id is null or char_length(btrim(p_campaign_id)) not between 1 and 100 then raise exception 'Invalid issuance campaign identifier'; end if;
   if p_organization_id is null or p_owner_id is null then raise exception 'Issuing organization and creator are required'; end if;
   if p_file_name is null or char_length(btrim(p_file_name)) not between 1 and 180 then raise exception 'Invalid issuance campaign file name'; end if;
-  if p_method not in ('CSV_ZIP','CSV_MULTIPLE_PDFS','CSV_GENERATED') then raise exception 'Invalid issuance campaign method'; end if;
+  if p_method is null or p_method not in ('CSV_ZIP','CSV_MULTIPLE_PDFS','CSV_GENERATED') then raise exception 'Invalid issuance campaign method'; end if;
   if p_total_items is null or p_total_items < 1 or p_total_items > 50000 then raise exception 'An issuance campaign must contain between 1 and 50,000 records'; end if;
 
   -- Serialize reservations for one institution to prevent concurrent oversubscription.
