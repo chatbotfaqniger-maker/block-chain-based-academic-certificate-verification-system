@@ -4,7 +4,6 @@
 DO $$
 DECLARE
   v_definition text;
-  v_limit integer;
 BEGIN
   -- Student onboarding must discover any approved credential issuer, not only
   -- organizations whose legacy type happens to be INSTITUTION.
@@ -83,14 +82,13 @@ BEGIN
     RAISE EXCEPTION 'Roster chunk uploads are not protected by issuer capability';
   END IF;
 
-  SELECT (regexp_match(pg_get_constraintdef(oid),'totalItems.*?([0-9]+)'))[1]::integer
-    INTO v_limit
-  FROM pg_constraint
-  WHERE conrelid='public."CertificateIssuanceBatch"'::regclass
-    AND contype='c'
-    AND pg_get_constraintdef(oid) ILIKE '%totalItems%';
-  IF v_limit IS NOT NULL AND v_limit<>500 THEN
-    RAISE EXCEPTION 'Existing bulk certificate batch limit unexpectedly changed';
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid='public."CertificateIssuanceBatch"'::regclass
+      AND contype='c'
+      AND pg_get_constraintdef(oid) ILIKE '%500%'
+  ) THEN
+    RAISE EXCEPTION 'The existing 500-item bulk certificate batch constraint was not preserved';
   END IF;
 
   RAISE NOTICE 'VERITY issuer/verifier capability workflow assertions passed';
