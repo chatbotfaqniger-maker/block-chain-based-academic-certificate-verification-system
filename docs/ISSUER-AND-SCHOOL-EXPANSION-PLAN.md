@@ -126,26 +126,27 @@ Before merging capability or school changes, test the current and expanded paths
 
 Implemented in `feature/issuer-capability-expansion`:
 
-- Additive `Organization.educationLevels` metadata for PRIMARY, SECONDARY and TERTIARY, including one school account serving primary and secondary levels.
+- Additive `Organization.educationLevels` metadata for PRIMARY, SECONDARY and TERTIARY, including one school account serving primary and secondary levels through mobile-friendly multi-select controls. Primary/secondary school identity review requires a registration number and supervising/accreditation body; a public website is optional, while tertiary institution requirements remain unchanged.
 - `OrganizationCapability` records for independently requested and reviewed `ISSUE_CREDENTIALS` and `VERIFY_CREDENTIALS` permissions.
 - Explicit baseline backfill preserving existing institution issuance and employer verification permissions; suspended organizations remain blocked by organization status and can be reinstated without losing their baseline capability.
 - Organization-owner capability request/resubmission API and panel, plus a separate System Admin capability review API and panel.
 - Organization approval integration that activates only the existing type's baseline capability; additional permissions still require a separate administrator decision.
 - Capability-aware backend checks for student/graduate membership, roster imports, activation tokens, certificate design, individual/bulk issuance, document upload, QR generation, revocation, internal issuer verification, external verification, graduate-consented document access and registration-code management.
 - Additive RLS and database-function migration for roster, issuance, verifier consent and private document access.
-- Regression assertion fixtures for capability backfill, RLS policies, student onboarding functions and preservation of the existing 500-item bulk-issuance limit.
+- Regression assertion fixtures for capability backfill, RLS policies, student onboarding functions, RPC execution privileges and preservation of the existing 500-item bulk-issuance limit.
+- GitHub Actions PostgreSQL integration job applies both expansion migrations to an isolated PostgreSQL 16 database and executes the SQL assertions. The existing application build/test suite also passes on the validated feature-branch commit.
 - README and User Guide updates.
 
 Preservation boundary remains unchanged: the existing Certificate Design Studio, school-uploaded PDF/image artwork, bucket mapping, editable student-specific data, private storage locations, certificate renderer, three bulk-issuance methods, ledger records and existing batch limit are reused. No second upload system or certificate engine has been added.
 
 Still required before merge or production use:
 
-1. Execute both migrations on a non-production Supabase test database and run the included SQL assertion fixtures.
-2. Run the complete existing application test suite and build, including all university and verifier regression cases.
-3. Exercise primary-only, secondary-only and combined schools; issuer-only, verifier-only and dual-capability organizations; and negative authorization cases.
-4. Verify the existing template/artwork → bucket mapping → editable student data → PDF generation → ledger/verification path end to end.
-5. Confirm ICT delegation and registration-recovery behaviour. Non-academic issuer staff delegation and recovery are intentionally not enabled in this stage; the issuer owner can manage its roster.
-6. Perform load tests before changing the existing 500 certificate-per-batch limit. The limit remains 500.
-7. Review and merge the draft pull request, then deploy migrations before deploying the application code.
+1. Run the migrations against a non-production Supabase project with the repository's real migration history and environment-specific extensions; the automated PostgreSQL 16 fixture is an isolated schema test, not a substitute for staging.
+2. Exercise primary-only, secondary-only and combined schools; issuer-only, verifier-only and dual-capability organizations; and negative authorization cases with real Supabase Auth/RLS sessions.
+3. Verify the existing template/artwork → bucket mapping → editable student data → PDF generation → ledger/verification path end to end. The existing Certificate Design Studio, uploaded PDF/image assets and editable per-student data remain the source of truth.
+4. Confirm institution ICT delegation and registration-recovery behaviour. Non-academic issuer staff delegation and recovery are intentionally not enabled in this stage; an approved non-academic issuer owner can manage its roster.
+5. Roster imports support large cohorts through the existing chunked import queue. Certificate issuance remains capped at 500 items per batch; cohorts above 500 must use separate batches for now. A parent campaign that orchestrates multiple batches should be considered after load testing.
+6. Perform representative worker, storage and database load tests before changing the existing 500 certificate-per-batch limit.
+7. Review the draft pull request, merge only after staging validation, then deploy migrations before deploying the application code.
 
-No migrations have been applied to the connected production Supabase project, no production deployment has been made, and the test fixtures have not yet been executed.
+No migrations have been applied to the connected production Supabase project and no production deployment has been made. Automated isolated PostgreSQL migration assertions and the existing application CI suite have passed on the validated branch revision; later commits must pass CI again before merge.
