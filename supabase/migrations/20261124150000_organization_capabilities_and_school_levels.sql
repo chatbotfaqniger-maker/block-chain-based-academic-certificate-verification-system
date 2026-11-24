@@ -56,8 +56,7 @@ SELECT
   o.id,
   CASE WHEN o.type = 'INSTITUTION' THEN 'ISSUE_CREDENTIALS' ELSE 'VERIFY_CREDENTIALS' END,
   CASE
-    WHEN o.status = 'APPROVED' THEN 'APPROVED'
-    WHEN o.status = 'SUSPENDED' THEN 'SUSPENDED'
+    WHEN o.status IN ('APPROVED','SUSPENDED') THEN 'APPROVED'
     ELSE 'PENDING'
   END,
   o."ownerId",
@@ -65,7 +64,7 @@ SELECT
   'Backfilled from the organization type and approval state that existed before this migration.',
   now(),
   now(),
-  CASE WHEN o.status = 'APPROVED' THEN now() ELSE NULL END
+  CASE WHEN o.status IN ('APPROVED','SUSPENDED') THEN now() ELSE NULL END
 FROM public."Organization" o
 WHERE o.type IN ('INSTITUTION','EMPLOYER')
   AND o."ownerId" IS NOT NULL
