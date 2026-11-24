@@ -1120,6 +1120,89 @@ app.patch("/api/organization/certificate-design/digitization/:id",auth,roles("EM
  if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_DIGITIZATION_"+b.status,"CertificateDigitizationCase",current.id,{organizationId:access.organization.id});
  s.json({case:data,message:b.status==="APPROVED"?"Validated. Issue a matching VERITY credential through the normal issuance workflow.":"Digitisation case rejected."});
 }));
+app.post("/api/organization/certificate-design/digitization/:id/convert",auth,roles("EMPLOYER"),run(async(q,s)=>{
+ const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
+ const db=makeServerClient();
+ const {data:caseRow,error:caseError}=await db.from("CertificateDigitizationCase")
+  .select("id,organizationId,studentNumber,claimedStudentName,credentialData,sourceStoragePath,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewedBy,certificateId")
+  .eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
+ if(caseError)throw caseError;if(!caseRow)return s.status(404).json({error:"Historical certificate case not found."});
+ if(caseRow.status==="ISSUED"&&caseRow.certificateId){
+  const {data:existing,error:existingError}=await db.from("Certificate").select("*").eq("certificateId",caseRow.certificateId).maybeSingle();
+  if(existingError)throw existingError;if(!existing)return s.status(409).json({error:"The issued historical case is missing its credential record."});
+  return s.json({certificate:existing,idempotent:true,message:"This historical certificate has already been converted."});
+ }
+ if(caseRow.status!=="APPROVED")return s.status(409).json({error:"Only an institution-approved historical certificate can be converted."});
+ if(!caseRow.reviewedBy)return s.status(409).json({error:"The historical record has no recorded institutional reviewer."});
+ const {data:source,error:sourceError}=await db.storage.from("verity-certificates").download(caseRow.sourceStoragePath);
+ if(sourceError)throw sourceError;
+ const sourceBytes=Buffer.from(await source.arrayBuffer());
+ const spec=documentMime.get(caseRow.sourceMimeType);
+ if(!spec||sourceBytes.length!==caseRow.sourceSizeBytes||digest(sourceBytes)!==caseRow.sourceSha256||!spec.magic(sourceBytes))
+  return s.status(409).json({error:"The original historical scan failed its stored size, file-type or SHA-256 integrity check. No credential was issued."});
+ const academic=caseRow.credentialData||{};
+ const clean={
+  studentName:String(caseRow.claimedStudentName||"").trim(),
+  studentEmail:String(academic.studentEmail||"").trim().toLowerCase()||null,
+  studentNumber:String(caseRow.studentNumber||"").trim(),
+  institution:access.organization.name,
+  faculty:String(academic.faculty||"").trim(),
+  department:String(academic.department||"").trim(),
+  programme:String(academic.programme||"").trim(),
+  qualification:String(academic.qualification||"").trim(),
+  classification:String(academic.classification||"").trim()||null,
+  awardDate:academic.awardDate
+ };
+ if(!clean.studentName||!clean.studentNumber||!clean.faculty||!clean.department||!clean.programme||!clean.qualification||!clean.awardDate)
+  return s.status(422).json({error:"The approved case is missing required academic details. Update the case details through the institution review process before conversion."});
+ const awardDate=new Date(clean.awardDate);
+ if(Number.isNaN(awardDate.getTime()))return s.status(422).json({error:"The historical award date is invalid."});
+ clean.awardDate=awardDate.toISOString();
+ if(clean.studentEmail){
+  const {data:graduate,error:graduateError}=await db.from("User").select("id").eq("email",clean.studentEmail).maybeSingle();
+  if(graduateError)throw graduateError;
+  clean.graduateId=graduate?.id||null;
+ }else clean.graduateId=null;
+ const certificateId=`VRT-${new Date().getFullYear()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+ const verificationKey=`VRT-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
+ const canonicalRecord={
+  certificateId,studentName:clean.studentName.trim(),studentNumber:clean.studentNumber.trim(),
+  institution:clean.institution.trim(),faculty:clean.faculty.trim(),department:clean.department.trim(),
+  programme:clean.programme.trim(),qualification:clean.qualification.trim(),
+  classification:clean.classification||"",awardDate:clean.awardDate
+ };
+ const hash=digest(JSON.stringify(canonicalRecord)),now=new Date().toISOString();
+ const record={
+  id:crypto.randomUUID(),...clean,certificateId,verificationKey,organizationId:access.organization.id,
+  digest:hash,txHash:null,chainId:null,contractAddress:null,status:"ACTIVE",
+  issuerId:caseRow.reviewedBy,createdAt:now,updatedAt:now,issuedAt:now
+ };
+ const {data:converted,error:convertError}=await db.rpc("verity_convert_digitization_case",{p_case_id:caseRow.id,p_certificate:record});
+ if(convertError){
+  if(String(convertError.message||"").includes("Only institution-approved"))return s.status(409).json({error:convertError.message});
+  throw convertError;
+ }
+ const certificate=converted;
+ const {data:existingEvidence,error:evidenceLookupError}=await db.from("CertificateDocument")
+  .select("id,sha256").eq("certificateId",certificate.id).eq("sha256",caseRow.sourceSha256).maybeSingle();
+ if(evidenceLookupError)throw evidenceLookupError;
+ if(!existingEvidence){
+  const evidenceId=crypto.randomUUID();
+  const {error:evidenceInsertError}=await db.from("CertificateDocument").insert({
+   id:evidenceId,certificateId:certificate.id,organizationId:access.organization.id,
+   storagePath:caseRow.sourceStoragePath,originalName:caseRow.sourceFileName,
+   mimeType:caseRow.sourceMimeType,sizeBytes:caseRow.sourceSizeBytes,sha256:caseRow.sourceSha256,
+   uploadedBy:caseRow.submittedBy||q.user.id,scanStatus:"NOT_SCANNED"
+  });
+  if(evidenceInsertError)throw evidenceInsertError;
+  try{await audit(q.supabase,q.user.id,"HISTORICAL_CERTIFICATE_EVIDENCE_ATTACHED","CertificateDocument",evidenceId,{certificateId:certificate.certificateId,caseId:caseRow.id,sha256:caseRow.sourceSha256,originalEvidenceRetained:true});}catch(auditError){console.error("Historical evidence audit failed:",auditError);}
+ }
+ await audit(q.supabase,q.user.id,"HISTORICAL_CERTIFICATE_CONVERTED","Certificate",certificate.id,{certificateId:certificate.certificateId,caseId:caseRow.id,organizationId:access.organization.id,sourceSha256:caseRow.sourceSha256,mode:"SUPABASE_LEDGER"});
+ if(certificate.graduateId)try{await createVerityNotification(certificate.graduateId,{type:"CERTIFICATE_ISSUED",category:"CERTIFICATE",title:"A historical certificate is now available",body:"A validated historical certificate from "+access.organization.name+" has been added to your VERITY account.",url:"/certificates",metadata:{certificateId:certificate.certificateId}});}catch(notificationError){console.error("Historical certificate graduate notification failed:",notificationError);}
+ try{await notifyVerityAdmins({type:"CERTIFICATE_ISSUED",category:"PLATFORM",title:"Historical certificate converted",body:certificate.certificateId+" was issued from an approved historical record.",url:"/certificates",metadata:{certificateId:certificate.certificateId,caseId:caseRow.id}});}catch(notificationError){console.error("Historical conversion admin notification failed:",notificationError);}
+ s.status(201).json({certificate,sourceEvidence:{sha256:caseRow.sourceSha256,originalName:caseRow.sourceFileName,retained:true},message:"Historical certificate converted through the canonical VERITY issuance and ledger workflow. The original scan remains private and unchanged."});
+}));
+ 
 app.post("/api/certificates/:id/document",auth,roles("EMPLOYER"),express.raw({type:["application/pdf","image/jpeg","image/png"],limit:"10mb"}),run(async(q,s)=>{
   const mime=q.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
   const spec=documentMime.get(mime), bytes=q.body;
