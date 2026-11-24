@@ -76,33 +76,40 @@ export default function BulkCertificates({api,notice,organization}){
   if(!pending){
     const selected=matched.filter(r=>method==="generate"||r.match==="Matched");
     if(!selected.length)return;
-    setBusy(true);setProgress({done:0,total:selected.length});
-    try{
-      const created=await api("/organization/certificates/bulk/campaigns",{method:"POST",body:JSON.stringify({
-        fileName:csvFile?.name||"VERITY-bulk-certificates.csv",
-        method:method==="zip"?"CSV_ZIP":method==="multiple"?"CSV_MULTIPLE_PDFS":"CSV_GENERATED",
-        totalItems:selected.length
-      })});
-      pending={campaignId:created.campaign.id,method,selectedRows:selected,itemIds:selected.map(()=>crypto.randomUUID()),nextIndex:0,batchId:null,totalItems:selected.length};
-      setPendingUpload(pending);
-    }catch(e){setFileError(e.message);setBusy(false);return;}
-  }else setBusy(true);
+    const campaignMethod=method==="zip"?"CSV_ZIP":method==="multiple"?"CSV_MULTIPLE_PDFS":"CSV_GENERATED";
+    pending={
+      campaignId:crypto.randomUUID(),campaignCreated:false,campaignFileName:csvFile?.name||"VERITY-bulk-certificates.csv",
+      campaignMethod,method,selectedRows:selected,itemIds:selected.map(()=>crypto.randomUUID()),
+      batchIds:Array.from({length:Math.ceil(selected.length/PROCESSING_BATCH_SIZE)},()=>crypto.randomUUID()),
+      nextIndex:0,batchId:null,totalItems:selected.length
+    };
+    setPendingUpload(pending);
+    setProgress({done:0,total:selected.length});
+  }else{
+    setProgress({done:pending.nextIndex,total:pending.selectedRows.length});
+  }
+  setBusy(true);
   let lastBatchId=null;
   try{
+    // The client supplies stable identifiers so network timeouts can retry campaign creation.
+    if(!pending.campaignCreated){
+      await api("/organization/certificates/bulk/campaigns",{method:"POST",body:JSON.stringify({
+        campaignId:pending.campaignId,fileName:pending.campaignFileName,
+        method:pending.campaignMethod,totalItems:pending.totalItems
+      })});
+      pending={...pending,campaignCreated:true};setPendingUpload(pending);
+    }
     while(pending.nextIndex<pending.selectedRows.length){
       const chunk=getIssuanceChunk(pending.selectedRows,pending.nextIndex);
       const {start:chunkStart,end:chunkEnd,items:chunkRows,partNumber,totalParts}=chunk;
-      let batchId=pending.batchId;
-      if(!batchId){
-        const created=await api("/organization/certificates/bulk/batches",{method:"POST",body:JSON.stringify({
-          campaignId:pending.campaignId,
-          fileName:(csvFile?.name||"VERITY-bulk-certificates").slice(0,130)+"-part-"+partNumber+"-of-"+totalParts,
-          method:pending.method==="zip"?"CSV_ZIP":pending.method==="multiple"?"CSV_MULTIPLE_PDFS":"CSV_GENERATED",
-          totalItems:chunkRows.length
+      let batchId=pending.batchId||pending.batchIds[partNumber-1];
+      if(!pending.batchId){
+        await api("/organization/certificates/bulk/batches",{method:"POST",body:JSON.stringify({
+          campaignId:pending.campaignId,batchId,
+          fileName:(pending.campaignFileName||"VERITY-bulk-certificates").slice(0,130)+"-part-"+partNumber+"-of-"+totalParts,
+          method:pending.campaignMethod,totalItems:chunkRows.length
         })});
-        batchId=created.batch.id;
-        pending={...pending,batchId};
-        setPendingUpload(pending);
+        pending={...pending,batchId};setPendingUpload(pending);
       }
       for(let i=pending.nextIndex;i<chunkEnd;i++){
         const row=pending.selectedRows[i],itemId=pending.itemIds[i];
@@ -132,7 +139,7 @@ export default function BulkCertificates({api,notice,organization}){
         pending={...pending,nextIndex:i+1,batchId};setPendingUpload(pending);
         setProgress({done:i+1,total:pending.selectedRows.length});
       }
-      // Submission is idempotent, so an interrupted response can safely be retried.
+      // Completion is idempotent. If its response is lost, retrying the same chunk is safe.
       const submitted=await api("/organization/certificates/bulk/batches/"+batchId+"/complete",{method:"POST",body:JSON.stringify({})});
       lastBatchId=batchId;
       pending={...pending,nextIndex:chunkEnd,batchId:null};setPendingUpload(pending);
