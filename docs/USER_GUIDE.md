@@ -3,7 +3,7 @@
 ## Organization identity and service permissions
 
 1. During institution registration, choose the education levels served by the organization. A school that operates both primary and secondary sections should select **Primary** and **Secondary** together under the same organization account. Universities and colleges can retain **Tertiary**.
-2. After signing in, open **Organization identity** and complete the organization's legal identity details and supporting evidence.
+2. After signing in, open **Organization identity** and complete the organization's legal identity details and supporting evidence. Tertiary institutions must provide a registration number, official website and accreditation body; primary/secondary schools must provide their school registration number and supervising or accreditation body, while a public website is optional.
 3. Open **Organization service permissions** to review the separate **Issue credentials** and **Verify credentials** permissions.
 4. An organization owner may request either permission or both, but cannot approve a request. A VERITY administrator reviews each request independently.
 5. Organization identity approval is required before a requested capability can be approved. Requesting a permission does not activate it.
