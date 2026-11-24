@@ -43,7 +43,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Atomic roster claim prevents duplicate student ownership, marks the token used, activates institution membership and applies the official roster name to the student profile
 - ICT can export per-student activation tokens once, reissue an unused token for an eligible unclaimed record, and open an audited dispute for suspected account misclaims; active-account release requires two different authorized officers, is blocked when the claimant has certificate records for that student identity, and preserves the old account and audit trail
 - The in-app User Guidelines include a step-by-step Student Registration & Institution Activation walkthrough for graduates and a Student Identity & ICT guide for institutions
-- Institution certificate design system: institution-original artwork, VERITY professional templates, drag-and-drop field positioning, owner approval/activation, server-side PDF preview and private SHA-256 document storage; approved active designs are used for single and durable bulk PDF generation
+- Institution certificate design system: institution-original artwork, VERITY professional templates, drag-and-drop field positioning, owner approval/activation, server-side PDF preview, private SHA-256 document storage, editable CSV/XLSX bulk import, and atomic conversion of institution-approved historical certificates with original scans retained as private evidence
 - Organization-scoped certificate issuance, registry and revocation
 - Admin issuance and revocation workflow
 - Graduate credential access
