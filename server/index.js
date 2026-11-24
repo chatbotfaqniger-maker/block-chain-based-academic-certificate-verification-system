@@ -981,17 +981,6 @@ app.post("/api/organization/certificate-design/templates/artwork",auth,roles("EM
  await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_ARTWORK_UPLOADED","InstitutionCertificateTemplate",id,{organizationId:access.organization.id,sha256,sizeBytes:bytes.length,mimeType:mime});
  s.status(201).json({template:data,message:"Artwork stored privately as a draft. Configure and preview field positions before production rendering."});
 }));
-app.post("/api/organization/certificate-design/templates/:id/activate",auth,roles("EMPLOYER"),run(async(q,s)=>{
- const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
- const db=makeServerClient(),{data:template,error:te}=await db.from("InstitutionCertificateTemplate").select("*").eq("id",q.params.id).eq("organizationId",access.organization.id).maybeSingle();
- if(te)throw te;if(!template)return s.status(404).json({error:"Certificate design not found."});
- if(template.sourceType==="INSTITUTION_ARTWORK"&&!template.assetStoragePath)return s.status(400).json({error:"The original artwork file is missing."});
- const now=new Date().toISOString();
- const {error:clearError}=await db.from("InstitutionCertificateTemplate").update({isDefault:false,updatedAt:now,updatedBy:q.user.id}).eq("organizationId",access.organization.id).eq("isDefault",true);if(clearError)throw clearError;
- const {data,error}=await db.from("InstitutionCertificateTemplate").update({isDefault:true,status:"ACTIVE",updatedAt:now,updatedBy:q.user.id}).eq("id",template.id).eq("organizationId",access.organization.id).select("id,name,status,isDefault,version").single();
- if(error)throw error;await audit(q.supabase,q.user.id,"CERTIFICATE_TEMPLATE_ACTIVATED","InstitutionCertificateTemplate",template.id,{organizationId:access.organization.id,version:template.version});
- s.json({template:data,message:"Default design activated for future certificate issuance. Existing issued documents remain unchanged."});
-}));
 app.get("/api/organization/certificate-design/digitization",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const access=await certificateDesignInstitution(q);if(access.error)return s.status(access.status).json({error:access.error});
  const db=makeServerClient(),{data,error}=await db.from("CertificateDigitizationCase").select("id,studentNumber,claimedStudentName,sourceFileName,sourceMimeType,sourceSizeBytes,sourceSha256,status,reviewNote,createdAt,reviewedAt,issuedAt").eq("organizationId",access.organization.id).order("createdAt",{ascending:false}).limit(100);
