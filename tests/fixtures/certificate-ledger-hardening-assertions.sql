@@ -174,9 +174,9 @@ $$;
 -- functions created by that owner. It does not pretend a migration can rewrite
 -- the independent supabase_admin role's defaults without membership in it.
 CREATE FUNCTION public.default_privilege_probe() RETURNS integer
-LANGUAGE sql AS $ SELECT 1; $;
+LANGUAGE sql AS $$ SELECT 1; $$;
 
-DO $
+DO $$
 DECLARE
   v_owner oid;
 BEGIN
@@ -195,7 +195,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_FAIL: migration-owner default function privileges expose new RPCs to anon/authenticated';
   END IF;
 END;
-$;
+$$;
 
 DROP FUNCTION public.default_privilege_probe();
 
