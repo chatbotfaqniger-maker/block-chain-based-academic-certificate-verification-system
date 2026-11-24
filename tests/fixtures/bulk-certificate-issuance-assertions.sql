@@ -74,3 +74,67 @@ BEGIN
   IF has_table_privilege('anon','public."CertificateIssuanceItem"','SELECT') THEN RAISE EXCEPTION 'anon must not read issuance payloads'; END IF;
   IF has_table_privilege('authenticated','public."CertificateIssuanceItem"','INSERT') THEN RAISE EXCEPTION 'authenticated must not write issuance payloads directly'; END IF;
 END $$;
+
+-- Large campaign allocation: one 501-item campaign is split into 500 + 1.
+INSERT INTO public."CertificateIssuanceCampaign"(
+  id,"organizationId","createdBy","fileName",method,"totalItems"
+) VALUES (
+  'campaign-large','org-bulk-test','11111111-1111-4111-8111-111111111111',
+  'large-cohort.csv','CSV_GENERATED',501
+);
+SET ROLE service_role;
+DO $$
+DECLARE r jsonb;
+BEGIN
+  r:=public.create_certificate_issuance_campaign_batch(
+    'campaign-large','batch-large-1','11111111-1111-4111-8111-111111111111',
+    'large-cohort-part-1.csv','CSV_GENERATED',500
+  );
+  IF r->'batch'->>'campaignId'<>'campaign-large' THEN
+    RAISE EXCEPTION 'First processing batch was not linked to its campaign';
+  END IF;
+  r:=public.create_certificate_issuance_campaign_batch(
+    'campaign-large','batch-large-2','11111111-1111-4111-8111-111111111111',
+    'large-cohort-part-2.csv','CSV_GENERATED',1
+  );
+  IF (r->>'allocatedItems')::integer<>501 THEN
+    RAISE EXCEPTION 'Campaign allocation total is incorrect';
+  END IF;
+  BEGIN
+    PERFORM public.create_certificate_issuance_campaign_batch(
+      'campaign-large','batch-large-overflow','11111111-1111-4111-8111-111111111111',
+      'overflow.csv','CSV_GENERATED',1
+    );
+    RAISE EXCEPTION 'Campaign allocation should reject items above its declared total';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='Campaign allocation should reject items above its declared total' THEN
+      RAISE;
+    END IF;
+  END;
+  IF (SELECT count(*) FROM public."CertificateIssuanceBatch" WHERE "campaignId"='campaign-large')<>2 THEN
+    RAISE EXCEPTION 'Campaign should contain exactly two processing batches';
+  END IF;
+  IF (SELECT sum("totalItems") FROM public."CertificateIssuanceBatch" WHERE "campaignId"='campaign-large')<>501 THEN
+    RAISE EXCEPTION 'Campaign processing batches must account for all 501 items';
+  END IF;
+END $$;
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF has_table_privilege('anon','public."CertificateIssuanceCampaign"','SELECT') THEN
+    RAISE EXCEPTION 'anon must not read issuance campaigns';
+  END IF;
+  IF NOT has_table_privilege('authenticated','public."CertificateIssuanceCampaign"','SELECT') THEN
+    RAISE EXCEPTION 'authenticated must be able to read RLS-scoped campaign summaries';
+  END IF;
+  IF has_function_privilege('anon','public.create_certificate_issuance_campaign_batch(text,text,text,text,text,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'anon must not allocate campaign processing batches';
+  END IF;
+  IF has_function_privilege('authenticated','public.create_certificate_issuance_campaign_batch(text,text,text,text,text,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated must not allocate campaign processing batches directly';
+  END IF;
+  IF NOT has_function_privilege('service_role','public.create_certificate_issuance_campaign_batch(text,text,text,text,text,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must allocate campaign processing batches';
+  END IF;
+END $$;
