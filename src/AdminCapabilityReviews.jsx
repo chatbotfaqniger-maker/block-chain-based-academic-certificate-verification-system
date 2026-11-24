@@ -27,9 +27,9 @@ export default function AdminCapabilityReviews({notice}){
   }catch(e){setError(e.message);}
   finally{setBusy("");}
  }
- const isBaseline=item=>item.isLegacyBaseline===true;
- const pending=items.filter(x=>x.status==="PENDING"&&!isBaseline(x));
- const reviewed=items.filter(x=>x.status!=="PENDING"&&!isBaseline(x));
+ const isLegacyBaselinePending=item=>item.isLegacyBaseline===true&&item.status==="PENDING";
+ const pending=items.filter(x=>x.status==="PENDING"&&!isLegacyBaselinePending(x));
+ const reviewed=items.filter(x=>x.status!=="PENDING"&&!isLegacyBaselinePending(x));
  return <section className="panel admin-registry">
   <div className="registry-heading"><div><span className="eyebrow">SEPARATE PERMISSION REVIEW</span><h3>Organization capability approvals</h3><p>Review credential issuance and external verification permissions independently of organization identity approval.</p></div><span className="registry-count">{pending.length} awaiting review</span></div>
   {pending.length?pending.map(item=>{
