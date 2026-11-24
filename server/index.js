@@ -1409,7 +1409,7 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4).max(200)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved academic institution can verify its own issued certificates."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can verify its own issued certificates."});
   const reference=b.certificateId.trim();
   const fields="id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId";
   let {data:c,error}=await q.supabase.from("Certificate").select(fields).eq("organizationId",org.id).eq("certificateId",reference).maybeSingle();
