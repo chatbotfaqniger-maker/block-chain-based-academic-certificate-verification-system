@@ -757,7 +757,7 @@ VERITY supports three document paths for approved academic institutions. These p
 - VERITY must never infer authenticity from a QR code printed on an uploaded scan, a file name, or a visual resemblance to an institutional template.
 
 ### Scale and bulk operations
-The institution's design is stored once and reused. Each graduate has an individual structured certificate record, unique certificate ID, verification key, QR code, SHA-256 digest and ledger event. Bulk issuance remains batch-based (currently up to 500 records per batch); large graduating classes should be split into reviewed batches. A document image is an optional presentation/evidence file, not the primary database record.
+The institution's design is stored once and reused. Each graduate has an individual structured certificate record, unique certificate ID, verification key, QR code, SHA-256 digest and ledger event. Bulk issuance is campaign-based (up to 50,000 records per campaign). VERITY automatically splits campaigns into durable processing batches of up to 500 records each. Student identity and editable certificate fields remain structured PostgreSQL records; private Storage buckets retain certificate PDFs and institution artwork, mapped to their existing student/certificate records. A document image is an optional presentation/evidence file, not the primary database record.
 
 ### Verification rule
 Scanning a QR code resolves the credential reference. VERITY then checks the issuer, registry record, credential digest/ledger integrity and revocation status. The QR code is only a lookup route; it is not the authenticity proof. Transcript/result verification is a separate credential type and must not be implied by certificate verification.
