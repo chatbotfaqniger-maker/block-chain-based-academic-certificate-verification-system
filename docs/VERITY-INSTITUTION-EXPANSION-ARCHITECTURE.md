@@ -169,3 +169,20 @@ All database changes must be additive and reversible where practical:
 ## 8. Completion criteria
 
 The expansion is complete only when the new categories can onboard and operate through the shared credential lifecycle, configurable identifiers work end-to-end, roster import is reliable, existing University/employer regression tests pass, documentation is updated, and the release has been reviewed. A merged branch or successful frontend build alone is not proof of production readiness.
+
+
+## 9. Implementation progress (isolated feature branch)
+
+The first code slice adds reusable server-side identity primitives:
+
+- Supported issuer-category constants and strict category validation.
+- Preset/custom identifier-label validation.
+- A shared organization-scoped identifier normalizer (Unicode NFKC, trim, uppercase, whitespace removal, control-character rejection).
+- The existing CSV roster import now uses the shared normalizer while retaining its current accepted CSV column names and the existing `studentNumber` / `normalizedStudentNumber` persistence contract.
+- Unit tests cover supported categories, Unicode normalization, invalid identifiers, and custom label validation.
+
+This is intentionally a compatibility-first foundation, not the complete user-facing feature. It does not yet persist category/identifier configuration, alter registration or activation RPC parameters, add configurable CSV column mapping, or expose new categories in onboarding. Those steps require a reviewed additive Supabase migration and coordinated server/UI changes.
+
+## 10. Tooling and verification gate
+
+The current connected environment provides GitHub file operations and production Supabase SQL access, but no local repository checkout or Supabase CLI executable. The Supabase workflow requires creating migration files with the CLI, validating locally, running advisors, and testing before migration release. Therefore no migration file has been fabricated, no production DDL has been executed, and no claim of a passing test run is made here. The feature branch should remain isolated until a proper local/CI migration workflow is available.
