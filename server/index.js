@@ -59,7 +59,7 @@ async function ensureOrganization(client, authUser, profile) {
  if(profile.role!=="EMPLOYER") return null;
  const {data:found,error}=await client.from("Organization").select("*").eq("ownerId",profile.id).maybeSingle();
  if(error) throw error;
- if(found) return found;
+ if(found) { await ensureDefaultOrganizationCapability(client,found,profile.id); return found; }
  const m=authUser.user_metadata||{}, name=String(m.organizationName||m.institution||profile.institution||"").trim();
  if(name.length<2) return null;
  const registrationNumber=String(m.registrationNumber||"").trim()||null;
@@ -70,13 +70,20 @@ async function ensureOrganization(client, authUser, profile) {
    if(claimed && claimed.ownerId===profile.id) {
      const {data,error:reloadError}=await client.from("Organization").select("*").eq("id",claimed.id).single();
      if(reloadError) throw reloadError;
+     await ensureDefaultOrganizationCapability(client,data,profile.id);
      return data;
    }
  }
- const org={id:crypto.randomUUID(),name,type:m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION",ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null,locationCity:m.locationCity||null,locationState:m.locationState||null,locationCountry:m.locationCountry||null};
+ const organizationType=m.organizationType==="EMPLOYER"?"EMPLOYER":"INSTITUTION";
+ const allowedLevels=["PRIMARY","SECONDARY","TERTIARY"];
+ const educationLevels=organizationType==="INSTITUTION"&&Array.isArray(m.educationLevels)
+   ?[...new Set(m.educationLevels.filter(level=>allowedLevels.includes(level)))]
+   :organizationType==="INSTITUTION"?["TERTIARY"]:[];
+ const org={id:crypto.randomUUID(),name,type:organizationType,educationLevels,ownerId:profile.id,status:"PENDING",registrationCode:"VRT-"+crypto.randomBytes(4).toString("hex").toUpperCase(),registrationNumber,officialWebsite:m.officialWebsite||null,officialEmailDomain:m.officialEmailDomain||null,accreditationBody:m.accreditationBody||null,locationCity:m.locationCity||null,locationState:m.locationState||null,locationCountry:m.locationCountry||null};
  const {data,error:e}=await client.from("Organization").insert(org).select().single();
  if(e && e.code==="23505" && /organization_registration_number_unique/.test(e.message||"")) throw new Error("This registration number is already registered in Verity. Sign in with the original organization account or contact the System Administrator. No duplicate organization was created.");
  if(e) throw e;
+ await ensureDefaultOrganizationCapability(client,data,profile.id);
  return data;
 }
 async function ensureStudentMembership(client, authUser, profile) {
@@ -157,6 +164,32 @@ async function auth(req,res,next) {
   } catch(e) { res.status(401).json({error:e.message||"Authentication failed."}); }
 }
 const roles=(...allowed)=>(req,res,next)=>allowed.includes(req.user.role)?next():res.status(403).json({error:"Permission denied."});
+
+const ORGANIZATION_CAPABILITIES=["ISSUE_CREDENTIALS","VERIFY_CREDENTIALS"];
+async function organizationCapabilities(client,organizationId) {
+ const {data,error}=await client.from("OrganizationCapability")
+   .select("id,capability,status,requestNote,decisionNote,createdAt,updatedAt,reviewedAt")
+   .eq("organizationId",organizationId)
+   .order("createdAt",{ascending:true});
+ if(error)throw error;
+ return data||[];
+}
+async function ensureDefaultOrganizationCapability(client,organization,userId) {
+ const capability=organization?.type==="INSTITUTION"?"ISSUE_CREDENTIALS":organization?.type==="EMPLOYER"?"VERIFY_CREDENTIALS":null;
+ if(!capability||!organization?.id||!userId)return;
+ const {data:existing,error:lookupError}=await client.from("OrganizationCapability")
+   .select("id").eq("organizationId",organization.id).eq("capability",capability).maybeSingle();
+ if(lookupError)throw lookupError;
+ if(existing)return;
+ const status=organization.status==="APPROVED"?"APPROVED":organization.status==="SUSPENDED"?"SUSPENDED":"PENDING";
+ const {error}=await client.from("OrganizationCapability").insert({
+   id:crypto.randomUUID(),organizationId:organization.id,capability,status,requestedBy:userId,
+   requestNote:"Default capability for the existing VERITY organization category.",
+   decisionNote:status==="APPROVED"?"Preserved from the existing approved organization category.":null,
+   reviewedBy:null,reviewedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+ });
+ if(error&&error.code!=="23505")throw error;
+}
 async function activeStaffFor(client,userId) {
  const {data:staff,error}=await client.from("OrganizationStaff").select("id,organizationId,permissions,status").eq("userId",userId).eq("status","ACTIVE");
  if(error) throw error;
@@ -212,7 +245,7 @@ app.get("/api/directory/organizations",run(async(q,s)=>{
 }));
 
 app.post("/api/auth/register",run(async(q,s)=>{
-  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional(),studentOrganizationId:z.string().optional()}).parse(q.body); const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."}); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
+  const b=z.object({fullName:z.string().min(2),email:z.string().email(),password:z.string().min(10),role:z.enum(["GRADUATE","EMPLOYER"]),institution:z.string().optional(),organizationName:z.string().optional(),organizationType:z.enum(["INSTITUTION","EMPLOYER"]).optional(),educationLevels:z.array(z.enum(["PRIMARY","SECONDARY","TERTIARY"])).max(3).optional(),registrationNumber:z.string().max(100).optional(),officialWebsite:z.string().max(300).optional(),officialEmailDomain:z.string().max(150).optional(),accreditationBody:z.string().max(200).optional(),locationCity:z.string().max(100).optional(),locationState:z.string().max(100).optional(),locationCountry:z.string().max(100).optional(),organizationCode:z.string().optional(),studentNumber:z.string().optional(),studentOrganizationId:z.string().optional()}).parse(q.body); const locationParts=[b.locationCity,b.locationState,b.locationCountry];if(locationParts.some(v=>String(v||"").trim())&&locationParts.some(v=>!String(v||"").trim()))return s.status(400).json({error:"Provide city, state / region and country together, or leave all three blank."}); if(b.role==="EMPLOYER"&&String(b.organizationName||b.institution||"").trim().length<2)return s.status(400).json({error:"Enter your organization name."});
   if(b.role==="GRADUATE"){
    const studentNumber=String(b.studentNumber||"").trim(),organizationId=String(b.studentOrganizationId||"").trim();
    if(!organizationId||studentNumber.length<2)return s.status(400).json({error:"Select your institution and enter your matriculation number before creating a student account."});
@@ -222,7 +255,7 @@ app.post("/api/auth/register",run(async(q,s)=>{
   const client=makeClient();
   const {data,error}=await client.auth.signUp({
     email:b.email.trim().toLowerCase(),password:b.password,
-    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||"",studentOrganizationId:b.studentOrganizationId?.trim()||""}}
+    options:{data:{fullName:b.fullName.trim(),institution:b.institution?.trim()||"",role:b.role,organizationName:b.organizationName?.trim()||"",organizationType:b.organizationType||"INSTITUTION",educationLevels:b.educationLevels||["TERTIARY"],registrationNumber:b.registrationNumber?.trim()||"",officialWebsite:b.officialWebsite?.trim()||"",officialEmailDomain:b.officialEmailDomain?.trim().toLowerCase()||"",accreditationBody:b.accreditationBody?.trim()||"",locationCity:b.locationCity?.trim()||"",locationState:b.locationState?.trim()||"",locationCountry:b.locationCountry?.trim()||"",organizationCode:b.organizationCode?.trim().toUpperCase()||"",studentNumber:b.studentNumber?.trim()||"",studentOrganizationId:b.studentOrganizationId?.trim()||""}}
   });
   if(error) {
     const duplicate=/already registered|already exists|user exists/i.test(error.message||"");
