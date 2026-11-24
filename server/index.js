@@ -403,7 +403,7 @@ app.patch("/api/organization/staff/:id",auth,roles("EMPLOYER"),run(async(q,s)=>{
 app.patch("/api/organization/registration-code-policy",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const b=z.object({enabled:z.boolean(),expiresAt:z.string().datetime().optional()}).parse(q.body);
  const {data:org,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can configure its registration-code policy."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can configure its registration-code policy."});
  if(b.enabled&&(!b.expiresAt||new Date(b.expiresAt)<=new Date()))return s.status(400).json({error:"Choose a future expiry date, or leave expiry disabled."});
  const patch={registrationCodeExpiryEnabled:b.enabled,registrationCodeExpiresAt:b.enabled?b.expiresAt:null,updatedAt:new Date().toISOString()};
  const {data,error:saveError}=await q.supabase.from("Organization").update(patch).eq("id",org.id).eq("ownerId",q.user.id).select("id,registrationCodeExpiryEnabled,registrationCodeExpiresAt").single();if(saveError)throw saveError;
@@ -412,7 +412,7 @@ app.patch("/api/organization/registration-code-policy",auth,roles("EMPLOYER"),ru
 }));
 app.post("/api/organization/registration-code/rotate",auth,roles("EMPLOYER"),run(async(q,s)=>{
  const {data:org,error}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();if(error)throw error;
- if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved institution owner can rotate its registration code."});
+ if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can rotate its registration code."});
  const code="VRT-"+crypto.randomBytes(8).toString("hex").toUpperCase();
  const {data,error:saveError}=await q.supabase.from("Organization").update({registrationCode:code,updatedAt:new Date().toISOString()}).eq("id",org.id).eq("ownerId",q.user.id).select("registrationCode").single();if(saveError)throw saveError;
  await audit(q.supabase,q.user.id,"INSTITUTION_REGISTRATION_CODE_ROTATED","Organization",org.id,{});
@@ -427,7 +427,7 @@ app.get("/api/student/registration-options",run(async(q,s)=>{
 app.get("/api/student/registration-context",auth,roles("GRADUATE"),run(async(q,s)=>{
  const metadata=q.authUser.user_metadata||{},organizationId=metadata.studentOrganizationId||null,studentNumber=metadata.studentNumber||null;
  let institution=null;
- if(organizationId){const {data,error}=await q.supabase.from("Organization").select("id,name,type,status").eq("id",organizationId).maybeSingle();if(error)throw error;if(data?.type==="INSTITUTION"&&data.status==="APPROVED")institution={id:data.id,name:data.name};}
+ if(organizationId){const {data,error}=await q.supabase.from("Organization").select("id,name,status").eq("id",organizationId).maybeSingle();if(error)throw error;if(data?.status==="APPROVED"&&await hasApprovedOrganizationCapability(q.supabase,data.id,"ISSUE_CREDENTIALS"))institution={id:data.id,name:data.name};}
  s.json({institution,studentNumber,needsActivation:!q.user.id?false:true});
 }));
 app.post("/api/student/activate",auth,roles("GRADUATE"),run(async(q,s)=>{
@@ -1052,7 +1052,7 @@ app.get("/api/certificates/:id/qr",auth,run(async(q,s)=>{
   if(q.user.role==="EMPLOYER"){
     const {data:org,error:oe}=await q.supabase.from("Organization").select("id,status,type").eq("ownerId",q.user.id).maybeSingle();
     if(oe)throw oe;
-    if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||org.type!=="INSTITUTION")return s.status(403).json({error:"Only the approved issuing institution can generate its certificate QR."});
+    if(!org||org.id!==c.organizationId||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only the approved credential issuer can generate its certificate QR."});
   }
   if(q.user.role==="GRADUATE"&&c.graduateId!==q.user.id){
     const staff=staffForOrganization(await activeStaffFor(q.supabase,q.user.id),c.organizationId);
@@ -1387,14 +1387,14 @@ app.post("/api/institution/verify",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const b=z.object({certificateId:z.string().min(4).max(200)}).parse(q.body);
   const {data:org,error:orgError}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(orgError)throw orgError;
-  if(!org||org.type!=="INSTITUTION"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved academic institution can verify its own issued certificates."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"ISSUE_CREDENTIALS")))return s.status(403).json({error:"Only an approved credential issuer can verify its own issued certificates."});
   const reference=b.certificateId.trim();
   let query=q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id);
   let {data:c,error}=await query.eq("certificateId",reference).maybeSingle();
   if(error)throw error;
   if(!c){const result=await q.supabase.from("Certificate").select("id,certificateId,verificationKey,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,issuedAt,digest,txHash,status,organizationId").eq("organizationId",org.id).eq("verificationKey",reference.toUpperCase()).maybeSingle();c=result.data;error=result.error;if(error)throw error;}
   if(!c)return s.status(404).json({verified:false,status:"NOT_FOUND",message:"This certificate reference was not found in your institution's own issuance records."});
-  const recomputed=org.type==="INSTITUTION"?digest(canonical(c)):null,dbOk=org.type!=="INSTITUTION"||recomputed===c.digest,chain=await verifyCertificateChain(c);
+  const recomputed=digest(canonical(c)),dbOk=recomputed===c.digest,chain=await verifyCertificateChain(c);
   const chainOk=!chain.enabled||(chain.exists===true&&chain.digest?.toLowerCase()===String(c.digest||"").toLowerCase()&&!chain.revoked);
   const verified=c.status==="ACTIVE"&&dbOk&&chainOk;
   const status=c.status==="REVOKED"||chain.revoked?"REVOKED":verified?"VERIFIED":"INTEGRITY_MISMATCH";
@@ -1484,7 +1484,7 @@ app.post("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,
 
 app.get("/api/organization/access-requests",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
-  if(oe)throw oe;if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can view its access requests."});
+  if(oe)throw oe;if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Only an organization with approved verifier permission can view its access requests."});
   const {data,error}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,graduateId,purpose,status,createdAt,approvedAt,expiresAt,revokedAt").eq("organizationId",org.id).order("createdAt",{ascending:false});
   if(error)throw error;
   const ids=(data||[]).map(x=>x.certificateId);
@@ -1520,7 +1520,7 @@ app.patch("/api/graduate/access-requests/:id",auth,roles("GRADUATE"),run(async(q
 app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can access shared documents."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Only an organization with approved verifier permission can access shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
   if(!isCertificateAccessActive(grant))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
@@ -1547,7 +1547,7 @@ app.get("/api/organization/access-requests/:id/document",auth,roles("EMPLOYER"),
 app.get("/api/organization/access-requests/:id/document/download",auth,roles("EMPLOYER"),run(async(q,s)=>{
   const {data:org,error:oe}=await q.supabase.from("Organization").select("id,name,type,status").eq("ownerId",q.user.id).maybeSingle();
   if(oe)throw oe;
-  if(!org||org.type!=="EMPLOYER"||org.status!=="APPROVED")return s.status(403).json({error:"Only an approved verification organization can download shared documents."});
+  if(!org||org.status!=="APPROVED"||!(await hasApprovedOrganizationCapability(q.supabase,org.id,"VERIFY_CREDENTIALS")))return s.status(403).json({error:"Only an organization with approved verifier permission can download shared documents."});
   const {data:grant,error:ge}=await q.supabase.from("CertificateAccessGrant").select("id,certificateId,status,expiresAt").eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
   if(ge)throw ge;
   if(!isCertificateAccessActive(grant))return s.status(403).json({error:"The graduate has not approved access, or the approval has expired."});
