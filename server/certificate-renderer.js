@@ -62,7 +62,7 @@ async function addQr(pdf, page, text, pageWidth, pageHeight) {
   page.drawImage(image, { x: pageWidth - size - 38, y: 28, width: size, height: size });
 }
 
-function drawBuiltIn(page, font, bold, templateKey, institution, data, width, height) {
+function drawBuiltIn(page, font, bold, templateKey, institution, data, width, height, isPreview = true) {
   const heritage = templateKey === "verity-heritage";
   const signature = templateKey === "verity-signature";
   const accent = heritage ? COLORS.gold : COLORS.teal;
@@ -91,10 +91,10 @@ function drawBuiltIn(page, font, bold, templateKey, institution, data, width, he
   page.drawText("AUTHORIZED INSTITUTIONAL SIGNATORY", { x: 54, y: 70, size: 8, font: bold, color: COLORS.muted });
   page.drawText("DATE OF AWARD", { x: width * 0.42, y: 70, size: 8, font: bold, color: COLORS.muted });
   page.drawText(safeText(data.awardDate || "Award date"), { x: width * 0.42, y: 52, size: 10, font, color: COLORS.navy });
-  page.drawText("PREVIEW · NOT A VALID CREDENTIAL", { x: width * 0.66, y: 45, size: 7, font: bold, color: COLORS.teal });
+  if (isPreview) page.drawText("PREVIEW · NOT A VALID CREDENTIAL", { x: width * 0.66, y: 45, size: 7, font: bold, color: COLORS.teal });
 }
 
-export async function renderCertificatePreview({ template, organizationName, data, artworkBytes = null, previewToken = "VERITY-PREVIEW-NOT-VALID" }) {
+export async function renderCertificateDocument({ template, organizationName, data, artworkBytes = null, verificationUrl, preview = true }) {
   if (!template || !["VERITY_TEMPLATE", "INSTITUTION_ARTWORK"].includes(template.sourceType)) {
     throw new TypeError("A supported certificate design is required.");
   }
@@ -117,7 +117,7 @@ export async function renderCertificatePreview({ template, organizationName, dat
     page = pdf.addPage(dimensions);
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-    drawBuiltIn(page, font, bold, template.templateKey, organizationName, data, dimensions[0], dimensions[1]);
+    drawBuiltIn(page, font, bold, template.templateKey, organizationName, data, dimensions[0], dimensions[1], preview);
   }
   const { width, height } = page.getSize();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -132,3 +132,4 @@ export async function renderCertificatePreview({ template, organizationName, dat
   });
   return Buffer.from(await pdf.save());
 }
+\nexport async function renderCertificatePreview(options) { return renderCertificateDocument({ ...options, preview: true, verificationUrl: "VERITY-PREVIEW-NOT-VALID" }); }\n
