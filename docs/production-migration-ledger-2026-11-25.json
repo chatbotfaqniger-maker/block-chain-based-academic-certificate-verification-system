@@ -1,0 +1,993 @@
+{
+  "audit_date": "2026-11-25",
+  "supabase_project_id": "fnsnhasnjmvodkwmdqkc",
+  "repository": "chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system",
+  "branch": "feat/immutable-credentials-and-owner-approved-roster",
+  "method": "Read-only comparison of the Supabase project migration list with all SQL files in supabase/migrations on the named branch. Exact 14-digit filename version matches are classified first. Remaining records are compared by normalized migration name after stripping a leading 14-digit timestamp (also stripped once from ledger names that embed an earlier timestamp). A name match does not prove SQL byte identity or execution equivalence.",
+  "summary": {
+    "applied_ledger_entries": 67,
+    "repository_sql_files": 34,
+    "ledger_exact_version_matches": 15,
+    "ledger_name_matches_with_version_drift": 16,
+    "ledger_entries_without_source_name_match": 36,
+    "source_files_exact_version_matches": 15,
+    "source_files_name_matches_with_version_drift": 13,
+    "source_files_not_found_in_ledger": 6,
+    "duplicate_or_aliased_name_groups": [
+      "separate_staff_document_metadata_and_download_permissions",
+      "add_durable_roster_import_queue",
+      "durable_bulk_certificate_issuance_queue",
+      "certificate_ledger_integrity_hardening"
+    ]
+  },
+  "repository_files": [
+    {
+      "name": "20261116112343_staff_tenant_isolation_document_quarantine.sql",
+      "sha": "18ba97d07c4305065bbaa69b04d771e59ab6b298",
+      "size_bytes": 3530,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261116112343_staff_tenant_isolation_document_quarantine.sql",
+      "version": "20261116112343",
+      "normalized_name": "staff_tenant_isolation_document_quarantine",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261116112343",
+          "name": "staff_tenant_isolation_document_quarantine"
+        }
+      ]
+    },
+    {
+      "name": "20261117121000_harden_staff_assignments.sql",
+      "sha": "b5c6a97905881cb3c53b9e4a889344f09a65f0a3",
+      "size_bytes": 5154,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261117121000_harden_staff_assignments.sql",
+      "version": "20261117121000",
+      "normalized_name": "harden_staff_assignments",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261117112421",
+          "name": "harden_staff_assignments"
+        }
+      ]
+    },
+    {
+      "name": "20261117121208_harden_staff_tenant_type_and_document_binding.sql",
+      "sha": "2dee23efa3c9957c3a1e909289dfd261bcb62e00",
+      "size_bytes": 7914,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261117121208_harden_staff_tenant_type_and_document_binding.sql",
+      "version": "20261117121208",
+      "normalized_name": "harden_staff_tenant_type_and_document_binding",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261117121208",
+          "name": "harden_staff_tenant_type_and_document_binding"
+        }
+      ]
+    },
+    {
+      "name": "20261118113732_enforce_staff_permissions_and_document_tenant_isolation.sql",
+      "sha": "33312ece9ae4cd45333a7de8bec43f27dd512925",
+      "size_bytes": 4245,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261118113732_enforce_staff_permissions_and_document_tenant_isolation.sql",
+      "version": "20261118113732",
+      "normalized_name": "enforce_staff_permissions_and_document_tenant_isolation",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261118113732",
+          "name": "enforce_staff_permissions_and_document_tenant_isolation"
+        }
+      ]
+    },
+    {
+      "name": "20261121120000_remove_antivirus_scan_gates.sql",
+      "sha": "5bbfe97fc75c71eeb9e2d7370c52ca791b269b97",
+      "size_bytes": 2186,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql",
+      "version": "20261121120000",
+      "normalized_name": "remove_antivirus_scan_gates",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261121104051",
+          "name": "remove_antivirus_scan_gates"
+        }
+      ]
+    },
+    {
+      "name": "20261122100000_student_identity_registration_foundation.sql",
+      "sha": "8ed13184caff2f56c1d8b7d35c27c2c315c2e441",
+      "size_bytes": 10843,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122100000_student_identity_registration_foundation.sql",
+      "version": "20261122100000",
+      "normalized_name": "student_identity_registration_foundation",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122192524",
+          "name": "student_identity_registration_foundation"
+        }
+      ]
+    },
+    {
+      "name": "20261122110000_enforce_institution_invitation_code_expiry_setting.sql",
+      "sha": "4a6bdeb259987cd110d472c1ee05795eaaa26824",
+      "size_bytes": 1613,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122110000_enforce_institution_invitation_code_expiry_setting.sql",
+      "version": "20261122110000",
+      "normalized_name": "enforce_institution_invitation_code_expiry_setting",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122193345",
+          "name": "enforce_institution_invitation_code_expiry_setting"
+        }
+      ]
+    },
+    {
+      "name": "20261122120000_student_activation_tokens_and_atomic_roster_claim.sql",
+      "sha": "d56512689c1fab151fd9ca88f9701b03775c24db",
+      "size_bytes": 6724,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122120000_student_activation_tokens_and_atomic_roster_claim.sql",
+      "version": "20261122120000",
+      "normalized_name": "student_activation_tokens_and_atomic_roster_claim",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122194202",
+          "name": "student_activation_tokens_and_atomic_roster_claim"
+        }
+      ]
+    },
+    {
+      "name": "20261122130000_institution_student_recovery_two_person_workflow.sql",
+      "sha": "a5267f636d01904fb856a612bba5ca24d5971e9c",
+      "size_bytes": 6532,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122130000_institution_student_recovery_two_person_workflow.sql",
+      "version": "20261122130000",
+      "normalized_name": "institution_student_recovery_two_person_workflow",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122195012",
+          "name": "institution_student_recovery_two_person_workflow"
+        }
+      ]
+    },
+    {
+      "name": "20261122132644_add_organization_directory_location.sql",
+      "sha": "b0e04dd1d16fd368fdc3216f1c4152fa533402f6",
+      "size_bytes": 2523,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122132644_add_organization_directory_location.sql",
+      "version": "20261122132644",
+      "normalized_name": "add_organization_directory_location",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122132644",
+          "name": "add_organization_directory_location"
+        }
+      ]
+    },
+    {
+      "name": "20261122132915_harden_organization_directory_function_search_path.sql",
+      "sha": "133d23182b247e55847f4a50ab0aed87ad443fdb",
+      "size_bytes": 99,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122132915_harden_organization_directory_function_search_path.sql",
+      "version": "20261122132915",
+      "normalized_name": "harden_organization_directory_function_search_path",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122132915",
+          "name": "harden_organization_directory_function_search_path"
+        }
+      ]
+    },
+    {
+      "name": "20261122133617_separate_staff_document_metadata_and_download_permissions.sql",
+      "sha": "e94a064052c3f33f9024af89252058f41489b769",
+      "size_bytes": 1937,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122133617_separate_staff_document_metadata_and_download_permissions.sql",
+      "version": "20261122133617",
+      "normalized_name": "separate_staff_document_metadata_and_download_permissions",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122133617",
+          "name": "separate_staff_document_metadata_and_download_permissions"
+        },
+        {
+          "version": "20261122133647",
+          "name": "20261122134000_separate_staff_document_metadata_and_download_permissions"
+        }
+      ]
+    },
+    {
+      "name": "20261122133647_20261122134000_separate_staff_document_metadata_and_download_permissions.sql",
+      "sha": "e94a064052c3f33f9024af89252058f41489b769",
+      "size_bytes": 1937,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122133647_20261122134000_separate_staff_document_metadata_and_download_permissions.sql",
+      "version": "20261122133647",
+      "normalized_name": "separate_staff_document_metadata_and_download_permissions",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122133617",
+          "name": "separate_staff_document_metadata_and_download_permissions"
+        },
+        {
+          "version": "20261122133647",
+          "name": "20261122134000_separate_staff_document_metadata_and_download_permissions"
+        }
+      ]
+    },
+    {
+      "name": "20261122134522_harden_public_security_definer_functions.sql",
+      "sha": "bd065a9eaee96b517705a82fb1cca3adae84319d",
+      "size_bytes": 851,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122134522_harden_public_security_definer_functions.sql",
+      "version": "20261122134522",
+      "normalized_name": "harden_public_security_definer_functions",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122134522",
+          "name": "harden_public_security_definer_functions"
+        }
+      ]
+    },
+    {
+      "name": "20261122134554_optimize_organization_staff_and_document_rls.sql",
+      "sha": "caad7437ee8cdaa6b91fe848ee38816087b04220",
+      "size_bytes": 3257,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122134554_optimize_organization_staff_and_document_rls.sql",
+      "version": "20261122134554",
+      "normalized_name": "optimize_organization_staff_and_document_rls",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122134554",
+          "name": "optimize_organization_staff_and_document_rls"
+        }
+      ]
+    },
+    {
+      "name": "20261122134629_optimize_document_read_policy_and_lock_trigger_functions.sql",
+      "sha": "9ad372de07d5e78e471583276b25fc92a86e07ec",
+      "size_bytes": 2025,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122134629_optimize_document_read_policy_and_lock_trigger_functions.sql",
+      "version": "20261122134629",
+      "normalized_name": "optimize_document_read_policy_and_lock_trigger_functions",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122134629",
+          "name": "optimize_document_read_policy_and_lock_trigger_functions"
+        }
+      ]
+    },
+    {
+      "name": "20261122195500_allow_ict_recovery_token_reissue.sql",
+      "sha": "4dc93208277ccc70756cb19165f7aef5bcfc6932",
+      "size_bytes": 1228,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122195500_allow_ict_recovery_token_reissue.sql",
+      "version": "20261122195500",
+      "normalized_name": "allow_ict_recovery_token_reissue",
+      "classification": "repository_only",
+      "matching_ledger_entries": []
+    },
+    {
+      "name": "20261122200500_secure_ict_recovery_case_claimant_lookup.sql",
+      "sha": "57140dfccfe620824cfcafa3d63fcfa27f7a36a5",
+      "size_bytes": 2334,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122200500_secure_ict_recovery_case_claimant_lookup.sql",
+      "version": "20261122200500",
+      "normalized_name": "secure_ict_recovery_case_claimant_lookup",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261122195704",
+          "name": "secure_ict_recovery_case_claimant_lookup"
+        }
+      ]
+    },
+    {
+      "name": "20261122202000_secure_ict_roster_claimant_lookup.sql",
+      "sha": "f2c09ff8e4bda7f5a8df110074fbbfb385d80e9e",
+      "size_bytes": 2685,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122202000_secure_ict_roster_claimant_lookup.sql",
+      "version": "20261122202000",
+      "normalized_name": "secure_ict_roster_claimant_lookup",
+      "classification": "repository_only",
+      "matching_ledger_entries": []
+    },
+    {
+      "name": "20261122202500_drop_ambiguous_student_roster_lookup.sql",
+      "sha": "65ca777aff8d9e64c784d376742a7d0ea73faa8e",
+      "size_bytes": 162,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261122202500_drop_ambiguous_student_roster_lookup.sql",
+      "version": "20261122202500",
+      "normalized_name": "drop_ambiguous_student_roster_lookup",
+      "classification": "repository_only",
+      "matching_ledger_entries": []
+    },
+    {
+      "name": "20261123130000_enforce_staff_permission_boundary.sql",
+      "sha": "2910252ad3cd8240e123b34f4e0e9e77538d4f45",
+      "size_bytes": 1340,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261123130000_enforce_staff_permission_boundary.sql",
+      "version": "20261123130000",
+      "normalized_name": "enforce_staff_permission_boundary",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261123114847",
+          "name": "enforce_staff_permission_boundary"
+        }
+      ]
+    },
+    {
+      "name": "20261123182712_complete_graduate_consent_revocation.sql",
+      "sha": "f37ea3cfaf8d1d826a789f693b986cbc223ca2e5",
+      "size_bytes": 8225,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261123182712_complete_graduate_consent_revocation.sql",
+      "version": "20261123182712",
+      "normalized_name": "complete_graduate_consent_revocation",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261123182712",
+          "name": "complete_graduate_consent_revocation"
+        }
+      ]
+    },
+    {
+      "name": "20261123221423_restrict_sensitive_rpc_execution.sql",
+      "sha": "1633d7ace684699326da667c6b8c14cfeb2a51c9",
+      "size_bytes": 4491,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261123221423_restrict_sensitive_rpc_execution.sql",
+      "version": "20261123221423",
+      "normalized_name": "restrict_sensitive_rpc_execution",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261123221423",
+          "name": "restrict_sensitive_rpc_execution"
+        }
+      ]
+    },
+    {
+      "name": "20261123223013_add_durable_roster_import_queue.sql",
+      "sha": "f3631c5a1fab07b2988a71aeaddb6184908d9b8d",
+      "size_bytes": 18522,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261123223013_add_durable_roster_import_queue.sql",
+      "version": "20261123223013",
+      "normalized_name": "add_durable_roster_import_queue",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261123223013",
+          "name": "add_durable_roster_import_queue"
+        },
+        {
+          "version": "20261124134929",
+          "name": "20261123223013_add_durable_roster_import_queue"
+        }
+      ]
+    },
+    {
+      "name": "20261124071328_durable_bulk_certificate_issuance_queue.sql",
+      "sha": "8e22659143e6622aaef0fee72d2ae7e530f61aa9",
+      "size_bytes": 24215,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124071328_durable_bulk_certificate_issuance_queue.sql",
+      "version": "20261124071328",
+      "normalized_name": "durable_bulk_certificate_issuance_queue",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124071328",
+          "name": "durable_bulk_certificate_issuance_queue"
+        },
+        {
+          "version": "20261124134932",
+          "name": "20261124071328_durable_bulk_certificate_issuance_queue"
+        }
+      ]
+    },
+    {
+      "name": "20261124074628_certificate_ledger_integrity_hardening.sql",
+      "sha": "bb92461e65368d886ab5b0d2c9c1fc467f81c51a",
+      "size_bytes": 12118,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124074628_certificate_ledger_integrity_hardening.sql",
+      "version": "20261124074628",
+      "normalized_name": "certificate_ledger_integrity_hardening",
+      "classification": "exact_version_match",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124074628",
+          "name": "certificate_ledger_integrity_hardening"
+        },
+        {
+          "version": "20261124134935",
+          "name": "20261124074628_certificate_ledger_integrity_hardening"
+        }
+      ]
+    },
+    {
+      "name": "20261124110000_institution_certificate_design_and_digitization.sql",
+      "sha": "12c142cd59e60ee5ca20a9364354753c62a1405a",
+      "size_bytes": 6512,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124110000_institution_certificate_design_and_digitization.sql",
+      "version": "20261124110000",
+      "normalized_name": "institution_certificate_design_and_digitization",
+      "classification": "repository_only",
+      "matching_ledger_entries": []
+    },
+    {
+      "name": "20261124123000_enforce_staff_document_download_permission.sql",
+      "sha": "4526234bd59b47c8ec204824f57469a857e34b2c",
+      "size_bytes": 1993,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124123000_enforce_staff_document_download_permission.sql",
+      "version": "20261124123000",
+      "normalized_name": "enforce_staff_document_download_permission",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124112527",
+          "name": "enforce_staff_document_download_permission"
+        }
+      ]
+    },
+    {
+      "name": "20261124150000_organization_capabilities_and_school_levels.sql",
+      "sha": "ae0fd59071dc27d4d293e90c9f7bd550802d8423",
+      "size_bytes": 7438,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124150000_organization_capabilities_and_school_levels.sql",
+      "version": "20261124150000",
+      "normalized_name": "organization_capabilities_and_school_levels",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124171347",
+          "name": "organization_capabilities_and_school_levels"
+        }
+      ]
+    },
+    {
+      "name": "20261124153000_enable_capability_based_issuer_workflows.sql",
+      "sha": "475ad686d20ae301672fd29dc2a2b272d8cc2e5b",
+      "size_bytes": 30801,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124153000_enable_capability_based_issuer_workflows.sql",
+      "version": "20261124153000",
+      "normalized_name": "enable_capability_based_issuer_workflows",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124171356",
+          "name": "enable_capability_based_issuer_workflows"
+        }
+      ]
+    },
+    {
+      "name": "20261124180000_large_certificate_issuance_campaigns.sql",
+      "sha": "1b30dce31a1bbc49dc3581cb5ecf67efe535696a",
+      "size_bytes": 5783,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124180000_large_certificate_issuance_campaigns.sql",
+      "version": "20261124180000",
+      "normalized_name": "large_certificate_issuance_campaigns",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124174155",
+          "name": "large_certificate_issuance_campaigns"
+        }
+      ]
+    },
+    {
+      "name": "20261124190000_institution_monthly_certificate_issuance_limit.sql",
+      "sha": "65aa12177e57474ea52f1163efb4dc011486ad67",
+      "size_bytes": 4396,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261124190000_institution_monthly_certificate_issuance_limit.sql",
+      "version": "20261124190000",
+      "normalized_name": "institution_monthly_certificate_issuance_limit",
+      "classification": "name_match_version_drift",
+      "matching_ledger_entries": [
+        {
+          "version": "20261124175741",
+          "name": "institution_monthly_certificate_issuance_limit"
+        }
+      ]
+    },
+    {
+      "name": "20261125100000_owner_approved_roster_and_credential_corrections.sql",
+      "sha": "a9ca93514a4dd7d0a13bd0b26bd515834a998acb",
+      "size_bytes": 29714,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261125100000_owner_approved_roster_and_credential_corrections.sql",
+      "version": "20261125100000",
+      "normalized_name": "owner_approved_roster_and_credential_corrections",
+      "classification": "repository_only",
+      "matching_ledger_entries": []
+    },
+    {
+      "name": "20261125120000_persistent_roster_import_drafts.sql",
+      "sha": "a53d4d779db74aae2153f44b5f88d170e19409cb",
+      "size_bytes": 8065,
+      "url": "https://github.com/chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system/blob/feat/immutable-credentials-and-owner-approved-roster/supabase/migrations/20261125120000_persistent_roster_import_drafts.sql",
+      "version": "20261125120000",
+      "normalized_name": "persistent_roster_import_drafts",
+      "classification": "repository_only",
+      "matching_ledger_entries": []
+    }
+  ],
+  "applied_ledger": [
+    {
+      "version": "20261114211414",
+      "name": "create_verity_academic_credentials_schema",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261114212532",
+      "name": "switch_verity_to_supabase_auth_and_publishable_api",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261114212545",
+      "name": "support_verity_employer_signup_roles",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261114212711",
+      "name": "grant_verity_admin_only_after_email_confirmation",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261114212803",
+      "name": "tighten_verity_trigger_permissions_and_index_relations",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261114212820",
+      "name": "restrict_public_certificate_lookup_to_anonymous_verification",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115083914",
+      "name": "organization_accounts_and_student_memberships",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115084052",
+      "name": "student_membership_rpc_and_immutability",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115084138",
+      "name": "restrict_membership_rpc_to_authenticated",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115093725",
+      "name": "add_verity_verification_keys",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115093918",
+      "name": "add_authenticated_verification_organization_lookup",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115094118",
+      "name": "add_student_controlled_certificate_sharing",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115094205",
+      "name": "protect_certificate_access_grant_transitions",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261115094240",
+      "name": "scope_granted_certificate_and_verification_reads",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261116112343",
+      "name": "staff_tenant_isolation_document_quarantine",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261116112343_staff_tenant_isolation_document_quarantine.sql"
+      ]
+    },
+    {
+      "version": "20261117112421",
+      "name": "harden_staff_assignments",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261117121000_harden_staff_assignments.sql"
+      ]
+    },
+    {
+      "version": "20261117121208",
+      "name": "harden_staff_tenant_type_and_document_binding",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261117121208_harden_staff_tenant_type_and_document_binding.sql"
+      ]
+    },
+    {
+      "version": "20261118113732",
+      "name": "enforce_staff_permissions_and_document_tenant_isolation",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261118113732_enforce_staff_permissions_and_document_tenant_isolation.sql"
+      ]
+    },
+    {
+      "version": "20261121104051",
+      "name": "remove_antivirus_scan_gates",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261121120000_remove_antivirus_scan_gates.sql"
+      ]
+    },
+    {
+      "version": "20261121112824",
+      "name": "public_verity_organization_identity_functions",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261121113747",
+      "name": "add_supabase_hash_chained_certificate_ledger",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261121113845",
+      "name": "correct_ledger_identifier_and_backfill_existing_certificates",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261121113920",
+      "name": "fix_ledger_hash_function_search_path",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122121434",
+      "name": "organization_directory_visibility",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122132644",
+      "name": "add_organization_directory_location",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122132644_add_organization_directory_location.sql"
+      ]
+    },
+    {
+      "version": "20261122132915",
+      "name": "harden_organization_directory_function_search_path",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122132915_harden_organization_directory_function_search_path.sql"
+      ]
+    },
+    {
+      "version": "20261122133617",
+      "name": "separate_staff_document_metadata_and_download_permissions",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122133617_separate_staff_document_metadata_and_download_permissions.sql",
+        "20261122133647_20261122134000_separate_staff_document_metadata_and_download_permissions.sql"
+      ]
+    },
+    {
+      "version": "20261122133647",
+      "name": "20261122134000_separate_staff_document_metadata_and_download_permissions",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122133617_separate_staff_document_metadata_and_download_permissions.sql",
+        "20261122133647_20261122134000_separate_staff_document_metadata_and_download_permissions.sql"
+      ]
+    },
+    {
+      "version": "20261122134522",
+      "name": "harden_public_security_definer_functions",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122134522_harden_public_security_definer_functions.sql"
+      ]
+    },
+    {
+      "version": "20261122134554",
+      "name": "optimize_organization_staff_and_document_rls",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122134554_optimize_organization_staff_and_document_rls.sql"
+      ]
+    },
+    {
+      "version": "20261122134629",
+      "name": "optimize_document_read_policy_and_lock_trigger_functions",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261122134629_optimize_document_read_policy_and_lock_trigger_functions.sql"
+      ]
+    },
+    {
+      "version": "20261122143103",
+      "name": "add_verity_issue_resolution_centre",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122143339",
+      "name": "restrict_issue_report_update_columns",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122143504",
+      "name": "enforce_new_issue_report_defaults",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122143950",
+      "name": "add_secure_verity_support_conversations",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122144217",
+      "name": "snapshot_support_chat_author_display",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122154058",
+      "name": "verity_support_chat_file_attachments",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122154734",
+      "name": "verity_support_assignment_unread_and_push_subscriptions",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122192524",
+      "name": "student_identity_registration_foundation",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261122100000_student_identity_registration_foundation.sql"
+      ]
+    },
+    {
+      "version": "20261122193345",
+      "name": "enforce_institution_invitation_code_expiry_setting",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261122110000_enforce_institution_invitation_code_expiry_setting.sql"
+      ]
+    },
+    {
+      "version": "20261122194202",
+      "name": "student_activation_tokens_and_atomic_roster_claim",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261122120000_student_activation_tokens_and_atomic_roster_claim.sql"
+      ]
+    },
+    {
+      "version": "20261122194353",
+      "name": "student_signup_precheck_and_authoritative_roster_identity",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122194416",
+      "name": "public_student_signup_institution_options",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122194847",
+      "name": "normalize_student_matriculation_whitespace",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122194929",
+      "name": "student_recovery_two_person_approval",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122195012",
+      "name": "institution_student_recovery_two_person_workflow",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261122130000_institution_student_recovery_two_person_workflow.sql"
+      ]
+    },
+    {
+      "version": "20261122195038",
+      "name": "allow_first_reviewer_to_open_and_approve_recovery",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122195101",
+      "name": "simplify_two_person_student_recovery_approval",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122195410",
+      "name": "allow_recovery_officers_to_issue_replacement_activation_tokens",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122195704",
+      "name": "secure_ict_recovery_case_claimant_lookup",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261122200500_secure_ict_recovery_case_claimant_lookup.sql"
+      ]
+    },
+    {
+      "version": "20261122195752",
+      "name": "secure_ict_roster_claimant_identity_lookup",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122195805",
+      "name": "scope_student_roster_lookup_to_exact_institution",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261122195847",
+      "name": "remove_ambiguous_student_roster_lookup_overload",
+      "classification": "ledger_only",
+      "matching_source_files": []
+    },
+    {
+      "version": "20261123114847",
+      "name": "enforce_staff_permission_boundary",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261123130000_enforce_staff_permission_boundary.sql"
+      ]
+    },
+    {
+      "version": "20261123182712",
+      "name": "complete_graduate_consent_revocation",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261123182712_complete_graduate_consent_revocation.sql"
+      ]
+    },
+    {
+      "version": "20261123221423",
+      "name": "restrict_sensitive_rpc_execution",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261123221423_restrict_sensitive_rpc_execution.sql"
+      ]
+    },
+    {
+      "version": "20261123223013",
+      "name": "add_durable_roster_import_queue",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261123223013_add_durable_roster_import_queue.sql"
+      ]
+    },
+    {
+      "version": "20261124071328",
+      "name": "durable_bulk_certificate_issuance_queue",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261124071328_durable_bulk_certificate_issuance_queue.sql"
+      ]
+    },
+    {
+      "version": "20261124074628",
+      "name": "certificate_ledger_integrity_hardening",
+      "classification": "exact_version_match",
+      "matching_source_files": [
+        "20261124074628_certificate_ledger_integrity_hardening.sql"
+      ]
+    },
+    {
+      "version": "20261124112527",
+      "name": "enforce_staff_document_download_permission",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124123000_enforce_staff_document_download_permission.sql"
+      ]
+    },
+    {
+      "version": "20261124134929",
+      "name": "20261123223013_add_durable_roster_import_queue",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261123223013_add_durable_roster_import_queue.sql"
+      ]
+    },
+    {
+      "version": "20261124134932",
+      "name": "20261124071328_durable_bulk_certificate_issuance_queue",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124071328_durable_bulk_certificate_issuance_queue.sql"
+      ]
+    },
+    {
+      "version": "20261124134935",
+      "name": "20261124074628_certificate_ledger_integrity_hardening",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124074628_certificate_ledger_integrity_hardening.sql"
+      ]
+    },
+    {
+      "version": "20261124171347",
+      "name": "organization_capabilities_and_school_levels",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124150000_organization_capabilities_and_school_levels.sql"
+      ]
+    },
+    {
+      "version": "20261124171356",
+      "name": "enable_capability_based_issuer_workflows",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124153000_enable_capability_based_issuer_workflows.sql"
+      ]
+    },
+    {
+      "version": "20261124174155",
+      "name": "large_certificate_issuance_campaigns",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124180000_large_certificate_issuance_campaigns.sql"
+      ]
+    },
+    {
+      "version": "20261124175741",
+      "name": "institution_monthly_certificate_issuance_limit",
+      "classification": "name_match_version_drift",
+      "matching_source_files": [
+        "20261124190000_institution_monthly_certificate_issuance_limit.sql"
+      ]
+    }
+  ]
+}
