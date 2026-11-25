@@ -45,18 +45,18 @@ function validateRosterRows(rows){
   if(key&&seen.has(key))issues.push({rowNumber,message:"Duplicate student or employee number within this file."});
   if(key)seen.add(key);
   const email=String(r.email??"").trim();
-  if(email&&(email.length>254||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)))issues.push({rowNumber,message:"Invalid email address (maximum 254 characters)."});
+  if(email&&(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))issues.push({rowNumber,message:"Invalid email address (maximum 254 characters)."});
   const date=String(r.awardDate??"").trim();
-  if(date){const parsed=new Date(date+"T00:00:00.000Z");if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||Number.isNaN(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)issues.push({rowNumber,message:"Award date must be a real calendar date in YYYY-MM-DD format."});}
+  if(date){const parsed=new Date(date+"T00:00:00.000Z");if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)issues.push({rowNumber,message:"Award date must be a real calendar date in YYYY-MM-DD format."});}
  });
  return issues;
 }
 function editorId(){return "roster-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);}
 function downloadRosterCsv(rows){
  const headers=ROSTER_COLUMNS.map(c=>c.key);
- const quote=value=>{const s=String(value??"");return /[",\\r\\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
- const csv=[headers.join(","),...rows.map(r=>headers.map(k=>quote(r[k])).join(","))].join("\\r\\n");
- const blob=new Blob(["\\uFEFF",csv],{type:"text/csv;charset=utf-8"});
+ const quote=value=>{const s=String(value??"");return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+ const csv=[headers.join(","),...rows.map(r=>headers.map(k=>quote(r[k])).join(","))].join("\r\n");
+ const blob=new Blob(["\uFEFF",csv],{type:"text/csv;charset=utf-8"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="VERITY-corrected-student-roster.csv";a.click();URL.revokeObjectURL(url);
 }
 \nexport default function BulkStudents({api,notice,organization}){
@@ -80,7 +80,7 @@ function downloadRosterCsv(rows){
  async function rejectImport(id){const reason=window.prompt("Explain why this import batch is being rejected (at least 10 characters):");if(reason===null)return;if(reason.trim().length<10){notice("A rejection reason of at least 10 characters is required.");return;}setBusy(true);try{const r=await api("/organization/students/import-batches/"+id+"/reject",{method:"POST",body:JSON.stringify({reason})});notice(r.message);await load();}catch(error){notice(error.message);}finally{setBusy(false);}}
  const validRows=useMemo(()=>rows.filter(r=>!errors.some(e=>e.rowNumber===r.rowNumber)),[rows,errors]);
  const filtered=students;
- async function selectFile(f){if(pendingUpload)return;setFile(f||null);setRows([]);setErrors([]);setUndoStack([]);setRedoStack([]);setEditorPage(0);if(!f)return;if(f.size>20*1024*1024){setErrors([{rowNumber:0,message:"The selected file must be 20 MB or smaller."}]);return;}const isCsv=/\\.csv$/i.test(f.name),isXlsx=/\\.xlsx$/i.test(f.name);if(!isCsv&&!isXlsx){setErrors([{rowNumber:0,message:"Choose a .csv or .xlsx file. Legacy .xls and macro-enabled .xlsm files are not supported."}]);return;}try{const parsed=isCsv?parseCsv(await f.text()):await parseXlsxRoster(f);const identified=parsed.map(r=>({...r,_editorId:editorId()}));setRows(identified);setErrors(validateRosterRows(identified));}catch(e){setErrors([{rowNumber:0,message:e.message||"The selected spreadsheet could not be read."}]);}}
+ async function selectFile(f){if(pendingUpload)return;setFile(f||null);setRows([]);setErrors([]);setUndoStack([]);setRedoStack([]);setEditorPage(0);if(!f)return;if(f.size>20*1024*1024){setErrors([{rowNumber:0,message:"The selected file must be 20 MB or smaller."}]);return;}const isCsv=/\.csv$/i.test(f.name),isXlsx=/\.xlsx$/i.test(f.name);if(!isCsv&&!isXlsx){setErrors([{rowNumber:0,message:"Choose a .csv or .xlsx file. Legacy .xls and macro-enabled .xlsm files are not supported."}]);return;}try{const parsed=isCsv?parseCsv(await f.text()):await parseXlsxRoster(f);const identified=parsed.map(r=>({...r,_editorId:editorId()}));setRows(identified);setErrors(validateRosterRows(identified));}catch(e){setErrors([{rowNumber:0,message:e.message||"The selected spreadsheet could not be read."}]);}}
  function saveEditorChange(next){setUndoStack(stack=>[...stack.slice(-39),rows]);setRedoStack([]);setRows(next);setErrors(validateRosterRows(next));}
  function updateRosterCell(id,key,value){const next=rows.map(r=>r._editorId===id?{...r,[key]:value}:r);saveEditorChange(next);}
  function addRosterRow(){const nextNumber=Math.max(1,...rows.map(r=>Number(r.rowNumber)||1))+1;saveEditorChange([...rows,{rowNumber:nextNumber,_editorId:editorId(),studentNumber:"",fullName:"",email:"",faculty:"",department:"",programme:"",qualification:"",classification:"",awardDate:"",academicSession:""}]);setEditorPage(Math.floor(rows.length/50));}
@@ -106,7 +106,7 @@ function downloadRosterCsv(rows){
  {errors.length>0&&<div className="bulk-errors"><b>{errors.filter(e=>e.rowNumber>0).length} row validation issue(s)</b><ul>{errors.filter(e=>e.rowNumber>0).slice(0,12).map((e,i)=><li key={i}>Row {e.rowNumber}: {e.message}</li>)}</ul></div>}
  <small>Required fields are marked *. Fix all invalid rows or remove them before submission. Only valid rows are staged; rejected rows remain in the draft and the source file is preserved.</small></div>}
  {busy&&<div className="bulk-progress"><div><b>Uploading import batch</b><span>{progress.done} / {progress.total} rows staged</span></div><div className="bulk-progress-track"><i style={{width:(progress.total?progress.done/progress.total*100:0)+"%"}}/></div><small>Rows are being staged in the durable queue; database processing begins after submission.</small></div>}
- <button className="primary" disabled={!approved||busy||!validRows.length} onClick={importStudents}>{busy?"Uploading securely…":pendingUpload?"Resume interrupted upload":"Import "+validRows.length+" valid student records"}</button></section>
+ <button className="primary" disabled={!approved||busy||!validRows.length} onClick={importStudents}>{busy?"Uploading securely…":pendingUpload?"Resume interrupted upload":"Submit "+validRows.length+" valid rows for owner approval"}</button></section>
  <section className="panel bulk-history"><div className="panel-head"><div><h3>Import history</h3><p>Review recent roster imports and their outcomes.</p></div><button className="icon-btn" onClick={()=>{load();loadStudents();}} aria-label="Refresh import history"><RefreshCw size={16}/></button></div>
  {batches.length?batches.map(b=><article className="bulk-batch" key={b.id}><div><b>{b.fileName}</b><small>{new Date(b.createdAt).toLocaleString()}</small></div><span className={"bulk-status "+b.status.toLowerCase()}>{b.status}</span>{b.status==="AWAITING_APPROVAL"&&b.canApprove&&<button type="button" className="primary" disabled={busy} onClick={()=>approveImport(b.id)}><Check size={14}/> Approve import</button>}{b.status==="AWAITING_APPROVAL"&&b.canApprove&&<button type="button" className="btn-outline" disabled={busy} onClick={()=>rejectImport(b.id)}>Reject import</button>}{b.status==="AWAITING_APPROVAL"&&!b.canApprove&&<small><Clock size={13}/> Waiting for issuer owner approval</small>}<div className="bulk-batch-counts"><span>{b.insertedRows} added</span><span>{b.duplicateRows} duplicates</span><span>{b.rejectedRows} rejected</span><span>{b.failedChunks||0} failed chunks</span><span>{b.processedChunks||0}/{b.totalChunks||0} chunks processed</span></div>{b.errorSummary?.length>0&&<small className="bulk-batch-error">{b.errorSummary.slice(0,3).map(e=>(e.rowNumber?"Row "+e.rowNumber+": ":e.chunkIndex!==undefined?"Chunk "+(e.chunkIndex+1)+": ":"")+e.message).join(" · ")}</small>}</article>):<p className="muted">No import batches yet.</p>}</section></div>
  <section className="panel bulk-roster"><div className="panel-head"><div><h3>Organization student directory</h3><p>Search the full organization roster and browse results in pages.</p></div><label className="search"><Search size={16}/><input placeholder="Search name, number or department" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></label></div>
