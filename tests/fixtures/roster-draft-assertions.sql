@@ -1,4 +1,15 @@
 -- Verify uploader-owned, resumable draft persistence and isolation.
+-- Isolated uploader and issuer fixtures for the draft test.
+INSERT INTO public."User"(id,"fullName",email,role) VALUES
+ ('30000000-0000-4000-8000-000000000003','Draft ICT Officer','draft-ict@verity.test','GRADUATE'),
+ ('40000000-0000-4000-8000-000000000004','Draft Institution Owner','draft-owner@verity.test','EMPLOYER');
+INSERT INTO public."Organization"(id,name,type,status,"ownerId")
+VALUES ('org-draft','Draft Test Institution','INSTITUTION','APPROVED','40000000-0000-4000-8000-000000000004');
+INSERT INTO public."OrganizationCapability"(id,"organizationId",capability,status)
+VALUES ('cap-draft','org-draft','ISSUE_CREDENTIALS','APPROVED');
+INSERT INTO public."InstitutionICTStaff"(id,"organizationId","userId",permissions,status)
+VALUES ('ict-draft','org-draft','30000000-0000-4000-8000-000000000003',ARRAY['roster:manage'],'ACTIVE');
+
 DO $$
 BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='StudentRosterImportDraft') THEN
@@ -18,13 +29,13 @@ BEGIN
  END IF;
 END $$;
 
-SET request.jwt.claim.sub='10000000-0000-4000-8000-000000000001';
+SET request.jwt.claim.sub='30000000-0000-4000-8000-000000000003';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
 INSERT INTO public."StudentRosterImportDraft"(
  id,"organizationId","createdBy","fileName","totalRows","totalChunks",status
 ) VALUES (
- '30000000-0000-4000-8000-000000000001','org-integrity',
+ '50000000-0000-4000-8000-000000000005','org-draft',
  '10000000-0000-4000-8000-000000000001','semester-roster.xlsx',2,1,'DRAFT'
 );
 INSERT INTO public."StudentRosterImportDraftChunk"(
@@ -48,7 +59,7 @@ END $$;
 RESET ROLE;
 
 -- Another authorized issuer user cannot read or edit the uploader's draft.
-SET request.jwt.claim.sub='20000000-0000-4000-8000-000000000002';
+SET request.jwt.claim.sub='40000000-0000-4000-8000-000000000004';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
 DO $$
