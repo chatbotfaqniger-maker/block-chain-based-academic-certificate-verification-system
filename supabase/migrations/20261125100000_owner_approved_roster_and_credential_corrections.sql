@@ -239,6 +239,9 @@ DECLARE
   v_name text;
 BEGIN
   IF p_decision NOT IN ('APPROVED','REJECTED') THEN RAISE EXCEPTION 'Decision must be APPROVED or REJECTED'; END IF;
+  IF p_decision='REJECTED' AND length(btrim(coalesce(p_note,''))) NOT BETWEEN 10 AND 1000 THEN
+    RAISE EXCEPTION 'A rejection reason between 10 and 1000 characters is required';
+  END IF;
   SELECT * INTO v_request FROM public."StudentRosterCorrectionRequest"
     WHERE id=p_request_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Correction request not found'; END IF;
@@ -348,6 +351,9 @@ AS $$
 DECLARE v_request public."CredentialCorrectionRequest"%ROWTYPE; v_org public."Organization"%ROWTYPE;
 BEGIN
   IF p_decision NOT IN ('APPROVED','REJECTED') THEN RAISE EXCEPTION 'Decision must be APPROVED or REJECTED'; END IF;
+  IF p_decision='REJECTED' AND length(btrim(coalesce(p_note,''))) NOT BETWEEN 10 AND 1000 THEN
+    RAISE EXCEPTION 'A rejection reason between 10 and 1000 characters is required';
+  END IF;
   SELECT * INTO v_request FROM public."CredentialCorrectionRequest" WHERE id=p_request_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Credential correction request not found'; END IF;
   SELECT * INTO v_org FROM public."Organization" WHERE id=v_request."organizationId";
