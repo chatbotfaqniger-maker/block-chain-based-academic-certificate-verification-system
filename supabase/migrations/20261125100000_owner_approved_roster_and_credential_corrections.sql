@@ -1,5 +1,16 @@
--- VERITY institutional roster approval and correction controls.
+-- VERITY institutional and organization roster approval and correction controls.
 -- Additive migration: existing roster records and issued certificates are preserved.
+
+-- RLS helper: permit approved credential-issuing institutions and organizations.
+CREATE OR REPLACE FUNCTION public.verity_has_approved_credential_issuer(p_organization_id text)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
+AS $
+  SELECT EXISTS (SELECT 1 FROM public."OrganizationCapability" c
+    WHERE c."organizationId"=p_organization_id
+      AND c.capability='ISSUE_CREDENTIALS' AND c.status='APPROVED');
+$;
+REVOKE ALL ON FUNCTION public.verity_has_approved_credential_issuer(text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.verity_has_approved_credential_issuer(text) TO authenticated;
 
 ALTER TABLE public."StudentRosterImport"
   DROP CONSTRAINT IF EXISTS "StudentRosterImport_status_check";
@@ -24,12 +35,12 @@ CREATE POLICY verity_student_import_submit_for_approval
     AND EXISTS (
       SELECT 1 FROM public."Organization" o
       WHERE o.id="StudentRosterImport"."organizationId"
-        AND o.type='INSTITUTION' AND o.status='APPROVED'
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id)
         AND (
           o."ownerId"=(SELECT auth.uid())::text
           OR EXISTS (
             SELECT 1 FROM public."InstitutionICTStaff" i
-            WHERE i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
+            WHERE o.type='INSTITUTION' AND i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
               AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
           )
         )
@@ -45,12 +56,12 @@ CREATE POLICY verity_student_import_submit_for_approval
     AND EXISTS (
       SELECT 1 FROM public."Organization" o
       WHERE o.id="StudentRosterImport"."organizationId"
-        AND o.type='INSTITUTION' AND o.status='APPROVED'
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id)
         AND (
           o."ownerId"=(SELECT auth.uid())::text
           OR EXISTS (
             SELECT 1 FROM public."InstitutionICTStaff" i
-            WHERE i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
+            WHERE o.type='INSTITUTION' AND i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
               AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
           )
         )
@@ -64,7 +75,8 @@ CREATE POLICY verity_student_import_owner_approval
     AND EXISTS (
       SELECT 1 FROM public."Organization" o
       WHERE o.id="StudentRosterImport"."organizationId"
-        AND o.type='INSTITUTION' AND o."ownerId"=(SELECT auth.uid())::text
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id)
+        AND o."ownerId"=(SELECT auth.uid())::text
     )
   )
   WITH CHECK (
@@ -77,7 +89,8 @@ CREATE POLICY verity_student_import_owner_approval
     AND EXISTS (
       SELECT 1 FROM public."Organization" o
       WHERE o.id="StudentRosterImport"."organizationId"
-        AND o.type='INSTITUTION' AND o."ownerId"=(SELECT auth.uid())::text
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id)
+        AND o."ownerId"=(SELECT auth.uid())::text
     )
   );
 
@@ -137,7 +150,7 @@ CREATE POLICY verity_student_import_owner_rejection
   USING (
     status='AWAITING_APPROVAL'
     AND EXISTS (SELECT 1 FROM public."Organization" o
-      WHERE o.id="StudentRosterImport"."organizationId" AND o.type='INSTITUTION'
+      WHERE o.id="StudentRosterImport"."organizationId" AND o.type IN ('INSTITUTION','EMPLOYER')
         AND o."ownerId"=(SELECT auth.uid())::text)
   )
   WITH CHECK (
@@ -148,7 +161,7 @@ CREATE POLICY verity_student_import_owner_rejection
     AND "approvedBy" IS NULL AND "approvedAt" IS NULL
     AND "submittedAt" IS NOT NULL
     AND EXISTS (SELECT 1 FROM public."Organization" o
-      WHERE o.id="StudentRosterImport"."organizationId" AND o.type='INSTITUTION'
+      WHERE o.id="StudentRosterImport"."organizationId" AND o.type IN ('INSTITUTION','EMPLOYER')
         AND o."ownerId"=(SELECT auth.uid())::text)
   );
 
@@ -189,10 +202,10 @@ CREATE POLICY verity_roster_correction_submit
   WITH CHECK (
     "requestedBy"=(SELECT auth.uid())::text AND status='PENDING'
     AND "reviewedBy" IS NULL AND "reviewedAt" IS NULL
-    AND EXISTS (SELECT 1 FROM public."Organization" o WHERE o.id="organizationId" AND o.type='INSTITUTION'
-      AND o.status='APPROVED' AND (
+    AND EXISTS (SELECT 1 FROM public."Organization" o WHERE o.id="organizationId" AND o.type IN ('INSTITUTION','EMPLOYER')
+      AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id) AND (
         o."ownerId"=(SELECT auth.uid())::text
-        OR EXISTS (SELECT 1 FROM public."InstitutionICTStaff" i WHERE i."organizationId"=o.id
+        OR EXISTS (SELECT 1 FROM public."InstitutionICTStaff" i WHERE o.type='INSTITUTION' AND i."organizationId"=o.id
           AND i."userId"=(SELECT auth.uid())::text AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
         )
       ))
@@ -302,10 +315,10 @@ CREATE POLICY verity_credential_correction_submit
   WITH CHECK (
     "requestedBy"=(SELECT auth.uid())::text AND status='PENDING'
     AND "reviewedBy" IS NULL AND "reviewedAt" IS NULL
-    AND EXISTS (SELECT 1 FROM public."Organization" o WHERE o.id="organizationId" AND o.type='INSTITUTION'
-      AND o.status='APPROVED' AND (
+    AND EXISTS (SELECT 1 FROM public."Organization" o WHERE o.id="organizationId" AND o.type IN ('INSTITUTION','EMPLOYER')
+      AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id) AND (
         o."ownerId"=(SELECT auth.uid())::text
-        OR EXISTS (SELECT 1 FROM public."InstitutionICTStaff" i WHERE i."organizationId"=o.id
+        OR EXISTS (SELECT 1 FROM public."InstitutionICTStaff" i WHERE o.type='INSTITUTION' AND i."organizationId"=o.id
           AND i."userId"=(SELECT auth.uid())::text AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
         )
       ))
