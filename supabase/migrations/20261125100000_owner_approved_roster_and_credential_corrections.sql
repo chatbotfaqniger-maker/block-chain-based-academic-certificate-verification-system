@@ -7,8 +7,17 @@ RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
 AS 'SELECT EXISTS (
   SELECT 1 FROM public."OrganizationCapability" c
+  JOIN public."Organization" o ON o.id=c."organizationId"
   WHERE c."organizationId"=p_organization_id
     AND c.capability=''ISSUE_CREDENTIALS'' AND c.status=''APPROVED''
+    AND (
+      o."ownerId"=auth.uid()::text
+      OR (o.type=''INSTITUTION'' AND EXISTS (
+        SELECT 1 FROM public."InstitutionICTStaff" i
+        WHERE i."organizationId"=o.id AND i."userId"=auth.uid()::text
+          AND i.status=''ACTIVE'' AND ''roster:manage''=ANY(i.permissions)
+      ))
+    )
 );';
 REVOKE ALL ON FUNCTION public.verity_has_approved_credential_issuer(text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.verity_has_approved_credential_issuer(text) TO authenticated;
