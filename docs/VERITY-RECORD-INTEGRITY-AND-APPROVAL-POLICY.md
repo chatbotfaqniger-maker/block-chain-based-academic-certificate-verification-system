@@ -80,7 +80,7 @@ Each clip must be at least **5 seconds**. Target 6–9 seconds per clip. Use act
 | Clip | Minimum duration | Screen / action | Narration / on-screen lesson |
 |---|---:|---|---|
 | 01 | 6 sec | Open Institution workspace and Student Directory | “VERITY keeps institutional student records separate from issued certificates.” |
-| 02 | 7 sec | Open CSV template download | “Start with the official template and use accurate institutional records.” |
+| 02 | 7 sec | Download the CSV or XLSX template | “Start with the official template and use accurate institutional records.” |
 | 03 | 8 sec | Select CSV or native XLSX and show the one-sheet validation preview | “VERITY checks CSV/XLSX fields, formats and duplicate student numbers before staging.” |
 | 04 | 7 sec | Show staged import batch and row summary | “Uploading only stages the batch. It does not commit or link students.” |
 | 05 | 7 sec | Sign in as ICT and submit batch for approval | “ICT submits the completed batch to the Institution Owner; organization owners submit through their own account.” |
