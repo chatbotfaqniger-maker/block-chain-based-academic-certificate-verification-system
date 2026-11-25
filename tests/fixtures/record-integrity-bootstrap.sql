@@ -15,6 +15,15 @@ CREATE TABLE public."Certificate" (
   "certificateId" text NOT NULL UNIQUE,
   digest text NOT NULL,
   "organizationId" text NOT NULL REFERENCES public."Organization"(id),
+  "studentName" text,
+  "studentNumber" text,
+  institution text,
+  faculty text,
+  department text,
+  programme text,
+  qualification text,
+  classification text,
+  "awardDate" date,
   status text NOT NULL CHECK (status IN ('ACTIVE','REVOKED'))
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."AuditEvent", public."Certificate" TO service_role, authenticated;
