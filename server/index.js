@@ -690,6 +690,10 @@ const rosterDraftRowSchema=z.object({
 
 app.get("/api/organization/students/import-drafts",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
+ const {error:purgeError}=await q.supabase.from("StudentRosterImportDraft").delete()
+  .eq("organizationId",org.id).eq("createdBy",q.user.id).eq("status","DRAFT")
+  .lt("expiresAt",new Date().toISOString());
+ if(purgeError)throw purgeError;
  const {data,error}=await q.supabase.from("StudentRosterImportDraft")
   .select("id,fileName,totalRows,totalChunks,revision,status,createdAt,updatedAt,expiresAt")
   .eq("organizationId",org.id).eq("createdBy",q.user.id).eq("status","DRAFT")
