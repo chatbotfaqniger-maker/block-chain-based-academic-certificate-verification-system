@@ -130,6 +130,8 @@ CREATE TRIGGER verity_guard_student_roster_import
   FOR EACH ROW EXECUTE FUNCTION public.verity_guard_student_roster_import();
 REVOKE ALL ON FUNCTION public.verity_guard_student_roster_import() FROM PUBLIC,anon,authenticated,service_role;
 
+GRANT UPDATE ON public."StudentRosterImport" TO authenticated;
+
 CREATE POLICY verity_student_import_owner_rejection
   ON public."StudentRosterImport" FOR UPDATE TO authenticated
   USING (
