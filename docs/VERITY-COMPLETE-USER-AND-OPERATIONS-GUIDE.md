@@ -801,7 +801,7 @@ If an issued credential contains an error:
 2. Provide the proposed corrected values and a clear reason.
 3. The Institution Owner approves or rejects the request.
 4. Approval authorizes a **new certificate issuance** through the normal issuance workflow. The new credential receives a new certificate ID, verification key, issuance timestamp and fingerprint.
-5. The original certificate remains unchanged. If it should no longer be relied upon, revoke it separately with a meaningful reason. Its historical record and verification outcome remain auditable.
+5. The original certificate remains unchanged. Revoke it separately with a meaningful reason before linking the replacement. Its historical record and verification outcome remain auditable.
 
 Approval does not automatically edit, revoke or replace the original credential.
 
