@@ -722,7 +722,7 @@ Approved institution owners and active ICT staff with the `roster:manage` permis
 2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional where supported by the selected issuer workflow.
 3. Select the CSV or native XLSX file. VERITY parses it and opens the in-app **Spreadsheet editor** before staging.
 4. Edit cells, add/duplicate/remove rows, search the draft, and use Undo/Redo as needed. Required fields, duplicate student numbers, email addresses and award dates are revalidated after edits. Invalid rows are highlighted and excluded from staging.
-5. Export the corrected draft to CSV or Excel if you need a separate copy. The editor draft exists only in the current page session; leaving or refreshing the page clears it. The original file on your device is not modified.
+5. Export the corrected draft to CSV or Excel if you need a separate copy. VERITY automatically saves the draft privately to Supabase in 100-row chunks. You can leave the page and resume it later from **Saved spreadsheet drafts** using the same account. Drafts expire 30 days after the last save. The original file on your device is not modified.
 6. Submit the valid rows for owner approval. VERITY stages them in durable 100-row chunks; staging does not yet add or link any roster records. The batch becomes **Awaiting approval**.
 7. The issuer owner reviews the manifest and explicitly approves or rejects the batch. Institution ICT cannot approve its own upload.
 8. Only after approval does the batch enter the worker queue. Review Import history for queued, processing, completed or partial outcomes.
@@ -777,7 +777,7 @@ Approved institution owners can generate a private PDF preview from a saved desi
 
 1. Authorized ICT or the Institution/Organization Owner downloads the CSV or XLSX template, or uploads a supported native `.xlsx` workbook with one visible worksheet.
 2. VERITY validates required columns, student numbers, dates and duplicate rows. For `.xlsx`, formula cells are rejected and student-number cells must be formatted as Text to preserve leading zeroes.
-3. Before staging, the in-app Spreadsheet editor allows the uploader to edit cells, add/duplicate/remove rows, search, undo/redo and export the corrected CSV/XLSX. Validation reruns after edits; invalid rows are highlighted and excluded from the staged payload. This draft is held in the current page session, so export a copy before leaving if it must be retained.
+3. Before staging, the in-app Spreadsheet editor allows the uploader to edit cells, add/duplicate/remove rows, search, undo/redo and export the corrected CSV/XLSX. Validation reruns after edits; invalid rows are highlighted and excluded from the staged payload. Draft changes autosave to a private Supabase draft owned by the uploader, in 100-row chunks. The uploader can resume the draft from the Saved spreadsheet drafts list for 30 days after the last save. Successful submission deletes the draft chunks after the import batch has been staged.
 4. The uploader submits the valid rows for Institution Owner approval. The batch status becomes **Awaiting approval**.
 5. **No student records are inserted or linked to accounts before approval.** Uploading or submitting is not approval.
 6. The Institution Owner reviews the batch details and selects **Approve import**. ICT officers cannot approve their own upload.
