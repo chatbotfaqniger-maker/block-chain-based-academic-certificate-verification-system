@@ -96,3 +96,12 @@ The guide contains 15 individually navigable clips, each exactly **8 seconds** (
 | 15 | 8 sec | Verify original and replacement; show original revoked/superseded history if applicable | “Link the newly issued replacement only after revoking the original. Both certificates remain verifiable in the audit history.” |
 
 **Video production rules:** Every clip must show a real workflow state. Do not show a successful import before owner approval, do not show an Edit control on an issued certificate, and do not imply that approving a correction silently changes or automatically replaces the original credential. Keep the clips separate and individually navigable in the User Guide module.
+
+## 2A. In-app CSV / Excel spreadsheet editor (pre-approval)
+- After parsing and validation, the uploader receives an in-app draft grid before any batch is submitted.
+- Authorized uploaders can edit all imported roster fields, add rows, duplicate rows, remove rows, search, undo/redo and export the corrected draft to CSV or XLSX.
+- The source file remains unchanged and is retained by the uploader's local session; the corrected draft is a separate in-memory working copy until staged. The final row payload and validation summary are sent to the existing import-batch staging API.
+- Every edit triggers client-side validation for required academic fields, duplicate student numbers, email format and award-date format. Invalid rows are visibly marked and excluded from staging until corrected or removed.
+- The editor is paginated (50 rows per view) to avoid rendering up to 50,000 rows at once.
+- Once submitted, the batch is locked by the existing server workflow. ICT cannot edit a submitted batch or approve it. A rejected batch must be corrected in a fresh import draft and resubmitted.
+- This editor changes only staged roster data. It does not provide editing access to existing roster records or any issued certificate.
