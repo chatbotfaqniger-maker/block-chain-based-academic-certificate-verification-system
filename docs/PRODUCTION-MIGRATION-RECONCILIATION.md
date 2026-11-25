@@ -120,3 +120,29 @@ They remain feature-branch-only. Production migration execution remains blocked 
 ### Next safe action
 
 Obtain the original migration files from the Supabase project history/export or the original source backups/branches. If the exact SQL cannot be recovered, establish and document a verified baseline snapshot through a controlled, reviewed process; do not invent historical migration files or use migration repair to silence discrepancies. Then validate clean bootstrap in CI against that baseline.
+
+
+## 25 November 2026 — exact ledger-to-file reconciliation (supersedes earlier derived counts)
+
+A second read-only comparison was performed against the live Supabase CLI migration list and every SQL file in `supabase/migrations` on `feat/immutable-credentials-and-owner-approved-roster`. The complete machine-readable comparison, including every applied version, source filename, source blob SHA and classification, is recorded in [production-migration-ledger-2026-11-25.json](production-migration-ledger-2026-11-25.json).
+
+The current comparison is:
+
+- **67** applied Supabase CLI migration ledger entries.
+- **34** SQL files in the reviewed feature branch.
+- **15** ledger entries have exact 14-digit filename-version matches.
+- **16** ledger entries have a normalized migration-name match but a different version prefix. These are version-drift/alias records, not proof that the source SQL is identical to what was executed.
+- **36** applied ledger entries have no normalized source filename match in this branch.
+- **6** repository SQL files have no corresponding applied ledger name: `20261122195500_allow_ict_recovery_token_reissue.sql`, `20261122202000_secure_ict_roster_claimant_lookup.sql`, `20261122202500_drop_ambiguous_student_roster_lookup.sql`, `20261124110000_institution_certificate_design_and_digitization.sql`, and the two PR #20 files dated 25 November.
+
+The earlier **43 unmatched** figure was derived from the 24 November ledger count of 59 and a simple version-prefix comparison. It is historical, not the current exact comparison. The new 36/16/15 breakdown distinguishes missing source names from version drift. Several migration names are duplicated/aliased in the live ledger, including staff-document metadata, roster import, bulk issuance and certificate-ledger hardening. These must be reconciled against original SQL and hashes before any bootstrap ordering is approved.
+
+The Supabase Storage internal `storage.migrations` table is a separate service ledger (81 rows in the catalog response) and is not the 67-entry Supabase CLI migration list. Do not mix those counts.
+
+### Consequences
+
+1. Do not rename existing migration files to match the live ledger based on name similarity alone.
+2. Do not copy one SQL file into multiple timestamped migration versions or infer that an alias is a harmless no-op.
+3. Do not apply the six repository-only migrations to production or to an isolated baseline until each is classified against the live schema and release intent.
+4. Continue source recovery and schema export. The JSON manifest is an inventory, not a bootstrap snapshot and not authorization to replay any migration.
+5. The two PR #20 migrations remain unapplied in production. No production DDL, migration repair, merge or deployment was performed during this comparison.
