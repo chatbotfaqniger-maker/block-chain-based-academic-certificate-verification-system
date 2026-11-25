@@ -85,7 +85,7 @@ CREATE POLICY verity_student_import_owner_approval
 -- Freeze the import manifest and enforce the two human-controlled state changes.
 CREATE OR REPLACE FUNCTION public.verity_guard_student_roster_import()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=''
-AS $
+AS $$
 DECLARE v_role text := coalesce(current_setting('request.jwt.claim.role',true),'');
 BEGIN
   IF TG_OP='DELETE' THEN
@@ -93,7 +93,7 @@ BEGIN
   END IF;
   IF (to_jsonb(NEW) - ARRAY['status','submittedAt','approvedBy','approvedAt','rejectedBy','rejectedAt','rejectionReason','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt'])
      IS DISTINCT FROM
-     (to_jsonb(OLD) - ARRAY['status','submittedAt','approvedBy','approvedAt','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt']) THEN
+     (to_jsonb(OLD) - ARRAY['status','submittedAt','approvedBy','approvedAt','rejectedBy','rejectedAt','rejectionReason','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt']) THEN
     RAISE EXCEPTION 'Student roster import manifest fields are immutable after staging';
   END IF;
   IF v_role <> 'service_role' THEN
@@ -123,7 +123,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 DROP TRIGGER IF EXISTS verity_guard_student_roster_import ON public."StudentRosterImport";
 CREATE TRIGGER verity_guard_student_roster_import
   BEFORE UPDATE OR DELETE ON public."StudentRosterImport"
@@ -351,7 +351,7 @@ CREATE OR REPLACE FUNCTION public.verity_link_credential_replacement(
   p_request_id text, p_replacement_certificate_row_id text
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
-AS $
+AS $$
 DECLARE
   v_request public."CredentialCorrectionRequest"%ROWTYPE;
   v_org public."Organization"%ROWTYPE;
@@ -391,7 +391,7 @@ BEGIN
   RETURN jsonb_build_object('status','REISSUED','originalCertificateUnchanged',true,
     'originalCertificateStatus','REVOKED','replacementCertificateId',v_replacement."certificateId");
 END;
-$;
+$$;
 REVOKE ALL ON FUNCTION public.verity_link_credential_replacement(text,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.verity_link_credential_replacement(text,text) TO authenticated;
 
