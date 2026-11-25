@@ -31,3 +31,11 @@ CREATE POLICY record_integrity_certificate_read
         AND i."userId"=(SELECT auth.uid())::text AND i.status='ACTIVE'
         AND 'roster:manage'=ANY(i.permissions))
   );
+
+CREATE TABLE public."OrganizationCapability" (
+  id text PRIMARY KEY,
+  "organizationId" text NOT NULL REFERENCES public."Organization"(id),
+  capability text NOT NULL,
+  status text NOT NULL
+);
+GRANT SELECT ON public."OrganizationCapability" TO authenticated,service_role;
