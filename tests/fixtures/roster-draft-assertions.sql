@@ -1,14 +1,14 @@
 -- Verify uploader-owned, resumable draft persistence and isolation.
 -- Isolated uploader and issuer fixtures for the draft test.
 INSERT INTO public."User"(id,"fullName",email,role) VALUES
- ('30000000-0000-4000-8000-000000000003','Draft ICT Officer','draft-ict@verity.test','GRADUATE'),
- ('40000000-0000-4000-8000-000000000004','Draft Institution Owner','draft-owner@verity.test','EMPLOYER');
+ ('60000000-0000-4000-8000-000000000006','Draft ICT Officer','draft-ict@verity.test','GRADUATE'),
+ ('70000000-0000-4000-8000-000000000007','Draft Institution Owner','draft-owner@verity.test','EMPLOYER');
 INSERT INTO public."Organization"(id,name,type,status,"ownerId")
-VALUES ('org-draft','Draft Test Institution','INSTITUTION','APPROVED','40000000-0000-4000-8000-000000000004');
+VALUES ('org-draft','Draft Test Institution','INSTITUTION','APPROVED','70000000-0000-4000-8000-000000000007');
 INSERT INTO public."OrganizationCapability"(id,"organizationId",capability,status)
 VALUES ('cap-draft','org-draft','ISSUE_CREDENTIALS','APPROVED');
 INSERT INTO public."InstitutionICTStaff"(id,"organizationId","userId",permissions,status)
-VALUES ('ict-draft','org-draft','30000000-0000-4000-8000-000000000003',ARRAY['roster:manage'],'ACTIVE');
+VALUES ('ict-draft','org-draft','60000000-0000-4000-8000-000000000006',ARRAY['roster:manage'],'ACTIVE');
 
 DO $$
 BEGIN
@@ -29,21 +29,21 @@ BEGIN
  END IF;
 END $$;
 
-SET request.jwt.claim.sub='30000000-0000-4000-8000-000000000003';
+SET request.jwt.claim.sub='60000000-0000-4000-8000-000000000006';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
 INSERT INTO public."StudentRosterImportDraft"(
  id,"organizationId","createdBy","fileName","totalRows","totalChunks",status
 ) VALUES (
  '50000000-0000-4000-8000-000000000005','org-draft',
- '30000000-0000-4000-8000-000000000003','semester-roster.xlsx',2,1,'DRAFT'
+ '60000000-0000-4000-8000-000000000006','semester-roster.xlsx',2,1,'DRAFT'
 );
 INSERT INTO public."StudentRosterImportDraftChunk"(
  "draftId","organizationId","chunkIndex",rows,"contentHash","updatedBy"
 ) VALUES (
  '50000000-0000-4000-8000-000000000005','org-draft',0,
  '[{"rowNumber":2,"studentNumber":"CS/002","fullName":"Grace Example","email":"grace@example.test","faculty":"Science","department":"Computer Science","programme":"Computer Science","qualification":"BSc","classification":"","awardDate":null,"academicSession":"2025/2026"},{"rowNumber":3,"studentNumber":"CS/003","fullName":"Alan Example","email":"","faculty":"Science","department":"Computer Science","programme":"Computer Science","qualification":"BSc","classification":"","awardDate":null,"academicSession":"2025/2026"}]'::jsonb,
- repeat('a',64),'30000000-0000-4000-8000-000000000003'
+ repeat('a',64),'60000000-0000-4000-8000-000000000006'
 );
 DO $$
 BEGIN
@@ -59,7 +59,7 @@ END $$;
 RESET ROLE;
 
 -- Another authorized issuer user cannot read or edit the uploader's draft.
-SET request.jwt.claim.sub='40000000-0000-4000-8000-000000000004';
+SET request.jwt.claim.sub='70000000-0000-4000-8000-000000000007';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
 DO $$
@@ -80,7 +80,7 @@ BEGIN
 END $$;
 
 -- Uploader can discard a draft; chunk data is removed by FK cascade.
-SET request.jwt.claim.sub='30000000-0000-4000-8000-000000000003';
+SET request.jwt.claim.sub='60000000-0000-4000-8000-000000000006';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
 DELETE FROM public."StudentRosterImportDraft"
