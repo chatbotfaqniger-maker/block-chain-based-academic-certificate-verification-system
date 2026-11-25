@@ -618,6 +618,17 @@ app.post("/api/organization/credentials/:id/correction-requests",auth,run(async(
  s.status(201).json({request,originalCertificateUnchanged:true,message:"Request recorded separately. The issued certificate has not been changed."});
 }));
 
+
+app.post("/api/organization/credentials/correction-requests/:id/link-replacement",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const body=z.object({replacementCertificateRowId:z.string().min(1).max(100)}).parse(q.body);
+ const {data,error}=await q.supabase.rpc("verity_link_credential_replacement",{
+  p_request_id:q.params.id,p_replacement_certificate_row_id:body.replacementCertificateRowId
+ });
+ if(error)throw error;
+ s.json({result:data});
+}));
+
 app.post("/api/organization/credentials/correction-requests/:id/decision",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const body=z.object({decision:z.enum(["APPROVED","REJECTED"]),note:z.string().trim().max(1000).optional().default("")}).parse(q.body);
