@@ -42,10 +42,10 @@ A credential correction request is separate from a Student Directory correction 
 3. The Institution Owner approves or rejects the request.
 4. Approval authorizes a separate replacement issuance; it does not update the original certificate.
 5. The replacement must be issued through the existing issuance process and receives a new certificate row, certificate ID, verification key, issuance timestamp and digest.
-6. The original remains unchanged. Where the institution determines it should no longer be relied upon, it is separately revoked with a meaningful reason and remains visible as a revoked historical credential.
+6. The original remains unchanged. Before linking the replacement, the institution must separately revoke the original with a meaningful reason. It remains visible as a revoked historical credential.
 7. The relationship between the correction request, original credential and replacement credential must be retained in the audit trail.
 
-A correction approval alone does not issue a replacement and does not revoke the original automatically.
+A correction approval alone does not issue a replacement or revoke the original. The owner must issue the replacement through the normal issuance flow, revoke the original with a reason, and then link the two records.
 
 ## 5. Security boundaries
 
