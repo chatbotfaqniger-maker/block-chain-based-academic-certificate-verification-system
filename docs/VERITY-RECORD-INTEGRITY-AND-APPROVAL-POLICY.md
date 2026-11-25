@@ -75,7 +75,7 @@ This feature branch is not production-active until all of the following are comp
 
 ## 7. User Guide video — 15-clip storyboard
 
-Each clip must be at least **5 seconds**. Target 6–9 seconds per clip. Use actual VERITY screens, the navy/teal visual identity, readable captions and no fabricated approval states.
+The guide contains 15 individually navigable clips, each exactly **8 seconds** (2 minutes total). The Admin-only MP4 download renders the same 15 clips in one video file. Use actual VERITY screens, the navy/teal visual identity, readable captions and no fabricated approval states.
 
 | Clip | Minimum duration | Screen / action | Narration / on-screen lesson |
 |---|---:|---|---|
