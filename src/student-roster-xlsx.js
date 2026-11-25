@@ -7,7 +7,7 @@ export async function parseXlsxRoster(file){
  if(sheets.length!==1)throw Error("Use exactly one visible, non-empty worksheet per import workbook.");
  const sheet=sheets[0];
  if(sheet.rowCount>50001)throw Error("A single import is limited to 50,000 student rows.");
- const headers=sheet.getRow(1).values.slice(1).map(value=>String(value??"").trim().toLowerCase().replace(/[\\s-]+/g,"_"));
+ const headers=sheet.getRow(1).values.slice(1).map(value=>String(value??"").trim().toLowerCase().replace(/[\s-]+/g,"_"));
  while(headers.length&&!headers[headers.length-1])headers.pop();
  if(!headers.length||headers.some(header=>!header))throw Error("The first worksheet row must contain non-empty column headers.");
  if(new Set(headers).size!==headers.length)throw Error("The workbook contains duplicate column headers.");
