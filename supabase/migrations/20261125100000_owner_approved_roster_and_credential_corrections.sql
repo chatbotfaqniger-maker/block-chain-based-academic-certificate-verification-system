@@ -22,6 +22,18 @@ AS 'SELECT EXISTS (
 REVOKE ALL ON FUNCTION public.verity_has_approved_credential_issuer(text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.verity_has_approved_credential_issuer(text) TO authenticated;
 
+ALTER TABLE public."StudentRosterImport"
+  DROP CONSTRAINT IF EXISTS "StudentRosterImport_status_check";
+ALTER TABLE public."StudentRosterImport"
+  ADD CONSTRAINT "StudentRosterImport_status_check"
+  CHECK (status IN ('UPLOADING','AWAITING_APPROVAL','QUEUED','PROCESSING','COMPLETED','PARTIAL','FAILED','REJECTED')),
+  ADD COLUMN IF NOT EXISTS "submittedAt" timestamptz,
+  ADD COLUMN IF NOT EXISTS "approvedBy" text REFERENCES public."User"("id"),
+  ADD COLUMN IF NOT EXISTS "approvedAt" timestamptz,
+  ADD COLUMN IF NOT EXISTS "rejectedBy" text REFERENCES public."User"("id"),
+  ADD COLUMN IF NOT EXISTS "rejectedAt" timestamptz,
+  ADD COLUMN IF NOT EXISTS "rejectionReason" text;
+
 -- Extend the durable chunk queue to approved employer/organization issuers while
 -- keeping ICT roster permissions institution-only.
 DROP POLICY IF EXISTS verity_student_import_chunk_roster_read ON public."StudentImportChunk";
@@ -105,17 +117,6 @@ CREATE POLICY "Institution owners and ICT create roster import audit"
     )
   );
 
-ALTER TABLE public."StudentRosterImport"
-  DROP CONSTRAINT IF EXISTS "StudentRosterImport_status_check";
-ALTER TABLE public."StudentRosterImport"
-  ADD CONSTRAINT "StudentRosterImport_status_check"
-  CHECK (status IN ('UPLOADING','AWAITING_APPROVAL','QUEUED','PROCESSING','COMPLETED','PARTIAL','FAILED','REJECTED')),
-  ADD COLUMN IF NOT EXISTS "submittedAt" timestamptz,
-  ADD COLUMN IF NOT EXISTS "approvedBy" text REFERENCES public."User"("id"),
-  ADD COLUMN IF NOT EXISTS "approvedAt" timestamptz,
-  ADD COLUMN IF NOT EXISTS "rejectedBy" text REFERENCES public."User"("id"),
-  ADD COLUMN IF NOT EXISTS "rejectedAt" timestamptz,
-  ADD COLUMN IF NOT EXISTS "rejectionReason" text;
 
 -- Replace the old one-step UPLOADING -> QUEUED transition with two distinct
 -- transitions: uploader submits for review; only the institution owner queues it.
