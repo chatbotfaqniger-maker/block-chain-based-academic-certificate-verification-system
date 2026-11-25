@@ -766,8 +766,8 @@ app.put("/api/organization/students/import-drafts/:id/chunks/:chunkIndex",auth,r
  if(chunkIndex>=draft.totalChunks||expectedRows!==body.rows.length)return s.status(400).json({error:"Draft chunk row count does not match its manifest."});
  const normalized=body.rows.map(row=>({...row,studentNumber:row.studentNumber.trim(),fullName:row.fullName.trim(),email:(row.email||"").trim().toLowerCase(),faculty:row.faculty.trim(),department:row.department.trim(),programme:row.programme.trim(),qualification:row.qualification.trim(),classification:row.classification||"",awardDate:row.awardDate||null,academicSession:row.academicSession||""}));
  for(const row of normalized){
-  if(row.awardDate){const d=new Date(row.awardDate+"T00:00:00.000Z");if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(row.awardDate)||Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==row.awardDate)return s.status(400).json({error:"Draft award dates must be real dates in YYYY-MM-DD format."});}
-  if(row.email&&(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(row.email)||row.email.length>254))return s.status(400).json({error:"One or more draft email addresses are invalid."});
+  if(row.awardDate){const d=new Date(row.awardDate+"T00:00:00.000Z");if(!/^\d{4}-\d{2}-\d{2}$/.test(row.awardDate)||Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==row.awardDate)return s.status(400).json({error:"Draft award dates must be real dates in YYYY-MM-DD format."});}
+  if(row.email&&(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)||row.email.length>254))return s.status(400).json({error:"One or more draft email addresses are invalid."});
  }
  const contentHash=digest(JSON.stringify(normalized));
  const {error}=await q.supabase.from("StudentRosterImportDraftChunk").upsert({
