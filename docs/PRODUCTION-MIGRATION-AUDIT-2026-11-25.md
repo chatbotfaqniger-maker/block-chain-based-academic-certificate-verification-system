@@ -67,3 +67,10 @@ A follow-up read-only comparison enumerated all 67 entries returned by the Supab
 A name match does not prove that the file bytes equal the SQL executed in production. The live ledger contains duplicate/aliased names for staff-document metadata, roster import, bulk issuance and certificate-ledger hardening. The exact per-entry comparison and Git blob SHAs are captured in [production-migration-ledger-2026-11-25.json](production-migration-ledger-2026-11-25.json). This manifest is an inventory only; it is not a verified schema baseline and must not be used to replay migrations.
 
 The separate internal `storage.migrations` table reported 81 rows; it is not the Supabase CLI migration ledger and must not be conflated with the 67 applied project migration entries. No production SQL, migration repair, reset, merge or deployment was performed.
+
+
+## 25 November 2026 follow-up — read-only catalog snapshot
+
+Captured [production-schema-catalog-2026-11-25.json](production-schema-catalog-2026-11-25.json) from read-only PostgreSQL catalog queries. The snapshot contains metadata only (no application row data or function source bodies): 27 public base tables, 185 constraints, 103 indexes, 64 public RLS policies, 28 public functions/procedures, 9 non-internal public triggers, 2 public enums, 5 extensions, 452 table-grant rows, 69 routine-grant rows, 3 Storage buckets, 7 Storage policies, zero public views/materialized views and one public sequence.
+
+This is not a complete `pg_dump` or a clean-bootstrap artifact. It excludes Auth internals, managed Storage internals, function source bodies and data. It can support a later schema comparison, but cannot reconstruct the historical migration chain. A clean bootstrap remains blocked pending original SQL recovery or a separately reviewed complete baseline export. No development branch was created and no production schema or data was changed.
