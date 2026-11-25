@@ -18,6 +18,7 @@ const scenes = [
   { kicker:"13 / CREDENTIAL CORRECTION", title:"A correction is a new issuance.", copy:"A separate request is reviewed. Approval authorizes a new issuance; it never edits the original certificate.", label:"PRESERVE ORIGINAL · ISSUE REPLACEMENT" },
   { kicker:"VERITY · COMPLETE", title:"Preserve the original. Verify the replacement.", copy:"Revoke the original with a reason, issue a new credential and verify both records through their audit history.", label:"ORIGINAL PRESERVED · NEW CERTIFICATE ID · AUDITABLE HISTORY" }
 ];
+if (scenes.length !== 15) throw new Error("VERITY User Guide must contain exactly 15 navigable clips.");
 
 function MiniMetric({label,value}) { return <div className="film-metric"><small>{label}</small><b>{value}</b></div>; }
 function masked(value) {
