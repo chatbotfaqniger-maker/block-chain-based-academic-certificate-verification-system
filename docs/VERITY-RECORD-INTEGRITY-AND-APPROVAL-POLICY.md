@@ -13,9 +13,9 @@ A Student Directory correction must never cascade into an issued certificate. Ce
 
 ## 2. CSV / Excel import approval
 
-1. Authorized Institution ICT or the Institution Owner uploads a supported roster file.
+1. Authorized Institution ICT or the Institution Owner uploads a supported `.csv` or native `.xlsx` roster file. XLSX workbooks must contain exactly one visible, non-empty worksheet; legacy `.xls` and macro-enabled `.xlsm` files are not accepted.
 2. VERITY validates headers, required values, dates, duplicate student numbers and file limits.
-3. VERITY stages rows in durable, idempotent chunks. The batch remains `UPLOADING` while chunks are staged.
+3. VERITY validates the workbook headers and values, rejects formula cells and numeric student-number cells that could lose leading zeroes, then stages rows in durable, idempotent chunks. The batch remains `UPLOADING` while chunks are staged.
 4. The uploader submits the completed batch. The batch transitions to `AWAITING_APPROVAL`.
 5. At this point no roster rows are inserted and no student accounts are linked.
 6. The Institution Owner reviews the manifest, row totals, validation errors and batch history.
