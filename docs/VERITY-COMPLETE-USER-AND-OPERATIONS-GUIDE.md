@@ -819,4 +819,4 @@ ICT can submit the request but cannot approve it or link the replacement. The In
 
 ### Fifteen-clip video guide
 
-The User Guide video sequence must contain 15 separately navigable clips, each at least five seconds long. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.
+The User Guide video sequence contains 15 separately navigable clips, each eight seconds long (two minutes total). The Admin-only MP4 download renders those same 15 clips into one video file. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.
