@@ -89,8 +89,8 @@ END $$;
 -- Credential correction approval never changes the original certificate row.
 SET request.jwt.claim.role='service_role';
 SET ROLE service_role;
-INSERT INTO public."Certificate"(id,"certificateId",digest,"organizationId",status)
-VALUES ('cert-original','VRT-ORIGINAL',repeat('b',64),'org-integrity','ACTIVE');
+INSERT INTO public."Certificate"(id,"certificateId",digest,"organizationId","studentName",status)
+VALUES ('cert-original','VRT-ORIGINAL',repeat('b',64),'org-integrity','Ada Example','ACTIVE');
 RESET ROLE;
 
 SET request.jwt.claim.sub='10000000-0000-4000-8000-000000000001';
@@ -119,13 +119,22 @@ END $$;
 SET request.jwt.claim.role='service_role';
 SET ROLE service_role;
 UPDATE public."Certificate" SET status='REVOKED' WHERE id='cert-original';
-INSERT INTO public."Certificate"(id,"certificateId",digest,"organizationId",status)
-VALUES ('cert-replacement','VRT-REPLACEMENT',repeat('c',64),'org-integrity','ACTIVE');
+INSERT INTO public."Certificate"(id,"certificateId",digest,"organizationId","studentName",status)
+VALUES ('cert-wrong','VRT-WRONG',repeat('d',64),'org-integrity','Unrelated Student','ACTIVE'),
+       ('cert-replacement','VRT-REPLACEMENT',repeat('c',64),'org-integrity','Ada Corrected','ACTIVE');
 RESET ROLE;
 
 SET request.jwt.claim.sub='20000000-0000-4000-8000-000000000002';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
+DO $ BEGIN
+  BEGIN
+    PERFORM public.verity_link_credential_replacement('credential-correction','cert-wrong');
+    RAISE EXCEPTION 'An unrelated certificate must not be linked as the replacement';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='An unrelated certificate must not be linked as the replacement' THEN RAISE; END IF;
+  END;
+END $;
 SELECT public.verity_link_credential_replacement('credential-correction','cert-replacement');
 RESET ROLE;
 
