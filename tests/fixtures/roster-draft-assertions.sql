@@ -36,12 +36,12 @@ INSERT INTO public."StudentRosterImportDraft"(
  id,"organizationId","createdBy","fileName","totalRows","totalChunks",status
 ) VALUES (
  '50000000-0000-4000-8000-000000000005','org-draft',
- '10000000-0000-4000-8000-000000000001','semester-roster.xlsx',2,1,'DRAFT'
+ '30000000-0000-4000-8000-000000000003','semester-roster.xlsx',2,1,'DRAFT'
 );
 INSERT INTO public."StudentRosterImportDraftChunk"(
  "draftId","organizationId","chunkIndex",rows,"contentHash","updatedBy"
 ) VALUES (
- '30000000-0000-4000-8000-000000000001','org-integrity',0,
+ '50000000-0000-4000-8000-000000000005','org-draft',0,
  '[{"rowNumber":2,"studentNumber":"CS/002","fullName":"Grace Example","email":"grace@example.test","faculty":"Science","department":"Computer Science","programme":"Computer Science","qualification":"BSc","classification":"","awardDate":null,"academicSession":"2025/2026"},{"rowNumber":3,"studentNumber":"CS/003","fullName":"Alan Example","email":"","faculty":"Science","department":"Computer Science","programme":"Computer Science","qualification":"BSc","classification":"","awardDate":null,"academicSession":"2025/2026"}]'::jsonb,
  repeat('a',64),'10000000-0000-4000-8000-000000000001'
 );
