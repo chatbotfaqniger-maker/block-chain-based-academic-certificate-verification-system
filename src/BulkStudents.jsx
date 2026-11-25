@@ -40,7 +40,9 @@ function validateRosterRows(rows){
  rows.forEach((r,index)=>{
   const rowNumber=r.rowNumber??index+2;
   const required=["studentNumber","fullName","faculty","department","programme","qualification"];
-  if(required.some(k=>!String(r[k]??"").trim()))issues.push({rowNumber,message:"Required student or academic details are missing."});
+  if(required.some(k=>String(r[k]??"").trim().length<2))issues.push({rowNumber,message:"Required student or academic fields must contain at least 2 characters."});
+  const limits={studentNumber:80,fullName:160,email:254,faculty:160,department:160,programme:180,qualification:180,classification:100,academicSession:80};
+  for(const [field,limit] of Object.entries(limits))if(String(r[field]??"").length>limit)issues.push({rowNumber,message:field+" exceeds the maximum length of "+limit+" characters."});
   const key=String(r.studentNumber??"").trim().toUpperCase();
   if(key&&seen.has(key))issues.push({rowNumber,message:"Duplicate student or employee number within this file."});
   if(key)seen.add(key);
