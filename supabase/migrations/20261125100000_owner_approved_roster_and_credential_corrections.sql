@@ -131,7 +131,7 @@ BEGIN
         RAISE EXCEPTION 'Invalid roster import approval transition';
       END IF;
     ELSE
-      RAISE EXCEPTION 'Only the uploader submission and Institution Owner approval transitions are allowed';
+      RAISE EXCEPTION 'Only the uploader submission and approved issuer-owner decisions are allowed';
     END IF;
   END IF;
   RETURN NEW;
@@ -151,6 +151,7 @@ CREATE POLICY verity_student_import_owner_rejection
     status='AWAITING_APPROVAL'
     AND EXISTS (SELECT 1 FROM public."Organization" o
       WHERE o.id="StudentRosterImport"."organizationId" AND o.type IN ('INSTITUTION','EMPLOYER')
+        AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id)
         AND o."ownerId"=(SELECT auth.uid())::text)
   )
   WITH CHECK (
@@ -162,6 +163,7 @@ CREATE POLICY verity_student_import_owner_rejection
     AND "submittedAt" IS NOT NULL
     AND EXISTS (SELECT 1 FROM public."Organization" o
       WHERE o.id="StudentRosterImport"."organizationId" AND o.type IN ('INSTITUTION','EMPLOYER')
+        AND o.status='APPROVED' AND public.verity_has_approved_credential_issuer(o.id)
         AND o."ownerId"=(SELECT auth.uid())::text)
   );
 
