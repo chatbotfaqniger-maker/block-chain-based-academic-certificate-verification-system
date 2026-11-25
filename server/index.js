@@ -585,7 +585,7 @@ app.post("/api/organization/students/:id/correction-requests",auth,run(async(q,s
  if(rosterError)throw rosterError;
  if(!roster)return s.status(404).json({error:"Student record not found."});
  const originalRecord={...roster};
- const proposedRecord=Object.fromEntries(Object.entries(body.proposedRecord).map(([k,v])=>[k,typeof v==="string"?v.trim():v]));
+ const proposedRecord={...originalRecord,...Object.fromEntries(Object.entries(body.proposedRecord).map(([k,v])=>[k,typeof v==="string"?v.trim():v]))};
  const {data:request,error}=await q.supabase.from("StudentRosterCorrectionRequest").insert({
   id:crypto.randomUUID(),organizationId:org.id,rosterId:roster.id,requestedBy:q.user.id,originalRecord,proposedRecord,reason:body.reason,status:"PENDING"
  }).select("id,status,createdAt").single();
