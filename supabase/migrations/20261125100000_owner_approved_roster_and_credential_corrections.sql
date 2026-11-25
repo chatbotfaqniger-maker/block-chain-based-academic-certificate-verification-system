@@ -316,5 +316,54 @@ $$;
 REVOKE ALL ON FUNCTION public.verity_decide_credential_correction(text,text,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.verity_decide_credential_correction(text,text,text) TO authenticated;
 
+
+CREATE OR REPLACE FUNCTION public.verity_link_credential_replacement(
+  p_request_id text, p_replacement_certificate_row_id text
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $
+DECLARE
+  v_request public."CredentialCorrectionRequest"%ROWTYPE;
+  v_org public."Organization"%ROWTYPE;
+  v_original public."Certificate"%ROWTYPE;
+  v_replacement public."Certificate"%ROWTYPE;
+BEGIN
+  SELECT * INTO v_request FROM public."CredentialCorrectionRequest" WHERE id=p_request_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Credential correction request not found'; END IF;
+  SELECT * INTO v_org FROM public."Organization" WHERE id=v_request."organizationId";
+  IF v_org."ownerId" IS DISTINCT FROM auth.uid()::text THEN
+    RAISE EXCEPTION 'Only the Institution Owner can link a replacement credential';
+  END IF;
+  IF v_request.status <> 'APPROVED' THEN RAISE EXCEPTION 'Only an approved correction request can be completed'; END IF;
+  SELECT * INTO v_original FROM public."Certificate" WHERE id=v_request."certificateRowId";
+  SELECT * INTO v_replacement FROM public."Certificate" WHERE id=p_replacement_certificate_row_id;
+  IF v_original.id IS NULL OR v_original.digest IS DISTINCT FROM v_request."originalDigest"
+     OR v_original."certificateId" IS DISTINCT FROM v_request."certificateId" THEN
+    RAISE EXCEPTION 'The original issued certificate no longer matches the correction request';
+  END IF;
+  IF v_original.status::text <> 'REVOKED' THEN
+    RAISE EXCEPTION 'Revoke the original credential with a documented reason before linking its replacement';
+  END IF;
+  IF v_replacement.id IS NULL OR v_replacement."organizationId" IS DISTINCT FROM v_request."organizationId"
+     OR v_replacement.id=v_original.id OR v_replacement.digest=v_original.digest
+     OR v_replacement.status::text <> 'ACTIVE' THEN
+    RAISE EXCEPTION 'Replacement must be a distinct active credential issued by the same institution';
+  END IF;
+  UPDATE public."CredentialCorrectionRequest" SET status='REISSUED',
+    "replacementCertificateRowId"=v_replacement.id,"reissuedAt"=now()
+    WHERE id=v_request.id;
+  INSERT INTO public."AuditEvent"(id,"actorId",action,entity,"entityId",metadata,"createdAt")
+  VALUES(gen_random_uuid()::text,auth.uid()::text,'CREDENTIAL_CORRECTION_REISSUED',
+    'CredentialCorrectionRequest',v_request.id,
+    jsonb_build_object('organizationId',v_request."organizationId",'originalCertificateId',v_original."certificateId",
+      'replacementCertificateId',v_replacement."certificateId",'originalDigest',v_original.digest,
+      'replacementDigest',v_replacement.digest),now());
+  RETURN jsonb_build_object('status','REISSUED','originalCertificateUnchanged',true,
+    'originalCertificateStatus','REVOKED','replacementCertificateId',v_replacement."certificateId");
+END;
+$;
+REVOKE ALL ON FUNCTION public.verity_link_credential_replacement(text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.verity_link_credential_replacement(text,text) TO authenticated;
+
 -- No direct updates/deletes to either request queue. Decisions go through the
 -- narrowly scoped owner-only functions so review and audit are atomic.
