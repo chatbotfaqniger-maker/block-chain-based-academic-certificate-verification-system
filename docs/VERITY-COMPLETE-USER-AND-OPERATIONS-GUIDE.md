@@ -767,3 +767,44 @@ Scanning a QR code resolves the credential reference. VERITY then checks the iss
 
 ### PDF certificate preview (development rollout)
 Approved institution owners can generate a private PDF preview from a saved design in the Certificate Design Studio. The preview uses sample or entered graduate details and includes a visible **PREVIEW — NOT A VALID CREDENTIAL** marking and a non-verifying preview QR. It is for layout inspection only: it does not create a certificate ID, verification key, ledger event or public verification result. The original artwork remains private and its stored SHA-256 fingerprint is checked before rendering. Do not distribute preview PDFs as issued certificates.
+
+
+## Institutional record approval and immutable certificate protection
+
+### CSV / Excel roster import approval
+
+1. Authorized ICT or the Institution Owner selects the official CSV template and uploads the institution's roster.
+2. VERITY validates required columns, student numbers, dates and duplicate rows, then stages the data in durable chunks.
+3. The uploader submits the completed batch for Institution Owner approval. The batch status becomes **Awaiting approval**.
+4. **No student records are inserted or linked to accounts before approval.** Uploading or submitting is not approval.
+5. The Institution Owner reviews the batch details and selects **Approve import**. ICT officers cannot approve their own upload.
+6. Only after owner approval does VERITY queue the batch for background processing. Existing institution/student-number matches are skipped; existing student records are never silently overwritten.
+7. The import history records the uploader, approver, approval time, processing state and row-level outcomes.
+
+### Student Directory correction
+
+1. ICT finds the student's record and selects **Request correction**.
+2. ICT enters the proposed values and a reason supported by official institutional evidence.
+3. The current directory record remains unchanged while the request is pending.
+4. The Institution Owner compares the original and proposed values and approves or rejects the request.
+5. If approved, VERITY updates the Student Directory record only. The action and decision are audited.
+6. If the source record changed after the request was created, VERITY marks the request as a conflict; ICT must review the current data and submit a fresh request.
+7. A claimed student's number cannot be changed through a normal profile correction. Use the existing identity dispute and recovery workflow.
+
+### Issued certificate correction — no editing
+
+**An issued certificate is permanently immutable.** No role, including the Institution Owner or VERITY System Administrator, can edit its academic contents, certificate ID, verification key, original document or SHA-256 fingerprint. A Student Directory correction never changes a previously issued certificate.
+
+If an issued credential contains an error:
+
+1. Submit a separate credential-correction request linked to the original certificate ID and digest.
+2. Provide the proposed corrected values and a clear reason.
+3. The Institution Owner approves or rejects the request.
+4. Approval authorizes a **new certificate issuance** through the normal issuance workflow. The new credential receives a new certificate ID, verification key, issuance timestamp and fingerprint.
+5. The original certificate remains unchanged. If it should no longer be relied upon, revoke it separately with a meaningful reason. Its historical record and verification outcome remain auditable.
+
+Approval does not automatically edit, revoke or replace the original credential.
+
+### Fifteen-clip video guide
+
+The User Guide video sequence must contain 15 separately navigable clips, each at least five seconds long. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.
