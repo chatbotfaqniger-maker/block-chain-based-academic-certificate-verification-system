@@ -398,14 +398,14 @@ BEGIN
     RAISE EXCEPTION 'Replacement must be a distinct active credential issued by the same issuer';
   END IF;
   -- Prevent an owner from linking an unrelated active certificate to this request.
-  IF (v_request."proposedRecord" ? 'studentName' AND v_replacement."studentName" IS DISTINCT FROM v_request."proposedRecord"->>'studentName')
-     OR (v_request."proposedRecord" ? 'studentNumber' AND v_replacement."studentNumber" IS DISTINCT FROM v_request."proposedRecord"->>'studentNumber')
-     OR (v_request."proposedRecord" ? 'institution' AND v_replacement.institution IS DISTINCT FROM v_request."proposedRecord"->>'institution')
-     OR (v_request."proposedRecord" ? 'faculty' AND v_replacement.faculty IS DISTINCT FROM v_request."proposedRecord"->>'faculty')
-     OR (v_request."proposedRecord" ? 'department' AND v_replacement.department IS DISTINCT FROM v_request."proposedRecord"->>'department')
-     OR (v_request."proposedRecord" ? 'programme' AND v_replacement.programme IS DISTINCT FROM v_request."proposedRecord"->>'programme')
-     OR (v_request."proposedRecord" ? 'qualification' AND v_replacement.qualification IS DISTINCT FROM v_request."proposedRecord"->>'qualification')
-     OR (v_request."proposedRecord" ? 'classification' AND v_replacement.classification IS DISTINCT FROM v_request."proposedRecord"->>'classification')
+  IF (v_request."proposedRecord" ? 'studentName' AND v_replacement."studentName" IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'studentName',''))
+     OR (v_request."proposedRecord" ? 'studentNumber' AND v_replacement."studentNumber" IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'studentNumber',''))
+     OR (v_request."proposedRecord" ? 'institution' AND v_replacement.institution IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'institution',''))
+     OR (v_request."proposedRecord" ? 'faculty' AND v_replacement.faculty IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'faculty',''))
+     OR (v_request."proposedRecord" ? 'department' AND v_replacement.department IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'department',''))
+     OR (v_request."proposedRecord" ? 'programme' AND v_replacement.programme IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'programme',''))
+     OR (v_request."proposedRecord" ? 'qualification' AND v_replacement.qualification IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'qualification',''))
+     OR (v_request."proposedRecord" ? 'classification' AND v_replacement.classification IS DISTINCT FROM NULLIF(v_request."proposedRecord"->>'classification',''))
      OR (v_request."proposedRecord" ? 'awardDate' AND v_replacement."awardDate"::text IS DISTINCT FROM v_request."proposedRecord"->>'awardDate') THEN
     RAISE EXCEPTION 'Replacement credential does not match the approved correction values';
   END IF;
