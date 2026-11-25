@@ -805,6 +805,18 @@ If an issued credential contains an error:
 
 Approval does not automatically edit, revoke or replace the original credential.
 
+#### Using the Student Directory
+
+1. Open **Issued certificate correction** and locate the active certificate.
+2. Select **Request credential correction**, change only the incorrect fields and provide the reason plus official supporting evidence.
+3. Submit the request. The original certificate remains active and unchanged while the request is pending.
+4. The Institution/Organization Owner reviews the proposed values and approves or rejects the request.
+5. If approved, issue a new certificate through the normal issuance workflow. Do not edit or duplicate the original record.
+6. Revoke the original certificate separately with a documented reason. Once it is revoked, select the new active certificate under the approved request and choose **Link replacement**.
+7. VERITY checks that the replacement belongs to the same issuer and matches the approved correction values. The original and replacement remain separately traceable in the audit history.
+
+ICT can submit the request but cannot approve it or link the replacement. The Institution/Organization Owner performs those decisions.
+
 ### Fifteen-clip video guide
 
 The User Guide video sequence must contain 15 separately navigable clips, each at least five seconds long. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.
