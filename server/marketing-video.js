@@ -48,6 +48,7 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
     ["14 / NEW ISSUANCE","Approval authorizes a new certificate.","The issuer owner approves a separate reissuance. The original certificate is revoked with a documented reason and its contents remain unchanged.","OWNER AUTHORIZATION · SEPARATE REISSUANCE","REISSUE CREDENTIAL",["Original content  Locked","Revocation reason  Recorded","New certificate  Issued separately","New ID and fingerprint"]],
     ["15 / VERIFICATION + AUDIT","Verify both records with confidence.","The replacement is linked only after its corrected values are checked. The original remains in the audit history with its revoked status.","ORIGINAL PRESERVED · REPLACEMENT VERIFIED","FINAL VERIFICATION",["Original  "+clean(verification?.status,"REVOKED / HISTORICAL"),"Replacement  New certificate ID","Ledger  "+audit,"Verification  "+status]]
   ];
+  if (scenes.length !== 15 || duration / scenes.length !== 8) throw new Error("VERITY guide export must contain exactly 15 eight-second clips.");
 
   const dir = await mkdtemp(path.join(os.tmpdir(), "verity-marketing-"));
   try {
