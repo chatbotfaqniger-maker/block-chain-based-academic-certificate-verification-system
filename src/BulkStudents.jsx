@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import { parseXlsxRoster } from "./student-roster-xlsx.js";
+import ExcelJS from "exceljs";
 import {FileSpreadsheet,Upload,Download,Users,AlertTriangle,RefreshCw,Search,Edit3,Check,Clock,ShieldCheck} from "lucide-react";
 const TEMPLATE="student_number,full_name,email,faculty,department,programme,qualification,classification,award_date,academic_session\n2021/CS/001,Example Student,student@example.edu.ng,Science,Computer Science,Computer Science,Bachelor of Science,Second Class Upper,2026-10-15,2025/2026\n";
 function parseCsv(source){
@@ -11,6 +12,17 @@ function parseCsv(source){
  return rows.slice(1).map((values,index)=>{const x=Object.fromEntries(headers.map((h,i)=>[h,(values[i]||"").trim()]));return {rowNumber:index+2,studentNumber:x.student_number,fullName:x.full_name,email:x.email||"",faculty:x.faculty,department:x.department,programme:x.programme,qualification:x.qualification,classification:x.classification||"",awardDate:x.award_date||null,academicSession:x.academic_session||""};});
 }
 function downloadTemplate(){const blob=new Blob([TEMPLATE],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="VERITY-student-import-template.csv";a.click();URL.revokeObjectURL(url);}
+async function downloadXlsxTemplate(){
+ const workbook=new ExcelJS.Workbook();
+ const sheet=workbook.addWorksheet("Student Roster");
+ sheet.addRow(["student_number","full_name","email","faculty","department","programme","qualification","classification","award_date","academic_session"]);
+ sheet.addRow(["2021/CS/001","Example Student","student@example.edu.ng","Science","Computer Science","Computer Science","Bachelor of Science","Second Class Upper","2026-10-15","2025/2026"]);
+ sheet.getColumn(1).numFmt="@";
+ sheet.getRow(1).font={bold:true};
+ const bytes=await workbook.xlsx.writeBuffer();
+ const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="VERITY-student-import-template.xlsx";a.click();URL.revokeObjectURL(url);
+}
 export default function BulkStudents({api,notice,organization}){
  const [file,setFile]=useState(null),[rows,setRows]=useState([]),[errors,setErrors]=useState([]),[busy,setBusy]=useState(false),[progress,setProgress]=useState({done:0,total:0,inserted:0,duplicates:0}),[students,setStudents]=useState([]),[studentTotal,setStudentTotal]=useState(0),[page,setPage]=useState(0),[batches,setBatches]=useState([]),[analytics,setAnalytics]=useState({totalStudents:0,certificatesIssued:null,activeCertificates:null}),[workerEnabled,setWorkerEnabled]=useState(false),[search,setSearch]=useState(""),[loadError,setLoadError]=useState(""),[pendingUpload,setPendingUpload]=useState(null),[correctionTarget,setCorrectionTarget]=useState(null),[correctionDraft,setCorrectionDraft]=useState({}),[correctionReason,setCorrectionReason]=useState(""),[correctionRequests,setCorrectionRequests]=useState([]),[canApproveCorrections,setCanApproveCorrections]=useState(false),[credentials,setCredentials]=useState([]),[credentialRequests,setCredentialRequests]=useState([]),[canApproveCredentials,setCanApproveCredentials]=useState(false),[credentialTarget,setCredentialTarget]=useState(null),[credentialDraft,setCredentialDraft]=useState({}),[credentialReason,setCredentialReason]=useState(""),[replacementDraft,setReplacementDraft]=useState({});
  const approved=organization?.status==="APPROVED"&&organization?.capabilities?.some(x=>x.capability==="ISSUE_CREDENTIALS"&&x.status==="APPROVED");
@@ -38,7 +50,7 @@ export default function BulkStudents({api,notice,organization}){
  <div className="bulk-stats"><div><small>Registered students</small><strong>{statCount(analytics.totalStudents)}</strong><span>Issuer roster</span></div><div><small>Certificates issued</small><strong>{statCount(analytics.certificatesIssued)}</strong><span>VERITY certificate records</span></div><div><small>Active credentials</small><strong>{statCount(analytics.activeCertificates)}</strong><span>Currently valid certificates</span></div></div>
  {!workerEnabled&&<div className="bulk-warning"><AlertTriangle size={18}/><span>Background processing is not enabled on this server. Imports can be staged, but will remain queued until the server worker is configured.</span></div>}
  <div className="bulk-grid"><section className="panel bulk-upload-panel"><div className="panel-head"><div><h3>Import student records</h3><p>Upload a CSV or native Excel workbook from your student information system.</p></div><FileSpreadsheet size={24}/></div>
- <div className="bulk-template"><div><b>Use the official VERITY template</b><small>Required: student number, full name, faculty, department, programme and qualification.</small></div><button type="button" className="btn-outline" onClick={downloadTemplate}><Download size={15}/> Download template</button></div>
+ <div className="bulk-template"><div><b>Use the official VERITY template</b><small>Required: student number, full name, faculty, department, programme and qualification.</small></div><div className="row-actions"><button type="button" className="btn-outline" onClick={downloadTemplate}><Download size={15}/> CSV template</button><button type="button" className="btn-outline" onClick={downloadXlsxTemplate}><Download size={15}/> Excel template</button></div></div>
  <label className="bulk-drop"><Upload size={23}/><b>{file?.name||"Choose student CSV or Excel file"}</b><small>CSV or XLSX · one worksheet · maximum 20 MB</small><input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy||!approved||Boolean(pendingUpload)} onChange={e=>selectFile(e.target.files?.[0])}/></label>
  {errors.length>0&&<div className="bulk-errors"><b>{errors.length} issue(s) need attention</b><ul>{errors.slice(0,12).map((e,i)=><li key={i}>{e.rowNumber?"Row "+e.rowNumber+": ":""}{e.message}</li>)}</ul></div>}
  {rows.length>0&&<div className="bulk-preview"><div><b>Import preview</b><span>{validRows.length} valid · {errors.filter(e=>e.rowNumber>0).length} rejected</span></div><div className="bulk-preview-table"><table><thead><tr><th>Student</th><th>Student / employee number</th><th>Department</th></tr></thead><tbody>{validRows.slice(0,5).map(r=><tr key={r.rowNumber}><td>{r.fullName}</td><td>{r.studentNumber}</td><td>{r.department}</td></tr>)}</tbody></table></div><small>Showing up to 5 preview rows. Duplicate student or employee numbers are not imported.</small></div>}
