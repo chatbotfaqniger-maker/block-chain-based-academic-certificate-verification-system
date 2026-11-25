@@ -89,3 +89,34 @@ Certificate ledger hardening is delivered by PR #9. Its migration `2026112407462
 - Generate a schema snapshot covering tables, constraints, indexes, RLS policies, functions, triggers, grants and storage policies.
 - Compare the snapshot with repository migrations and document any intentional differences.
 - Validate a clean database bootstrap in CI before re-enabling automated migration deployment.
+
+
+## 25 November 2026 follow-up — live ledger and historical source recovery
+
+A fresh read-only check of the connected production project (`fnsnhasnjmvodkwmdqkc`) on 25 November reports:
+
+- Project status: `ACTIVE_HEALTHY`
+- Applied migration versions: **67**
+- Latest applied version: `20261124175741`
+- Public catalog inventory: 27 base tables, 64 RLS policies, 28 public-schema functions, 9 non-internal public-table triggers, 185 constraints and 103 indexes.
+
+These are inventory counts, not proof that every live object is semantically identical to a source migration. The previous 24 November figure of 59 applied versions is now historical and must not be used as the current ledger count.
+
+### Recovery investigation result
+
+The repository commit search did not locate source commits for the oldest missing migration filenames. The historical PR review also confirms that `20261124133000_atomic_historical_certificate_conversion.sql` was deliberately removed in PR #15 because its prerequisite schema was incomplete. It must not be restored or replayed as a production migration merely because a later historical ledger or old documentation mentions the feature.
+
+The investigation has therefore **not** recovered the 43 older SQL sources. No SQL has been reconstructed from current catalog definitions, and no migration ledger rows have been inserted, deleted or rewritten.
+
+### Current PR #20 release additions
+
+The two new PR #20 migration versions are still absent from the production ledger:
+
+- `20261125100000_owner_approved_roster_and_credential_corrections`
+- `20261125120000_persistent_roster_import_drafts`
+
+They remain feature-branch-only. Production migration execution remains blocked pending verified baseline recovery, a full schema diff, isolated bootstrap and explicit release authorization.
+
+### Next safe action
+
+Obtain the original migration files from the Supabase project history/export or the original source backups/branches. If the exact SQL cannot be recovered, establish and document a verified baseline snapshot through a controlled, reviewed process; do not invent historical migration files or use migration repair to silence discrepancies. Then validate clean bootstrap in CI against that baseline.
