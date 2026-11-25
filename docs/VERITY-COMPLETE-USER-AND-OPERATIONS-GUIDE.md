@@ -773,7 +773,7 @@ Approved institution owners can generate a private PDF preview from a saved desi
 
 ### CSV / Excel roster import approval
 
-1. Authorized ICT or the Institution Owner selects the official CSV template or uploads a native `.xlsx` workbook with one visible worksheet.
+1. Authorized ICT or the Institution/Organization Owner downloads the CSV or XLSX template, or uploads a supported native `.xlsx` workbook with one visible worksheet.
 2. VERITY validates required columns, student numbers, dates and duplicate rows. For `.xlsx`, formula cells are rejected and student-number cells must be formatted as Text to preserve leading zeroes. VERITY then stages the data in durable chunks.
 3. The uploader submits the completed batch for Institution Owner approval. The batch status becomes **Awaiting approval**.
 4. **No student records are inserted or linked to accounts before approval.** Uploading or submitting is not approval.
