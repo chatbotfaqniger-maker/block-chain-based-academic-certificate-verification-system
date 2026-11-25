@@ -10,13 +10,13 @@ const scenes = [
   { kicker:"05 / SECURE SHARING", title:"Share proof. Protect the original.", copy:"Share a verification link or key. Private original documents remain protected by graduate consent.", label:"VERIFICATION LINK · CONSENT-BASED ACCESS" },
   { kicker:"06 / ORGANIZATION", title:"Verify before you decide.", copy:"Organizations check issuer identity, credential status and integrity through VERITY.", label:"APPROVED ISSUER · REGISTRY RESPONSE" },
   { kicker:"07 / ADMINISTRATION", title:"Oversight built into every workflow.", copy:"Administrators oversee organization approvals, system health and audit activity.", label:"SUPABASE LEDGER · AUDIT · SYSTEM HEALTH" },
-  { kicker:"08 / ROSTER IMPORT", title:"Upload is not approval.", copy:"CSV or Excel-exported data is validated and staged first. No student record is committed yet.", label:"VALIDATE · PREVIEW · STAGE" },
-  { kicker:"09 / OWNER APPROVAL", title:"Only the Institution Owner approves.", copy:"The owner reviews the import manifest and explicitly approves it. ICT cannot approve its own upload.", label:"MANDATORY OWNER APPROVAL" },
+  { kicker:"08 / ROSTER IMPORT", title:"Upload is not approval.", copy:"CSV and native XLSX files are validated and staged first. No student record is committed yet.", label:"VALIDATE · PREVIEW · STAGE" },
+  { kicker:"09 / OWNER APPROVAL", title:"Only the issuer owner approves.", copy:"The Institution or Organization Owner reviews the import manifest and approves it. ICT cannot approve its own upload.", label:"MANDATORY OWNER APPROVAL" },
   { kicker:"10 / STUDENT DIRECTORY", title:"Corrections require a reason.", copy:"ICT submits proposed directory changes. The current student record remains unchanged while pending.", label:"REQUEST · EVIDENCE · REVIEW" },
-  { kicker:"11 / OWNER DECISION", title:"The Institution Owner decides.", copy:"The owner compares original and proposed values, then approves or rejects. Every decision is audited.", label:"OWNER-ONLY APPROVAL · AUDIT HISTORY" },
+  { kicker:"11 / OWNER DECISION", title:"The issuer owner decides.", copy:"The Institution or Organization Owner compares original and proposed values, then approves or rejects. Every decision is audited.", label:"OWNER-ONLY APPROVAL · AUDIT HISTORY" },
   { kicker:"12 / IMMUTABLE CERTIFICATE", title:"Issued means locked forever.", copy:"No role can edit the original certificate, its academic details, ID, verification key or fingerprint.", label:"NO EDIT · NO OVERWRITE · NO DELETE" },
-  { kicker:"13 / CREDENTIAL CORRECTION", title:"A correction is a new issuance.", copy:"A separate request is reviewed. Approval authorizes a new credential; it never edits the original.", label:"PRESERVE ORIGINAL · ISSUE REPLACEMENT" },
-  { kicker:"VERITY · COMPLETE", title:"Achievement deserves proof.", copy:"Correct records responsibly. Preserve issued credentials permanently. Verify with confidence.", label:"THE FUTURE OF DIGITAL CREDENTIAL VERIFICATION" }
+  { kicker:"13 / CREDENTIAL CORRECTION", title:"A correction is a new issuance.", copy:"A separate request is reviewed. Approval authorizes a new issuance; it never edits the original certificate.", label:"PRESERVE ORIGINAL · ISSUE REPLACEMENT" },
+  { kicker:"VERITY · COMPLETE", title:"Preserve the original. Verify the replacement.", copy:"Revoke the original with a reason, issue a new credential and verify both records through their audit history.", label:"ORIGINAL PRESERVED · NEW CERTIFICATE ID · AUDITABLE HISTORY" }
 ];
 
 function MiniMetric({label,value}) { return <div className="film-metric"><small>{label}</small><b>{value}</b></div>; }
