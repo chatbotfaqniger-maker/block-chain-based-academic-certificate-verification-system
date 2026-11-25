@@ -28,7 +28,7 @@ A Student Directory correction must never cascade into an issued certificate. Ce
 
 - ICT may submit a proposed correction with a reason.
 - The live Student Directory row remains unchanged while the request is pending.
-- Only the Institution Owner may approve or reject.
+- Only the owning Institution or Organization Owner may approve or reject the correction.
 - Approval applies the proposal only if the original row still matches the snapshot reviewed by the requester. If the source row changed meanwhile, the request becomes `CONFLICT` and must be resubmitted against the current record.
 - Claimed student numbers cannot be changed through this profile-correction workflow. Identity changes use the existing dispute/recovery process.
 - The decision and actor are written to the audit history.
@@ -50,7 +50,7 @@ A correction approval alone does not issue a replacement or revoke the original.
 ## 5. Security boundaries
 
 - Authenticated clients cannot directly insert, update or delete Student Directory rows. Imports are committed by the existing privileged queue processor; approved corrections use a narrowly scoped owner-only database function.
-- Import state transitions are guarded by RLS: uploader/authorized ICT can submit for approval; only the institution owner can approve and queue.
+- Import state transitions are guarded by RLS: the uploader/authorized institution ICT can stage and submit; only the approved credential-issuer owner can approve and queue. Organization ICT roles do not bypass owner approval.
 - Correction decision functions verify the authenticated owner against the owning Organization row.
 - Request tables are tenant-scoped by RLS. Decisions are not client-editable.
 - Service-role keys remain server-only.
