@@ -597,6 +597,7 @@ app.post("/api/organization/students/:id/correction-requests",auth,run(async(q,s
 app.post("/api/organization/students/correction-requests/:id/decision",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const body=z.object({decision:z.enum(["APPROVED","REJECTED"]),note:z.string().trim().max(1000).optional().default("")}).parse(q.body);
+ if(body.decision==="REJECTED"&&body.note.length<10)return s.status(400).json({error:"A rejection reason of at least 10 characters is required."});
  const {data,error}=await q.supabase.rpc("verity_decide_student_roster_correction",{p_request_id:q.params.id,p_decision:body.decision,p_note:body.note});
  if(error)throw error;
  s.json({result:data});
@@ -668,6 +669,7 @@ app.post("/api/organization/credentials/correction-requests/:id/link-replacement
 app.post("/api/organization/credentials/correction-requests/:id/decision",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const body=z.object({decision:z.enum(["APPROVED","REJECTED"]),note:z.string().trim().max(1000).optional().default("")}).parse(q.body);
+ if(body.decision==="REJECTED"&&body.note.length<10)return s.status(400).json({error:"A rejection reason of at least 10 characters is required."});
  const {data,error}=await q.supabase.rpc("verity_decide_credential_correction",{p_request_id:q.params.id,p_decision:body.decision,p_note:body.note});
  if(error)throw error;
  s.json({result:data,originalCertificateUnchanged:true});
