@@ -395,7 +395,19 @@ BEGIN
   IF v_replacement.id IS NULL OR v_replacement."organizationId" IS DISTINCT FROM v_request."organizationId"
      OR v_replacement.id=v_original.id OR v_replacement.digest=v_original.digest
      OR v_replacement.status::text <> 'ACTIVE' THEN
-    RAISE EXCEPTION 'Replacement must be a distinct active credential issued by the same institution';
+    RAISE EXCEPTION 'Replacement must be a distinct active credential issued by the same issuer';
+  END IF;
+  -- Prevent an owner from linking an unrelated active certificate to this request.
+  IF (v_request."proposedRecord" ? 'studentName' AND v_replacement."studentName" IS DISTINCT FROM v_request."proposedRecord"->>'studentName')
+     OR (v_request."proposedRecord" ? 'studentNumber' AND v_replacement."studentNumber" IS DISTINCT FROM v_request."proposedRecord"->>'studentNumber')
+     OR (v_request."proposedRecord" ? 'institution' AND v_replacement.institution IS DISTINCT FROM v_request."proposedRecord"->>'institution')
+     OR (v_request."proposedRecord" ? 'faculty' AND v_replacement.faculty IS DISTINCT FROM v_request."proposedRecord"->>'faculty')
+     OR (v_request."proposedRecord" ? 'department' AND v_replacement.department IS DISTINCT FROM v_request."proposedRecord"->>'department')
+     OR (v_request."proposedRecord" ? 'programme' AND v_replacement.programme IS DISTINCT FROM v_request."proposedRecord"->>'programme')
+     OR (v_request."proposedRecord" ? 'qualification' AND v_replacement.qualification IS DISTINCT FROM v_request."proposedRecord"->>'qualification')
+     OR (v_request."proposedRecord" ? 'classification' AND v_replacement.classification IS DISTINCT FROM v_request."proposedRecord"->>'classification')
+     OR (v_request."proposedRecord" ? 'awardDate' AND v_replacement."awardDate"::text IS DISTINCT FROM v_request."proposedRecord"->>'awardDate') THEN
+    RAISE EXCEPTION 'Replacement credential does not match the approved correction values';
   END IF;
   UPDATE public."CredentialCorrectionRequest" SET status='REISSUED',
     "replacementCertificateRowId"=v_replacement.id,"reissuedAt"=now()
