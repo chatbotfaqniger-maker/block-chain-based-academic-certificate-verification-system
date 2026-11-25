@@ -622,7 +622,20 @@ app.get("/api/organization/credentials/correction-requests",auth,run(async(q,s)=
 
 app.post("/api/organization/credentials/:id/correction-requests",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
- const body=z.object({reason:z.string().trim().min(10).max(1000),proposedRecord:z.record(z.unknown())}).parse(q.body);
+ const body=z.object({
+  reason:z.string().trim().min(10).max(1000),
+  proposedRecord:z.object({
+   studentName:z.string().trim().min(2).max(160).optional(),
+   studentNumber:z.string().trim().min(2).max(80).optional(),
+   institution:z.string().trim().min(2).max(180).optional(),
+   faculty:z.string().trim().max(160).nullable().optional(),
+   department:z.string().trim().max(160).nullable().optional(),
+   programme:z.string().trim().max(180).nullable().optional(),
+   qualification:z.string().trim().max(180).nullable().optional(),
+   classification:z.string().trim().max(100).nullable().optional(),
+   awardDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional()
+  }).strict()
+ }).parse(q.body);
  const {data:certificate,error:certificateError}=await q.supabase.from("Certificate")
   .select("id,certificateId,digest,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,organizationId,status")
   .eq("id",q.params.id).eq("organizationId",org.id).maybeSingle();
