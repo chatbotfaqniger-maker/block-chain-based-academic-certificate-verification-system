@@ -1326,5 +1326,34 @@
     10,
     12,
     16
-  ]
+  ],
+  "all_repository_branches_reviewed": [
+    "feat/certificate-pdf-rendering-engine",
+    "feat/complete-certificate-lifecycle",
+    "feat/graduate-consent-revocation",
+    "feat/immutable-credentials-and-owner-approved-roster",
+    "feat/institution-certificate-design-system",
+    "feature/bulk-certificate-issuance",
+    "feature/institution-expansion-backward-compatible",
+    "feature/institutional-bulk-student-management",
+    "feature/issuer-capability-expansion",
+    "feature/large-issuance-campaigns",
+    "feature/verity-cinematic-showcase-guides",
+    "feature/verity-documentary-120-seconds",
+    "feature/verity-durable-bulk-certificate-issuance",
+    "feature/verity-durable-student-roster-import",
+    "feature/verity-ledger-security-hardening",
+    "feature/verity-monthly-issuance-quota",
+    "fix/defer-incomplete-historical-digitization-migration",
+    "fix/verity-ledger-and-document-guidance",
+    "main",
+    "security/verity-rpc-and-verification-rate-limits"
+  ],
+  "source_integrity_check": {
+    "selected_source_bearing_branches": 6,
+    "unique_filenames": 39,
+    "same_filename_distinct_blob_sha_count": 0,
+    "result": "Every repeated filename among the six source-bearing branches had the same Git blob SHA. Distinct filenames with the same normalized migration name remain separate alternatives and have different blob SHAs; do not treat them as interchangeable."
+  },
+  "recovery_conclusion": "All 20 repository branches were enumerated and their migration directories inspected. Six branches covered the distinct source-bearing variants; the remaining branches contained subsets. The 39-file union still does not include source filenames for 36 of the 67 applied ledger entries. Historical PRs 1–19 were cross-checked for migration file changes. No original SQL was found for the missing foundational, certificate-ledger and support/recovery migrations."
 }
