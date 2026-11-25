@@ -752,6 +752,34 @@ app.put("/api/organization/students/import-drafts/:id/manifest",auth,run(async(q
  s.json({draft});
 }));
 
+app.put("/api/organization/students/import-drafts/:id/chunks",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const body=z.object({chunks:z.array(z.object({
+  chunkIndex:z.number().int().min(0).max(499),
+  rows:z.array(rosterDraftRowSchema).min(1).max(100)
+ })).min(1).max(5)}).parse(q.body);
+ if(new Set(body.chunks.map(x=>x.chunkIndex)).size!==body.chunks.length)return s.status(400).json({error:"Draft chunk indexes must be unique in a save request."});
+ const {data:draft,error:draftError}=await q.supabase.from("StudentRosterImportDraft")
+  .select("id,totalRows,totalChunks,status").eq("id",q.params.id).eq("organizationId",org.id)
+  .eq("createdBy",q.user.id).eq("status","DRAFT").gt("expiresAt",new Date().toISOString()).maybeSingle();
+ if(draftError)throw draftError;
+ if(!draft)return s.status(404).json({error:"This draft is unavailable or has expired."});
+ const records=[];
+ for(const chunk of body.chunks){
+  const expectedRows=Math.min(100,draft.totalRows-chunk.chunkIndex*100);
+  if(chunk.chunkIndex>=draft.totalChunks||expectedRows!==chunk.rows.length)return s.status(400).json({error:"A draft chunk row count does not match its manifest."});
+  const normalized=chunk.rows.map(row=>({...row,studentNumber:row.studentNumber.trim(),fullName:row.fullName.trim(),email:(row.email||"").trim().toLowerCase(),faculty:row.faculty.trim(),department:row.department.trim(),programme:row.programme.trim(),qualification:row.qualification.trim(),classification:row.classification||"",awardDate:row.awardDate||null,academicSession:row.academicSession||""}));
+  for(const row of normalized){
+   if(row.awardDate){const d=new Date(row.awardDate+"T00:00:00.000Z");if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(row.awardDate)||Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==row.awardDate)return s.status(400).json({error:"Draft award dates must be real dates in YYYY-MM-DD format."});}
+   if(row.email&&(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(row.email)||row.email.length>254))return s.status(400).json({error:"One or more draft email addresses are invalid."});
+  }
+  records.push({id:crypto.randomUUID(),draftId:draft.id,organizationId:org.id,chunkIndex:chunk.chunkIndex,rows:normalized,contentHash:digest(JSON.stringify(normalized)),updatedBy:q.user.id,updatedAt:new Date().toISOString()});
+ }
+ const {error}=await q.supabase.from("StudentRosterImportDraftChunk").upsert(records,{onConflict:"draftId,chunkIndex"});
+ if(error)throw error;
+ s.json({saved:true,chunks:records.map(x=>({chunkIndex:x.chunkIndex,rows:x.rows.length,contentHash:x.contentHash}))});
+}));
+
 app.put("/api/organization/students/import-drafts/:id/chunks/:chunkIndex",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const chunkIndex=Number(q.params.chunkIndex);
