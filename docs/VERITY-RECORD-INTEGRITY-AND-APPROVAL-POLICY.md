@@ -13,14 +13,14 @@ A Student Directory correction must never cascade into an issued certificate. Ce
 
 ## 2. CSV / Excel import approval
 
-1. Authorized Institution ICT or the Institution Owner uploads a supported `.csv` or native `.xlsx` roster file. XLSX workbooks must contain exactly one visible, non-empty worksheet; legacy `.xls` and macro-enabled `.xlsm` files are not accepted.
+1. Authorized Institution ICT or the Institution/Organization Owner uploads a supported `.csv` or native `.xlsx` roster file. XLSX workbooks must contain exactly one visible, non-empty worksheet; legacy `.xls` and macro-enabled `.xlsm` files are not accepted.
 2. VERITY validates headers, required values, dates, duplicate student numbers and file limits.
 3. VERITY validates the workbook headers and values, rejects formula cells and numeric student-number cells that could lose leading zeroes, then stages rows in durable, idempotent chunks. The batch remains `UPLOADING` while chunks are staged.
 4. The uploader submits the completed batch. The batch transitions to `AWAITING_APPROVAL`.
 5. At this point no roster rows are inserted and no student accounts are linked.
 6. The Institution or Organization Owner reviews the manifest, row totals, validation errors and batch history.
 7. Only the approved credential-issuer owner can approve the batch. Institution ICT can submit but cannot approve its own upload; non-institution organizations use their owner account.
-8. Approval transitions the batch to `QUEUED`; only then may the existing worker process it.
+8. Approval transitions the batch to `QUEUED`; only then may the existing worker process it. Committed roster entries become eligible for VERITY's existing student account-claim and verification workflow; a matching name or student number alone never attaches an account automatically.
 9. Existing institution/student-number matches are skipped as duplicates. Existing rows are never overwritten by an import.
 10. Every stage, submission, approval and processing outcome is auditable.
 
