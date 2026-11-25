@@ -163,13 +163,24 @@ SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
 INSERT INTO public."StudentRosterImport"(id,"organizationId","uploadedBy","fileName","totalRows","rejectedRows","totalChunks",status)
 VALUES ('batch-employer','org-employer','30000000-0000-4000-8000-000000000003','employees.xlsx',1,0,1,'UPLOADING');
+INSERT INTO public."StudentImportChunk"(id,"batchId","organizationId","chunkIndex",rows,"contentHash","createdBy")
+VALUES ('chunk-employer','batch-employer','org-employer',0,
+ '[{"studentNumber":"EMP/001","fullName":"Grace Employee","faculty":"Operations","department":"Technology","programme":"Systems","qualification":"Professional Certificate","classification":"","awardDate":"2026-11-01","academicSession":"2026"}]'::jsonb,
+ repeat('e',64),'30000000-0000-4000-8000-000000000003');
 UPDATE public."StudentRosterImport" SET status='AWAITING_APPROVAL',"submittedAt"=now()
 WHERE id='batch-employer';
 UPDATE public."StudentRosterImport" SET status='QUEUED',"approvedBy"='30000000-0000-4000-8000-000000000003',"approvedAt"=now()
 WHERE id='batch-employer' AND status='AWAITING_APPROVAL';
 RESET ROLE;
-DO $$ BEGIN
- IF (SELECT status FROM public."StudentRosterImport" WHERE id='batch-employer') <> 'QUEUED' THEN
-   RAISE EXCEPTION 'Approved organization issuer could not submit and approve its roster';
+SET request.jwt.claim.role='service_role';
+SET ROLE service_role;
+SELECT public.process_next_student_import_chunk();
+RESET ROLE;
+DO $ BEGIN
+ IF (SELECT status FROM public."StudentRosterImport" WHERE id='batch-employer') <> 'COMPLETED' THEN
+   RAISE EXCEPTION 'Approved organization issuer import was not processed after owner approval';
  END IF;
-END $$;
+ IF NOT EXISTS (SELECT 1 FROM public."StudentRoster" WHERE "organizationId"='org-employer' AND "studentNumber"='EMP/001') THEN
+   RAISE EXCEPTION 'Approved organization issuer roster row was not committed';
+ END IF;
+END $;
