@@ -245,3 +245,5 @@ The 25 November read-only comparison of live Supabase migration versions against
 The read-only production catalog baseline (metadata only; not a restore or bootstrap script) is [`docs/production-schema-catalog-2026-11-25.json`](docs/production-schema-catalog-2026-11-25.json). A clean bootstrap is still blocked until historical source SQL or a complete, reviewed baseline export is recovered.
 
 Historical migration-source provenance across earlier feature branches is recorded in [`docs/production-migration-source-recovery-2026-11-25.json`](docs/production-migration-source-recovery-2026-11-25.json). It identifies available source variants and their Git blob hashes; it does not establish that missing production migrations have been recovered or authorize migration replay.
+
+The clean-database recovery gate and required evidence are documented in [`docs/VERITY-CLEAN-BOOTSTRAP-RECOVERY-RUNBOOK.md`](docs/VERITY-CLEAN-BOOTSTRAP-RECOVERY-RUNBOOK.md). The current decision is **NOT READY**: the historical migration source set is incomplete, and no production migration, merge or deployment is authorized by the runbook.
