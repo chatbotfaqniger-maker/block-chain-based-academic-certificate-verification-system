@@ -236,3 +236,8 @@ The mandatory CSV/native XLSX owner-approval workflow, Student Directory correct
 ### Production migration audit — 25 November 2026
 
 The latest read-only production migration and schema inventory is recorded in [VERITY Production Migration Audit — 25 November 2026](docs/PRODUCTION-MIGRATION-AUDIT-2026-11-25.md). The live ledger reports 67 applied versions (latest `20261124175741`). The two PR #20 migrations remain unapplied. Historical SQL recovery is incomplete; do not run migration repair, replay missing versions, reset, or push migrations to production. See [Production Migration-History Reconciliation](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) for the current findings and release gates.
+
+
+### Exact production migration ledger inventory
+
+The 25 November read-only comparison of live Supabase migration versions against repository SQL filenames is preserved in [`docs/production-migration-ledger-2026-11-25.json`](docs/production-migration-ledger-2026-11-25.json). It distinguishes exact version matches, name matches with version drift, ledger entries without source-name matches and branch-only SQL files. It is an inventory, not a clean-bootstrap baseline or permission to replay migrations. See the [migration reconciliation procedure](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) before any schema release.
