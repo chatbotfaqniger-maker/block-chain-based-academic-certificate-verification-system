@@ -21,10 +21,40 @@
   },
   "pull_request_evidence": [
     {
+      "pr": 3,
+      "source_file": "20261122130000_institutional_student_roster_and_bulk_import.sql",
+      "status": "added",
+      "blob_sha": "a20bc68e44ce3db239614d88f674875528d8572f"
+    },
+    {
+      "pr": 4,
+      "source_file": "20261122140000_durable_bulk_certificate_issuance_queue.sql",
+      "status": "added",
+      "blob_sha": "909a39bbe7a4b1514cd1e05ecb6bd567f5a269e8"
+    },
+    {
+      "pr": 5,
+      "source_file": "20261123182712_complete_graduate_consent_revocation.sql",
+      "status": "added",
+      "blob_sha": "f37ea3cfaf8d1d826a789f693b986cbc223ca2e5"
+    },
+    {
+      "pr": 6,
+      "source_file": "20261123221423_restrict_sensitive_rpc_execution.sql",
+      "status": "added",
+      "blob_sha": "1633d7ace684699326da667c6b8c14cfeb2a51c9"
+    },
+    {
       "pr": 7,
       "source_file": "20261123223013_add_durable_roster_import_queue.sql",
       "status": "added",
       "blob_sha": "f3631c5a1fab07b2988a71aeaddb6184908d9b8d"
+    },
+    {
+      "pr": 8,
+      "source_file": "20261123224500_durable_bulk_certificate_issuance_queue.sql",
+      "status": "added",
+      "blob_sha": "182b0ea6eecde22a0c075250cc05ba1f80114d42"
     },
     {
       "pr": 9,
@@ -45,11 +75,41 @@
       "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2"
     },
     {
+      "pr": 14,
+      "source_file": "20261124133000_atomic_historical_certificate_conversion.sql",
+      "status": "added",
+      "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2"
+    },
+    {
       "pr": 15,
       "source_file": "20261124133000_atomic_historical_certificate_conversion.sql",
       "status": "removed",
       "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2",
       "reason": "PR #15 removed the migration and its CI assertions because prerequisite schema and workflow were incomplete; do not restore or replay it blindly."
+    },
+    {
+      "pr": 17,
+      "source_files": [
+        "20261124150000_organization_capabilities_and_school_levels.sql",
+        "20261124153000_enable_capability_based_issuer_workflows.sql"
+      ],
+      "status": "added",
+      "blob_shas": [
+        "ae0fd59071dc27d4d293e90c9f7bd550802d8423",
+        "475ad686d20ae301672fd29dc2a2b272d8cc2e5b"
+      ]
+    },
+    {
+      "pr": 18,
+      "source_file": "20261124180000_large_certificate_issuance_campaigns.sql",
+      "status": "added",
+      "blob_sha": "1b30dce31a1bbc49dc3581cb5ecf67efe535696a"
+    },
+    {
+      "pr": 19,
+      "source_file": "20261124190000_institution_monthly_certificate_issuance_limit.sql",
+      "status": "added",
+      "blob_sha": "65aa12177e57474ea52f1163efb4dc011486ad67"
     }
   ],
   "repository_files": [
@@ -1259,5 +1319,12 @@
       ]
     }
   ],
-  "safety_conclusion": "The 39-file branch union does not recover 36 ledger entry names. Some normalized-name matches are only candidate source matches; several ledger entries have no source filename anywhere in the inspected branches. Do not rename, replay, repair, or synthesize migrations from this inventory."
+  "safety_conclusion": "The 39-file branch union does not recover 36 ledger entry names. Some normalized-name matches are only candidate source matches; several ledger entries have no source filename anywhere in the inspected branches. Do not rename, replay, repair, or synthesize migrations from this inventory.",
+  "pull_requests_without_migration_changes": [
+    1,
+    2,
+    10,
+    12,
+    16
+  ]
 }
