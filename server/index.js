@@ -675,6 +675,120 @@ app.post("/api/organization/credentials/correction-requests/:id/decision",auth,r
  s.json({result:data,originalCertificateUnchanged:true});
 }));
 
+// Persistent, uploader-owned pre-approval spreadsheet drafts. These records are
+// deliberately separate from StudentRosterImport and are never consumed by workers.
+const rosterDraftRowSchema=z.object({
+ rowNumber:z.number().int().min(2).max(50002),
+ studentNumber:z.string().max(80),fullName:z.string().max(160),
+ email:z.string().max(254).optional().default(""),
+ faculty:z.string().max(160),department:z.string().max(160),
+ programme:z.string().max(180),qualification:z.string().max(180),
+ classification:z.string().max(100).optional().default(""),
+ awardDate:z.string().max(10).nullable().optional(),
+ academicSession:z.string().max(80).optional().default("")
+}).strict();
+
+app.get("/api/organization/students/import-drafts",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {data,error}=await q.supabase.from("StudentRosterImportDraft")
+  .select("id,fileName,totalRows,totalChunks,revision,status,createdAt,updatedAt,expiresAt")
+  .eq("organizationId",org.id).eq("createdBy",q.user.id).eq("status","DRAFT")
+  .gt("expiresAt",new Date().toISOString()).order("updatedAt",{ascending:false}).limit(20);
+ if(error)throw error;
+ s.json({drafts:data||[]});
+}));
+
+app.post("/api/organization/students/import-drafts",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const body=z.object({
+  fileName:z.string().trim().min(1).max(180),
+  totalRows:z.number().int().min(1).max(50000)
+ }).parse(q.body);
+ const id=crypto.randomUUID(),totalChunks=Math.ceil(body.totalRows/100),now=new Date().toISOString();
+ const {data,error}=await q.supabase.from("StudentRosterImportDraft").insert({
+  id,organizationId:org.id,createdBy:q.user.id,fileName:body.fileName.replace(/[\\/]/g,"_"),
+  totalRows:body.totalRows,totalChunks,revision:1,status:"DRAFT",
+  createdAt:now,updatedAt:now,expiresAt:new Date(Date.now()+30*86400000).toISOString()
+ }).select("id,fileName,totalRows,totalChunks,revision,status,createdAt,updatedAt,expiresAt").single();
+ if(error)throw error;
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORT_DRAFT_CREATED","StudentRosterImportDraft",id,{organizationId:org.id,totalRows:body.totalRows,totalChunks});
+ s.status(201).json({draft:data});
+}));
+
+app.get("/api/organization/students/import-drafts/:id",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {data:draft,error}=await q.supabase.from("StudentRosterImportDraft")
+  .select("id,fileName,totalRows,totalChunks,revision,status,createdAt,updatedAt,expiresAt")
+  .eq("id",q.params.id).eq("organizationId",org.id).eq("createdBy",q.user.id)
+  .eq("status","DRAFT").gt("expiresAt",new Date().toISOString()).maybeSingle();
+ if(error)throw error;
+ if(!draft)return s.status(404).json({error:"This draft is unavailable or has expired."});
+ const {data:chunks,error:chunkError}=await q.supabase.from("StudentRosterImportDraftChunk")
+  .select("chunkIndex,rows,contentHash,updatedAt").eq("draftId",draft.id)
+  .eq("organizationId",org.id).order("chunkIndex",{ascending:true});
+ if(chunkError)throw chunkError;
+ s.json({draft,chunks:chunks||[]});
+}));
+
+app.put("/api/organization/students/import-drafts/:id/manifest",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const body=z.object({
+  fileName:z.string().trim().min(1).max(180),
+  totalRows:z.number().int().min(1).max(50000)
+ }).parse(q.body);
+ const totalChunks=Math.ceil(body.totalRows/100);
+ const {data:draft,error}=await q.supabase.from("StudentRosterImportDraft")
+  .update({fileName:body.fileName.replace(/[\\/]/g,"_"),totalRows:body.totalRows,totalChunks,
+   revision:q.body.revision?Number(q.body.revision)+1:undefined,
+   updatedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+30*86400000).toISOString()})
+  .eq("id",q.params.id).eq("organizationId",org.id).eq("createdBy",q.user.id).eq("status","DRAFT")
+  .gt("expiresAt",new Date().toISOString())
+  .select("id,fileName,totalRows,totalChunks,revision,status,updatedAt,expiresAt").maybeSingle();
+ if(error)throw error;
+ if(!draft)return s.status(409).json({error:"This draft is no longer editable. Refresh your draft list."});
+ const {error:staleError}=await q.supabase.from("StudentRosterImportDraftChunk")
+  .delete().eq("draftId",draft.id).eq("organizationId",org.id).gte("chunkIndex",totalChunks);
+ if(staleError)throw staleError;
+ s.json({draft});
+}));
+
+app.put("/api/organization/students/import-drafts/:id/chunks/:chunkIndex",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const chunkIndex=Number(q.params.chunkIndex);
+ if(!Number.isInteger(chunkIndex)||chunkIndex<0||chunkIndex>499)return s.status(400).json({error:"Invalid draft chunk index."});
+ const body=z.object({rows:z.array(rosterDraftRowSchema).min(1).max(100)}).parse(q.body);
+ const {data:draft,error:draftError}=await q.supabase.from("StudentRosterImportDraft")
+  .select("id,totalRows,totalChunks,status").eq("id",q.params.id).eq("organizationId",org.id)
+  .eq("createdBy",q.user.id).eq("status","DRAFT").gt("expiresAt",new Date().toISOString()).maybeSingle();
+ if(draftError)throw draftError;
+ if(!draft)return s.status(404).json({error:"This draft is unavailable or has expired."});
+ const expectedRows=Math.min(100,draft.totalRows-chunkIndex*100);
+ if(chunkIndex>=draft.totalChunks||expectedRows!==body.rows.length)return s.status(400).json({error:"Draft chunk row count does not match its manifest."});
+ const normalized=body.rows.map(row=>({...row,studentNumber:row.studentNumber.trim(),fullName:row.fullName.trim(),email:(row.email||"").trim().toLowerCase(),faculty:row.faculty.trim(),department:row.department.trim(),programme:row.programme.trim(),qualification:row.qualification.trim(),classification:row.classification||"",awardDate:row.awardDate||null,academicSession:row.academicSession||""}));
+ for(const row of normalized){
+  if(row.awardDate){const d=new Date(row.awardDate+"T00:00:00.000Z");if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(row.awardDate)||Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==row.awardDate)return s.status(400).json({error:"Draft award dates must be real dates in YYYY-MM-DD format."});}
+  if(row.email&&(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(row.email)||row.email.length>254))return s.status(400).json({error:"One or more draft email addresses are invalid."});
+ }
+ const contentHash=digest(JSON.stringify(normalized));
+ const {error}=await q.supabase.from("StudentRosterImportDraftChunk").upsert({
+  id:crypto.randomUUID(),draftId:draft.id,organizationId:org.id,chunkIndex,rows:normalized,
+  contentHash,updatedBy:q.user.id,updatedAt:new Date().toISOString()
+ },{onConflict:"draftId,chunkIndex"});
+ if(error)throw error;
+ s.json({saved:true,chunkIndex,rows:normalized.length,contentHash});
+}));
+
+app.delete("/api/organization/students/import-drafts/:id",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {data:draft,error}=await q.supabase.from("StudentRosterImportDraft")
+  .delete().eq("id",q.params.id).eq("organizationId",org.id).eq("createdBy",q.user.id)
+  .eq("status","DRAFT").select("id").maybeSingle();
+ if(error)throw error;
+ if(!draft)return s.status(404).json({error:"This draft is unavailable or has already been closed."});
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORT_DRAFT_DELETED","StudentRosterImportDraft",draft.id,{organizationId:org.id});
+ s.json({deleted:true});
+}));
+
 app.get("/api/organization/students/import-batches",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const {data,error}=await q.supabase.from("StudentRosterImport").select("id,fileName,totalRows,totalChunks,processedChunks,failedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt,submittedAt,approvedBy,approvedAt,rejectedBy,rejectedAt,rejectionReason").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(30);
