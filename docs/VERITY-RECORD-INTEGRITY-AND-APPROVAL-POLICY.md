@@ -100,7 +100,10 @@ The guide contains 15 individually navigable clips, each exactly **8 seconds** (
 ## 2A. In-app CSV / Excel spreadsheet editor (pre-approval)
 - After parsing and validation, the uploader receives an in-app draft grid before any batch is submitted.
 - Authorized uploaders can edit all imported roster fields, add rows, duplicate rows, remove rows, search, undo/redo and export the corrected draft to CSV or XLSX.
-- The source file remains unchanged and is retained by the uploader's local session; the corrected draft is a separate in-memory working copy until staged. The final row payload and validation summary are sent to the existing import-batch staging API.
+- The source file on the user's device remains unchanged. The corrected draft is persisted in Supabase as uploader-owned metadata plus 100-row JSON chunks; it is separate from `StudentRosterImport` and is never visible to import workers.
+- The API and database RLS restrict draft access to the authenticated uploader and their currently approved issuer scope. Another ICT account or issuer owner cannot read or change that uploader's draft.
+- The browser autosaves changed chunks and refreshes a 30-day inactivity expiry. The uploader can resume from the Saved spreadsheet drafts list after signing in again. A failed save is surfaced and blocks submission until the uploader retries successfully.
+- On submission, VERITY stages the validated rows through the existing owner-approval import workflow. After the batch is safely staged, draft metadata and chunks are deleted; the import batch's own audit manifest and chunk records become the authoritative processing record.
 - Every edit triggers client-side validation for required academic fields, duplicate student numbers, email format and award-date format. Invalid rows are visibly marked and excluded from staging until corrected or removed.
 - The editor is paginated (50 rows per view) to avoid rendering up to 50,000 rows at once.
 - Once submitted, the batch is locked by the existing server workflow. ICT cannot edit a submitted batch or approve it. A rejected batch must be corrected in a fresh import draft and resubmitted.
