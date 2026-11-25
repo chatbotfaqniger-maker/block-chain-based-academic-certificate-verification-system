@@ -116,9 +116,9 @@ Institution registration codes do not expire by default. An institution may expl
 
 Students should not have to visit ICT for routine onboarding. A physical visit is only an institution's fallback when its approved remote identity-checking and token-distribution channels cannot establish the student's identity.
 
-For the current importer, prepare the roster in Excel or another spreadsheet application and save/export it as **CSV UTF-8** before uploading. Required headers are `student_number` and `full_name`; optional headers are `institutional_email`, `faculty`, `department`, `programme`, and `academic_session`. A sample, non-real-data template is available at [VERITY Student Roster Template](VERITY-STUDENT-ROSTER-TEMPLATE.csv). Direct .xlsx workbook upload is not yet supported.
+Prepare the roster with the official VERITY CSV or XLSX template. CSV files must be UTF-8. Native `.xlsx` workbooks must contain exactly one visible, non-empty worksheet; legacy `.xls`, macro-enabled `.xlsm` and encrypted workbooks are not accepted. Student-number cells in Excel must be formatted as Text so leading zeroes are preserved. Required headers include `student_number` and `full_name`; use the supplied template for the complete supported field list. A sample CSV template is available at [VERITY Student Roster Template](VERITY-STUDENT-ROSTER-TEMPLATE.csv).
 
-Implementation status (22 November 2026): The first roster-backed signup and single-use activation workflow is deployed with CSV roster import, public approved-institution selection, student matriculation-first signup, one-time hashed activation tokens, atomic roster claiming, ACTIVE membership creation, per-student token replacement for eligible unclaimed records, scoped ICT assignment, and audited registration disputes. Two-person recovery is implemented: a first authorized officer records the review, a different authorized officer must approve completion, and release is blocked when the claimant has certificate records for that student identity so VERITY Admin can review credential ownership. The previous account is not deleted. Direct .xlsx import and full real-account end-to-end testing remain outstanding.
+Implementation status (25 November 2026): The feature branch adds native XLSX parsing alongside CSV, issuer-owner approval before roster worker processing, organization issuer support subject to approved `ISSUE_CREDENTIALS` capability, and the existing roster-backed signup and single-use activation workflow. The existing two-person recovery safeguards remain in place. These changes are not production-active until the feature branch is reviewed, merged and deployed, its additive migration is applied, and real-account end-to-end testing passes.
 
 
 ### 2.4 In-app student onboarding walkthrough
@@ -716,18 +716,19 @@ Open Notifications in the main workspace navigation to review recent account and
 
 ## Bulk student roster import
 
-Approved institution owners and active ICT staff with the `roster:manage` permission can open **Bulk student import** from the institution workspace.
+Approved institution owners and active ICT staff with the `roster:manage` permission can stage institution rosters from **Bulk student import**. Approved organization owners with the separately approved `ISSUE_CREDENTIALS` capability can stage organization rosters from their organization workspace.
 
-1. Download the VERITY student CSV template.
-2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional.
-3. Select the CSV and review the local preview and rejected-row messages.
-4. Import the valid records. VERITY stages them in 100-row chunks and shows the upload progress.
-5. Review Import history for queued, processing, completed or partial outcomes. The batch shows inserted, duplicate, rejected and failed counts.
-6. Open Institution ICT Centre to review the student roster and use the existing activation-token workflow.
+1. Download the official CSV or XLSX template.
+2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional where supported by the selected issuer workflow.
+3. Select the CSV or native XLSX file and review the preview, validation results and rejected-row messages.
+4. Upload the valid rows. VERITY stages them in durable 100-row chunks; staging does not yet add or link any roster records.
+5. Submit the completed batch for owner approval. Its status becomes **Awaiting approval**.
+6. The issuer owner reviews the manifest and explicitly approves or rejects the batch. Institution ICT cannot approve its own upload.
+7. Only after approval does the batch enter the worker queue. Review Import history for queued, processing, completed or partial outcomes.
 
-Bulk import adds eligible records to the existing student identity registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
+After owner approval and successful worker processing, bulk import adds eligible records to the issuer's existing roster registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
 
-ICT staff can use Bulk student import only when their active institution assignment includes `roster:manage`. Staff with only `registration:recover` can use the recovery workflow but cannot import or browse the full roster. The institution owner remains responsible for assigning and reviewing ICT permissions.
+Institution ICT staff can stage imports only when their active institution assignment includes `roster:manage`. Staff with only `registration:recover` can use the recovery workflow but cannot import or browse the full roster. Organization imports are staged by the organization owner; there is no organization ICT import-approval bypass. The issuer owner remains responsible for approval and the audit trail.
 
 
 ## Certificate design and existing-certificate digitisation
