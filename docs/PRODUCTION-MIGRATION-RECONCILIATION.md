@@ -166,3 +166,10 @@ The expanded inventory does **not** improve the source-name reconciliation count
 Pull-request history provides additional provenance: PR #7 added the durable roster import migration; PR #9 added an earlier certificate-ledger hardening migration; PR #11 added the institution certificate design/digitization migration; PR #13 added atomic historical-certificate conversion; PR #15 explicitly removed that conversion migration and its assertions because its prerequisite schema/workflow was incomplete. Do not restore or replay that removed migration without a complete, separately tested prerequisite implementation.
 
 This recovery search has located some additional historical source variants, but it has **not** recovered the missing 36 source names or established byte identity with production-executed SQL. The original 14–15 November foundational migrations and several 21–22 November ledger/support/recovery migrations remain absent from the inspected branch files. A clean bootstrap is still blocked. No migration ledger repair, production DDL, data change, merge or deployment was performed.
+
+
+### Pull-request history cross-check (PRs #1–#19)
+
+The migration-file changes were checked directly in the historical pull-request file lists. PRs #3–#9 introduced earlier roster-import, bulk-issuance, graduate-consent, RPC privilege and certificate-ledger migration variants. PR #11 introduced certificate design/digitization; PRs #13 and #14 introduced the historical-conversion RPC; PR #15 removed that RPC and its tests. PR #17 introduced issuer capability migrations; PR #18 introduced large issuance campaigns; PR #19 introduced the monthly issuance limit. PRs #1, #2, #10, #12 and #16 contained no migration-file changes. Exact filenames and blob SHAs are captured in the source-recovery JSON inventory.
+
+This confirms that some source variants are available through PR history even when they are not the current main-branch filename. It does not recover the 36 unmatched ledger entry names, and PR #15's removal remains an intentional release gate.
