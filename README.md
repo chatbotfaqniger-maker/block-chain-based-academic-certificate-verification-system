@@ -229,4 +229,4 @@ This section is the locked implementation and release decision record. Any futur
 
 ## Institutional record integrity
 
-The mandatory CSV/Excel owner-approval workflow, Student Directory correction policy, immutable issued-certificate rules and 15-clip User Guide storyboard are documented in [VERITY Record Integrity & Approval Policy](docs/VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md).
+The mandatory CSV/native XLSX owner-approval workflow, Student Directory correction policy, immutable issued-certificate rules and 15-clip User Guide storyboard are documented in [VERITY Record Integrity & Approval Policy](docs/VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md).
