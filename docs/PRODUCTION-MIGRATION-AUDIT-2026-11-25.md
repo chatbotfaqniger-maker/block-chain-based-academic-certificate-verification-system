@@ -83,3 +83,8 @@ The source search was expanded to six branches containing distinct migration-fil
 Historical PR review found PR #7 added roster-import queue SQL, PR #9 added a prior ledger-hardening SQL, PR #11 added certificate design/digitization SQL, PR #13 added atomic historical conversion, and PR #15 removed the historical-conversion SQL and test assertions because prerequisites were incomplete. The removal is intentional and must not be undone without completing and validating the prerequisites. Some branches contain differing source variants for similarly named queue/ledger migrations; blob SHAs are recorded and must be compared before selecting a source.
 
 This improves provenance but does not recover the missing historical SQL or prove that any source file matches production-executed bytes. The clean-bootstrap gate remains closed. No production SQL, migration repair, merge or deployment was performed.
+
+
+### Pull-request provenance cross-check
+
+Historical PR file lists #1–#19 were reviewed. Migration changes appeared in PRs #3–#9, #11, #13–#15 and #17–#19. PRs #1, #2, #10, #12 and #16 had no migration-file changes. PR #15 removed the historical conversion migration previously introduced in PRs #13/#14 because its prerequisite schema/workflow was incomplete. The detailed PR/file/blob inventory is maintained in [production-migration-source-recovery-2026-11-25.json](production-migration-source-recovery-2026-11-25.json).
