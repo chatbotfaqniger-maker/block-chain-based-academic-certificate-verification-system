@@ -633,7 +633,7 @@ app.post("/api/organization/credentials/:id/correction-requests",auth,run(async(
    programme:z.string().trim().max(180).nullable().optional(),
    qualification:z.string().trim().max(180).nullable().optional(),
    classification:z.string().trim().max(100).nullable().optional(),
-   awardDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional()
+   awardDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
   }).strict()
  }).parse(q.body);
  const {data:certificate,error:certificateError}=await q.supabase.from("Certificate")
