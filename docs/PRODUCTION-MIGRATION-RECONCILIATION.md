@@ -146,3 +146,12 @@ The Supabase Storage internal `storage.migrations` table is a separate service l
 3. Do not apply the six repository-only migrations to production or to an isolated baseline until each is classified against the live schema and release intent.
 4. Continue source recovery and schema export. The JSON manifest is an inventory, not a bootstrap snapshot and not authorization to replay any migration.
 5. The two PR #20 migrations remain unapplied in production. No production DDL, migration repair, merge or deployment was performed during this comparison.
+
+
+## 25 November 2026 — read-only schema catalog baseline
+
+A read-only PostgreSQL catalog snapshot has now been captured at [production-schema-catalog-2026-11-25.json](production-schema-catalog-2026-11-25.json). It records public table/column definitions and RLS flags, constraints, indexes, policies, function signatures and security metadata, triggers, enums, views, sequences, installed extensions, table/routine grants, Storage bucket metadata and Storage policies. It contains no application row data and omits function source bodies.
+
+Captured inventory: **27** public base tables, **185** constraints, **103** indexes, **64** public RLS policies, **28** public functions/procedures, **9** non-internal public triggers, **2** public enums, **5** extensions, **452** table-grant rows, **69** routine-grant rows, **3** Storage buckets and **7** Storage policies. There were no public views or materialized views and one public sequence in this catalog query.
+
+This is a catalog review baseline, **not** a complete `pg_dump`, not a source-migration recovery, and not a database bootstrap script. It omits Auth internals, managed Storage internals, function source bodies and data. A clean bootstrap remains blocked until original migration sources are recovered or a separately reviewed baseline package is created from an approved complete export. No development Supabase branch was created because that can incur additional charges; no production DDL or data was changed.
