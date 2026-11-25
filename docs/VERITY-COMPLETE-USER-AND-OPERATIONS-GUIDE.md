@@ -720,11 +720,12 @@ Approved institution owners and active ICT staff with the `roster:manage` permis
 
 1. Download the official CSV or XLSX template.
 2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional where supported by the selected issuer workflow.
-3. Select the CSV or native XLSX file and review the preview, validation results and rejected-row messages.
-4. Upload the valid rows. VERITY stages them in durable 100-row chunks; staging does not yet add or link any roster records.
-5. Submit the completed batch for owner approval. Its status becomes **Awaiting approval**.
-6. The issuer owner reviews the manifest and explicitly approves or rejects the batch. Institution ICT cannot approve its own upload.
-7. Only after approval does the batch enter the worker queue. Review Import history for queued, processing, completed or partial outcomes.
+3. Select the CSV or native XLSX file. VERITY parses it and opens the in-app **Spreadsheet editor** before staging.
+4. Edit cells, add/duplicate/remove rows, search the draft, and use Undo/Redo as needed. Required fields, duplicate student numbers, email addresses and award dates are revalidated after edits. Invalid rows are highlighted and excluded from staging.
+5. Export the corrected draft to CSV or Excel if you need a separate copy. The editor draft exists only in the current page session; leaving or refreshing the page clears it. The original file on your device is not modified.
+6. Submit the valid rows for owner approval. VERITY stages them in durable 100-row chunks; staging does not yet add or link any roster records. The batch becomes **Awaiting approval**.
+7. The issuer owner reviews the manifest and explicitly approves or rejects the batch. Institution ICT cannot approve its own upload.
+8. Only after approval does the batch enter the worker queue. Review Import history for queued, processing, completed or partial outcomes.
 
 After owner approval and successful worker processing, bulk import adds eligible records to the issuer's existing roster registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
 
@@ -775,12 +776,13 @@ Approved institution owners can generate a private PDF preview from a saved desi
 ### CSV / Excel roster import approval
 
 1. Authorized ICT or the Institution/Organization Owner downloads the CSV or XLSX template, or uploads a supported native `.xlsx` workbook with one visible worksheet.
-2. VERITY validates required columns, student numbers, dates and duplicate rows. For `.xlsx`, formula cells are rejected and student-number cells must be formatted as Text to preserve leading zeroes. VERITY then stages the data in durable chunks.
-3. The uploader submits the completed batch for Institution Owner approval. The batch status becomes **Awaiting approval**.
-4. **No student records are inserted or linked to accounts before approval.** Uploading or submitting is not approval.
-5. The Institution Owner reviews the batch details and selects **Approve import**. ICT officers cannot approve their own upload.
-6. Only after owner approval does VERITY queue the batch for background processing. Existing institution/student-number matches are skipped; existing student records are never silently overwritten.
-7. The import history records the uploader, approver, approval time, processing state and row-level outcomes.
+2. VERITY validates required columns, student numbers, dates and duplicate rows. For `.xlsx`, formula cells are rejected and student-number cells must be formatted as Text to preserve leading zeroes.
+3. Before staging, the in-app Spreadsheet editor allows the uploader to edit cells, add/duplicate/remove rows, search, undo/redo and export the corrected CSV/XLSX. Validation reruns after edits; invalid rows are highlighted and excluded from the staged payload. This draft is held in the current page session, so export a copy before leaving if it must be retained.
+4. The uploader submits the valid rows for Institution Owner approval. The batch status becomes **Awaiting approval**.
+5. **No student records are inserted or linked to accounts before approval.** Uploading or submitting is not approval.
+6. The Institution Owner reviews the batch details and selects **Approve import**. ICT officers cannot approve their own upload.
+7. Only after owner approval does VERITY queue the batch for background processing. Existing institution/student-number matches are skipped; existing student records are never silently overwritten.
+8. The import history records the uploader, approver, approval time, processing state and row-level outcomes.
 
 ### Student Directory correction
 
