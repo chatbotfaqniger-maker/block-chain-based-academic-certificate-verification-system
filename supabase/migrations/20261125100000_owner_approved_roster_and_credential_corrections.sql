@@ -3,12 +3,13 @@
 
 -- RLS helper: permit approved credential-issuing institutions and organizations.
 CREATE OR REPLACE FUNCTION public.verity_has_approved_credential_issuer(p_organization_id text)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
-AS $
-  SELECT EXISTS (SELECT 1 FROM public."OrganizationCapability" c
-    WHERE c."organizationId"=p_organization_id
-      AND c.capability='ISSUE_CREDENTIALS' AND c.status='APPROVED');
-$;
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
+AS 'SELECT EXISTS (
+  SELECT 1 FROM public."OrganizationCapability" c
+  WHERE c."organizationId"=p_organization_id
+    AND c.capability=''ISSUE_CREDENTIALS'' AND c.status=''APPROVED''
+);';
 REVOKE ALL ON FUNCTION public.verity_has_approved_credential_issuer(text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.verity_has_approved_credential_issuer(text) TO authenticated;
 
