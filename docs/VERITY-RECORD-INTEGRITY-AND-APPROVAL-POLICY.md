@@ -18,8 +18,8 @@ A Student Directory correction must never cascade into an issued certificate. Ce
 3. VERITY validates the workbook headers and values, rejects formula cells and numeric student-number cells that could lose leading zeroes, then stages rows in durable, idempotent chunks. The batch remains `UPLOADING` while chunks are staged.
 4. The uploader submits the completed batch. The batch transitions to `AWAITING_APPROVAL`.
 5. At this point no roster rows are inserted and no student accounts are linked.
-6. The Institution Owner reviews the manifest, row totals, validation errors and batch history.
-7. Only the Institution Owner can approve the batch. ICT cannot approve its own upload.
+6. The Institution or Organization Owner reviews the manifest, row totals, validation errors and batch history.
+7. Only the approved credential-issuer owner can approve the batch. Institution ICT can submit but cannot approve its own upload; non-institution organizations use their owner account.
 8. Approval transitions the batch to `QUEUED`; only then may the existing worker process it.
 9. Existing institution/student-number matches are skipped as duplicates. Existing rows are never overwritten by an import.
 10. Every stage, submission, approval and processing outcome is auditable.
@@ -39,7 +39,7 @@ A credential correction request is separate from a Student Directory correction 
 
 1. ICT or the Institution Owner opens a request against a specific issued certificate.
 2. The request stores the original certificate ID and digest plus proposed corrected values and a reason.
-3. The Institution Owner approves or rejects the request.
+3. The Institution or Organization Owner approves or rejects the request.
 4. Approval authorizes a separate replacement issuance; it does not update the original certificate.
 5. The replacement must be issued through the existing issuance process and receives a new certificate row, certificate ID, verification key, issuance timestamp and digest.
 6. The original remains unchanged. Before linking the replacement, the institution must separately revoke the original with a meaningful reason. It remains visible as a revoked historical credential.
@@ -81,11 +81,11 @@ Each clip must be at least **5 seconds**. Target 6–9 seconds per clip. Use act
 |---|---:|---|---|
 | 01 | 6 sec | Open Institution workspace and Student Directory | “VERITY keeps institutional student records separate from issued certificates.” |
 | 02 | 7 sec | Open CSV template download | “Start with the official template and use accurate institutional records.” |
-| 03 | 8 sec | Select CSV / Excel-exported CSV and show validation preview | “VERITY checks required fields, formats and duplicate student numbers before staging.” |
+| 03 | 8 sec | Select CSV or native XLSX and show the one-sheet validation preview | “VERITY checks CSV/XLSX fields, formats and duplicate student numbers before staging.” |
 | 04 | 7 sec | Show staged import batch and row summary | “Uploading only stages the batch. It does not commit or link students.” |
-| 05 | 7 sec | Sign in as ICT and submit batch for approval | “ICT submits the completed batch to the Institution Owner for approval.” |
-| 06 | 8 sec | Switch to Institution Owner and open awaiting-approval batch | “The Institution Owner reviews the batch, validation results and row totals.” |
-| 07 | 6 sec | Owner selects Approve import | “Only the Institution Owner can approve. ICT cannot approve its own upload.” |
+| 05 | 7 sec | Sign in as ICT and submit batch for approval | “ICT submits the completed batch to the Institution Owner; organization owners submit through their own account.” |
+| 06 | 8 sec | Switch to Institution Owner and open awaiting-approval batch | “The approved issuer owner reviews the batch, validation results and row totals.” |
+| 07 | 6 sec | Owner selects Approve import | “Only the issuer owner can approve. ICT cannot approve its own upload.” |
 | 08 | 7 sec | Show approved batch moving into processing and results | “After approval, VERITY processes the batch and skips existing student-number matches.” |
 | 09 | 7 sec | Search for a student in Student Directory | “Find a student and compare the directory details with official evidence.” |
 | 10 | 8 sec | ICT opens Request correction and enters reason/proposed values | “ICT proposes a correction. The live student record remains unchanged while pending.” |
