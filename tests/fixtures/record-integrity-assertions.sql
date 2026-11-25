@@ -3,6 +3,8 @@ INSERT INTO public."User"(id,"fullName",email,role) VALUES
  ('20000000-0000-4000-8000-000000000002','Institution Owner','owner@verity.test','EMPLOYER');
 INSERT INTO public."Organization"(id,name,type,status,"ownerId")
 VALUES ('org-integrity','Integrity Test Institution','INSTITUTION','APPROVED','20000000-0000-4000-8000-000000000002');
+INSERT INTO public."OrganizationCapability"(id,"organizationId",capability,status)
+VALUES ('cap-integrity','org-integrity','ISSUE_CREDENTIALS','APPROVED');
 INSERT INTO public."InstitutionICTStaff"(id,"organizationId","userId",permissions,status)
 VALUES ('ict-integrity','org-integrity','10000000-0000-4000-8000-000000000001',ARRAY['roster:manage'],'ACTIVE');
 
@@ -136,5 +138,29 @@ DO $$ BEGIN
  END IF;
  IF NOT EXISTS (SELECT 1 FROM public."AuditEvent" WHERE action='CREDENTIAL_CORRECTION_REISSUED') THEN
    RAISE EXCEPTION 'Replacement linkage was not audited';
+ END IF;
+END $$;
+
+
+-- An approved EMPLOYER/organization issuer owner can submit and approve a roster.
+INSERT INTO public."User"(id,"fullName",email,role)
+VALUES ('30000000-0000-4000-8000-000000000003','Organization Owner','org-owner@verity.test','EMPLOYER');
+INSERT INTO public."Organization"(id,name,type,status,"ownerId")
+VALUES ('org-employer','Employer Issuer','EMPLOYER','APPROVED','30000000-0000-4000-8000-000000000003');
+INSERT INTO public."OrganizationCapability"(id,"organizationId",capability,status)
+VALUES ('cap-employer','org-employer','ISSUE_CREDENTIALS','APPROVED');
+SET request.jwt.claim.sub='30000000-0000-4000-8000-000000000003';
+SET request.jwt.claim.role='authenticated';
+SET ROLE authenticated;
+INSERT INTO public."StudentRosterImport"(id,"organizationId","uploadedBy","fileName","totalRows","rejectedRows","totalChunks",status)
+VALUES ('batch-employer','org-employer','30000000-0000-4000-8000-000000000003','employees.xlsx',1,0,1,'UPLOADING');
+UPDATE public."StudentRosterImport" SET status='AWAITING_APPROVAL',"submittedAt"=now()
+WHERE id='batch-employer';
+UPDATE public."StudentRosterImport" SET status='QUEUED',"approvedBy"='30000000-0000-4000-8000-000000000003',"approvedAt"=now()
+WHERE id='batch-employer' AND status='AWAITING_APPROVAL';
+RESET ROLE;
+DO $$ BEGIN
+ IF (SELECT status FROM public."StudentRosterImport" WHERE id='batch-employer') <> 'QUEUED' THEN
+   RAISE EXCEPTION 'Approved organization issuer could not submit and approve its roster';
  END IF;
 END $$;
