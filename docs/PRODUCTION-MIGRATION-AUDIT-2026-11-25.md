@@ -58,3 +58,12 @@ Do not infer that a migration is safe to replay from its name, timestamp, or app
 - No production schema changes were made during this audit.
 - No application deployment or PR merge was performed.
 - Keep the student roster import worker disabled until its matching production migration and application deployment are both verified and the required server-only configuration is confirmed in Render.
+
+
+## 25 November 2026 follow-up — exact migration-source comparison
+
+A follow-up read-only comparison enumerated all 67 entries returned by the Supabase CLI migration list and all 34 SQL migration files on the reviewed feature branch. Results: 15 exact version-prefix matches; 16 ledger entries with a normalized name match but version-prefix drift/alias; 36 applied ledger entries with no normalized source-name match; and 6 repository SQL files with no matching applied ledger name. The earlier 43 figure in the 24 November reconciliation was based on an older 59-entry ledger snapshot and is not the current count.
+
+A name match does not prove that the file bytes equal the SQL executed in production. The live ledger contains duplicate/aliased names for staff-document metadata, roster import, bulk issuance and certificate-ledger hardening. The exact per-entry comparison and Git blob SHAs are captured in [production-migration-ledger-2026-11-25.json](production-migration-ledger-2026-11-25.json). This manifest is an inventory only; it is not a verified schema baseline and must not be used to replay migrations.
+
+The separate internal `storage.migrations` table reported 81 rows; it is not the Supabase CLI migration ledger and must not be conflated with the 67 applied project migration entries. No production SQL, migration repair, reset, merge or deployment was performed.
