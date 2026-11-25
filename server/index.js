@@ -544,6 +544,20 @@ app.post("/api/organization/students/import-batches/:id/approve",auth,run(async(
  s.json({batch,workerEnabled:STUDENT_IMPORT_WORKER_ENABLED,message:STUDENT_IMPORT_WORKER_ENABLED?"Approved. VERITY will now process the roster in the background.":"Approved and queued. The server worker must be enabled before records are processed."});
 }));
 
+app.post("/api/organization/students/import-batches/:id/reject",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ if(org.ownerId!==q.user.id)return s.status(403).json({error:"Only the Institution Owner can reject a student import batch."});
+ const body=z.object({reason:z.string().trim().min(10).max(1000)}).parse(q.body);
+ const {data:batch,error}=await q.supabase.from("StudentRosterImport")
+  .update({status:"REJECTED",rejectedBy:q.user.id,rejectedAt:new Date().toISOString(),rejectionReason:body.reason,updatedAt:new Date().toISOString()})
+  .eq("id",q.params.id).eq("organizationId",org.id).eq("status","AWAITING_APPROVAL")
+  .select("id,status,rejectedBy,rejectedAt,rejectionReason").maybeSingle();
+ if(error)throw error;
+ if(!batch)return s.status(409).json({error:"This batch is not awaiting approval or has already been decided."});
+ await audit(q.supabase,q.user.id,"STUDENT_ROSTER_IMPORT_REJECTED","StudentRosterImport",batch.id,{organizationId:org.id,reason:body.reason});
+ s.json({batch,message:"The import was rejected. No student records were committed or linked."});
+}));
+
 app.get("/api/organization/students/correction-requests",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const {data,error}=await q.supabase.from("StudentRosterCorrectionRequest")
@@ -639,7 +653,7 @@ app.post("/api/organization/credentials/correction-requests/:id/decision",auth,r
 
 app.get("/api/organization/students/import-batches",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
- const {data,error}=await q.supabase.from("StudentRosterImport").select("id,fileName,totalRows,totalChunks,processedChunks,failedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt,submittedAt,approvedBy,approvedAt").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(30);
+ const {data,error}=await q.supabase.from("StudentRosterImport").select("id,fileName,totalRows,totalChunks,processedChunks,failedChunks,insertedRows,duplicateRows,rejectedRows,status,errorSummary,createdAt,updatedAt,completedAt,submittedAt,approvedBy,approvedAt,rejectedBy,rejectedAt,rejectionReason").eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(30);
  if(error)throw error;
  s.json({batches:(data||[]).map(batch=>({...batch,canApprove:org.ownerId===q.user.id&&batch.status==="AWAITING_APPROVAL"})),workerEnabled:STUDENT_IMPORT_WORKER_ENABLED});
 }));
