@@ -577,7 +577,7 @@ app.post("/api/organization/students/:id/correction-requests",auth,run(async(q,s
    faculty:z.string().trim().max(160).optional().nullable(),department:z.string().trim().max(160).optional().nullable(),
    programme:z.string().trim().max(180).optional().nullable(),qualification:z.string().trim().max(180).optional().nullable(),
    classification:z.string().trim().max(100).optional().nullable(),
-   awardDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional().nullable(),
+   awardDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
    academicSession:z.string().trim().max(80).optional().nullable()
   })
  }).parse(q.body);
