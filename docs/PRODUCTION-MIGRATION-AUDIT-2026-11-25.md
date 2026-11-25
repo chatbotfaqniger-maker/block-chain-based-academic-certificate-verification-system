@@ -74,3 +74,12 @@ The separate internal `storage.migrations` table reported 81 rows; it is not the
 Captured [production-schema-catalog-2026-11-25.json](production-schema-catalog-2026-11-25.json) from read-only PostgreSQL catalog queries. The snapshot contains metadata only (no application row data or function source bodies): 27 public base tables, 185 constraints, 103 indexes, 64 public RLS policies, 28 public functions/procedures, 9 non-internal public triggers, 2 public enums, 5 extensions, 452 table-grant rows, 69 routine-grant rows, 3 Storage buckets, 7 Storage policies, zero public views/materialized views and one public sequence.
 
 This is not a complete `pg_dump` or a clean-bootstrap artifact. It excludes Auth internals, managed Storage internals, function source bodies and data. It can support a later schema comparison, but cannot reconstruct the historical migration chain. A clean bootstrap remains blocked pending original SQL recovery or a separately reviewed complete baseline export. No development branch was created and no production schema or data was changed.
+
+
+## 25 November 2026 follow-up — historical branch source recovery
+
+The source search was expanded to six branches containing distinct migration-file variants. The branch union contains 39 unique SQL files; the exact filename, Git blob SHA, branch provenance and comparison to all 67 applied ledger entries are in [production-migration-source-recovery-2026-11-25.json](production-migration-source-recovery-2026-11-25.json). Counts remain 15 exact version matches, 16 normalized-name matches with version drift and 36 applied entries without a source filename match; eight source files have no ledger name match.
+
+Historical PR review found PR #7 added roster-import queue SQL, PR #9 added a prior ledger-hardening SQL, PR #11 added certificate design/digitization SQL, PR #13 added atomic historical conversion, and PR #15 removed the historical-conversion SQL and test assertions because prerequisites were incomplete. The removal is intentional and must not be undone without completing and validating the prerequisites. Some branches contain differing source variants for similarly named queue/ledger migrations; blob SHAs are recorded and must be compared before selecting a source.
+
+This improves provenance but does not recover the missing historical SQL or prove that any source file matches production-executed bytes. The clean-bootstrap gate remains closed. No production SQL, migration repair, merge or deployment was performed.
