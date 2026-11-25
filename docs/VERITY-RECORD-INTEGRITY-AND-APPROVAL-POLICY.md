@@ -89,10 +89,10 @@ The guide contains 15 individually navigable clips, each exactly **8 seconds** (
 | 08 | 7 sec | Show approved batch moving into processing and results | “After approval, VERITY processes the batch and skips existing student-number matches.” |
 | 09 | 7 sec | Search for a student in Student Directory | “Find a student and compare the directory details with official evidence.” |
 | 10 | 8 sec | ICT opens Request correction and enters reason/proposed values | “ICT proposes a correction. The live student record remains unchanged while pending.” |
-| 11 | 8 sec | Owner compares original and proposed values, then approves/rejects | “The Institution Owner makes the decision. Every action is recorded.” |
+| 11 | 8 sec | Owner compares original and proposed values, then approves/rejects | “The owning issuer approves or rejects the proposed directory correction. Every action is recorded.” |
 | 12 | 7 sec | Open an issued certificate and show locked details / verification | “An issued certificate is permanently locked. Directory edits never rewrite it.” |
 | 13 | 8 sec | Create a separate credential-correction request | “If a certificate is wrong, submit a separate request linked to the original credential.” |
-| 14 | 8 sec | Owner approves and show a new issuance screen | “Approval authorizes a new certificate. It never edits the original.” |
-| 15 | 8 sec | Verify original and replacement; show original revoked/superseded history if applicable | “The original remains part of the audit history. The new credential has its own ID and fingerprint.” |
+| 14 | 8 sec | Owner approves and show a new issuance screen | “Approval permits a separate issuance. Revoke the original with a reason; never edit it.” |
+| 15 | 8 sec | Verify original and replacement; show original revoked/superseded history if applicable | “Link the newly issued replacement only after revoking the original. Both certificates remain verifiable in the audit history.” |
 
 **Video production rules:** Every clip must show a real workflow state. Do not show a successful import before owner approval, do not show an Edit control on an issued certificate, and do not imply that approving a correction silently changes or automatically replaces the original credential. Keep the clips separate and individually navigable in the User Guide module.
