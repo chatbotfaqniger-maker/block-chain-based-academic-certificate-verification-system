@@ -39,6 +39,19 @@ CREATE POLICY verity_student_import_submit_for_approval
     AND "submittedAt" IS NOT NULL
     AND "processedChunks"=0 AND "failedChunks"=0
     AND "insertedRows"=0 AND "duplicateRows"=0 AND "completedAt" IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentRosterImport"."organizationId"
+        AND o.type='INSTITUTION' AND o.status='APPROVED'
+        AND (
+          o."ownerId"=(SELECT auth.uid())::text
+          OR EXISTS (
+            SELECT 1 FROM public."InstitutionICTStaff" i
+            WHERE i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
+              AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
+          )
+        )
+    )
   );
 
 CREATE POLICY verity_student_import_owner_approval
@@ -58,7 +71,54 @@ CREATE POLICY verity_student_import_owner_approval
     AND "submittedAt" IS NOT NULL
     AND "processedChunks"=0 AND "failedChunks"=0
     AND "insertedRows"=0 AND "duplicateRows"=0 AND "completedAt" IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentRosterImport"."organizationId"
+        AND o.type='INSTITUTION' AND o."ownerId"=(SELECT auth.uid())::text
+    )
   );
+
+
+-- Freeze the import manifest and enforce the two human-controlled state changes.
+CREATE OR REPLACE FUNCTION public.verity_guard_student_roster_import()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=''
+AS $
+DECLARE v_role text := coalesce(current_setting('request.jwt.claim.role',true),'');
+BEGIN
+  IF TG_OP='DELETE' THEN
+    RAISE EXCEPTION 'Student roster import history cannot be deleted';
+  END IF;
+  IF (to_jsonb(NEW) - ARRAY['status','submittedAt','approvedBy','approvedAt','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt'])
+     IS DISTINCT FROM
+     (to_jsonb(OLD) - ARRAY['status','submittedAt','approvedBy','approvedAt','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt']) THEN
+    RAISE EXCEPTION 'Student roster import manifest fields are immutable after staging';
+  END IF;
+  IF v_role <> 'service_role' THEN
+    IF OLD.status='UPLOADING' AND NEW.status='AWAITING_APPROVAL' THEN
+      IF NEW."submittedAt" IS NULL OR NEW."approvedBy" IS NOT NULL OR NEW."approvedAt" IS NOT NULL
+         OR NEW."processedChunks"<>OLD."processedChunks" OR NEW."failedChunks"<>OLD."failedChunks"
+         OR NEW."insertedRows"<>OLD."insertedRows" OR NEW."duplicateRows"<>OLD."duplicateRows" THEN
+        RAISE EXCEPTION 'Invalid roster import submission transition';
+      END IF;
+    ELSIF OLD.status='AWAITING_APPROVAL' AND NEW.status='QUEUED' THEN
+      IF NEW."approvedBy" IS NULL OR NEW."approvedAt" IS NULL
+         OR NEW."submittedAt" IS DISTINCT FROM OLD."submittedAt"
+         OR NEW."processedChunks"<>OLD."processedChunks" OR NEW."failedChunks"<>OLD."failedChunks"
+         OR NEW."insertedRows"<>OLD."insertedRows" OR NEW."duplicateRows"<>OLD."duplicateRows" THEN
+        RAISE EXCEPTION 'Invalid roster import approval transition';
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'Only the uploader submission and Institution Owner approval transitions are allowed';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$;
+DROP TRIGGER IF EXISTS verity_guard_student_roster_import ON public."StudentRosterImport";
+CREATE TRIGGER verity_guard_student_roster_import
+  BEFORE UPDATE OR DELETE ON public."StudentRosterImport"
+  FOR EACH ROW EXECUTE FUNCTION public.verity_guard_student_roster_import();
+REVOKE ALL ON FUNCTION public.verity_guard_student_roster_import() FROM PUBLIC,anon,authenticated,service_role;
 
 -- Remove direct authenticated roster mutation. Imports are committed by the
 -- privileged queue processor; corrections use the owner-approved RPC below.
