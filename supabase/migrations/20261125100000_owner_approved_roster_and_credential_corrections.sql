@@ -5,10 +5,13 @@ ALTER TABLE public."StudentRosterImport"
   DROP CONSTRAINT IF EXISTS "StudentRosterImport_status_check";
 ALTER TABLE public."StudentRosterImport"
   ADD CONSTRAINT "StudentRosterImport_status_check"
-  CHECK (status IN ('UPLOADING','AWAITING_APPROVAL','QUEUED','PROCESSING','COMPLETED','PARTIAL','FAILED')),
+  CHECK (status IN ('UPLOADING','AWAITING_APPROVAL','QUEUED','PROCESSING','COMPLETED','PARTIAL','FAILED','REJECTED')),
   ADD COLUMN IF NOT EXISTS "submittedAt" timestamptz,
   ADD COLUMN IF NOT EXISTS "approvedBy" text REFERENCES public."User"("id"),
-  ADD COLUMN IF NOT EXISTS "approvedAt" timestamptz;
+  ADD COLUMN IF NOT EXISTS "approvedAt" timestamptz,
+  ADD COLUMN IF NOT EXISTS "rejectedBy" text REFERENCES public."User"("id"),
+  ADD COLUMN IF NOT EXISTS "rejectedAt" timestamptz,
+  ADD COLUMN IF NOT EXISTS "rejectionReason" text;
 
 -- Replace the old one-step UPLOADING -> QUEUED transition with two distinct
 -- transitions: uploader submits for review; only the institution owner queues it.
@@ -88,7 +91,7 @@ BEGIN
   IF TG_OP='DELETE' THEN
     RAISE EXCEPTION 'Student roster import history cannot be deleted';
   END IF;
-  IF (to_jsonb(NEW) - ARRAY['status','submittedAt','approvedBy','approvedAt','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt'])
+  IF (to_jsonb(NEW) - ARRAY['status','submittedAt','approvedBy','approvedAt','rejectedBy','rejectedAt','rejectionReason','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt'])
      IS DISTINCT FROM
      (to_jsonb(OLD) - ARRAY['status','submittedAt','approvedBy','approvedAt','updatedAt','processedChunks','failedChunks','insertedRows','duplicateRows','errorSummary','completedAt']) THEN
     RAISE EXCEPTION 'Student roster import manifest fields are immutable after staging';
@@ -99,6 +102,13 @@ BEGIN
          OR NEW."processedChunks"<>OLD."processedChunks" OR NEW."failedChunks"<>OLD."failedChunks"
          OR NEW."insertedRows"<>OLD."insertedRows" OR NEW."duplicateRows"<>OLD."duplicateRows" THEN
         RAISE EXCEPTION 'Invalid roster import submission transition';
+      END IF;
+    ELSIF OLD.status='AWAITING_APPROVAL' AND NEW.status='REJECTED' THEN
+      IF NEW."rejectedBy" IS NULL OR NEW."rejectedAt" IS NULL
+         OR length(btrim(coalesce(NEW."rejectionReason",''))) NOT BETWEEN 10 AND 1000
+         OR NEW."approvedBy" IS NOT NULL OR NEW."approvedAt" IS NOT NULL
+         OR NEW."submittedAt" IS DISTINCT FROM OLD."submittedAt" THEN
+        RAISE EXCEPTION 'Invalid roster import rejection transition';
       END IF;
     ELSIF OLD.status='AWAITING_APPROVAL' AND NEW.status='QUEUED' THEN
       IF NEW."approvedBy" IS NULL OR NEW."approvedAt" IS NULL
@@ -119,6 +129,26 @@ CREATE TRIGGER verity_guard_student_roster_import
   BEFORE UPDATE OR DELETE ON public."StudentRosterImport"
   FOR EACH ROW EXECUTE FUNCTION public.verity_guard_student_roster_import();
 REVOKE ALL ON FUNCTION public.verity_guard_student_roster_import() FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE POLICY verity_student_import_owner_rejection
+  ON public."StudentRosterImport" FOR UPDATE TO authenticated
+  USING (
+    status='AWAITING_APPROVAL'
+    AND EXISTS (SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentRosterImport"."organizationId" AND o.type='INSTITUTION'
+        AND o."ownerId"=(SELECT auth.uid())::text)
+  )
+  WITH CHECK (
+    status='REJECTED'
+    AND "rejectedBy"=(SELECT auth.uid())::text
+    AND "rejectedAt" IS NOT NULL
+    AND length(btrim(coalesce("rejectionReason",''))) BETWEEN 10 AND 1000
+    AND "approvedBy" IS NULL AND "approvedAt" IS NULL
+    AND "submittedAt" IS NOT NULL
+    AND EXISTS (SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentRosterImport"."organizationId" AND o.type='INSTITUTION'
+        AND o."ownerId"=(SELECT auth.uid())::text)
+  );
 
 -- Remove direct authenticated roster mutation. Imports are committed by the
 -- privileged queue processor; corrections use the owner-approved RPC below.
