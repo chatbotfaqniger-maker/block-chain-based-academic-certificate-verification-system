@@ -602,10 +602,19 @@ app.post("/api/organization/students/correction-requests/:id/decision",auth,run(
  s.json({result:data});
 }));
 
+app.get("/api/organization/credentials",auth,run(async(q,s)=>{
+ const org=await rosterImportAccess(q,s);if(!org)return;
+ const {data,error}=await q.supabase.from("Certificate")
+  .select("id,certificateId,studentName,studentNumber,institution,faculty,department,programme,qualification,classification,awardDate,digest,status")
+  .eq("organizationId",org.id).limit(200);
+ if(error)throw error;
+ s.json({certificates:data||[]});
+}));
+
 app.get("/api/organization/credentials/correction-requests",auth,run(async(q,s)=>{
  const org=await rosterImportAccess(q,s);if(!org)return;
  const {data,error}=await q.supabase.from("CredentialCorrectionRequest")
-  .select("id,certificateId,originalDigest,proposedRecord,reason,status,requestedBy,reviewedBy,decisionNote,replacementCertificateRowId,createdAt,reviewedAt,reissuedAt")
+  .select("id,certificateRowId,certificateId,originalDigest,proposedRecord,reason,status,requestedBy,reviewedBy,decisionNote,replacementCertificateRowId,createdAt,reviewedAt,reissuedAt")
   .eq("organizationId",org.id).order("createdAt",{ascending:false}).limit(100);
  if(error)throw error;
  s.json({requests:data||[],canApprove:org.ownerId===q.user.id});
