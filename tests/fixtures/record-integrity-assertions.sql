@@ -176,11 +176,11 @@ SET request.jwt.claim.role='service_role';
 SET ROLE service_role;
 SELECT public.process_next_student_import_chunk();
 RESET ROLE;
-DO $ BEGIN
+DO $block$ BEGIN
  IF (SELECT status FROM public."StudentRosterImport" WHERE id='batch-employer') <> 'COMPLETED' THEN
    RAISE EXCEPTION 'Approved organization issuer import was not processed after owner approval';
  END IF;
  IF NOT EXISTS (SELECT 1 FROM public."StudentRoster" WHERE "organizationId"='org-employer' AND "studentNumber"='EMP/001') THEN
    RAISE EXCEPTION 'Approved organization issuer roster row was not committed';
  END IF;
-END $;
+END $block$;
