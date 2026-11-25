@@ -628,12 +628,12 @@ app.post("/api/organization/credentials/:id/correction-requests",auth,run(async(
    studentName:z.string().trim().min(2).max(160).optional(),
    studentNumber:z.string().trim().min(2).max(80).optional(),
    institution:z.string().trim().min(2).max(180).optional(),
-   faculty:z.string().trim().max(160).nullable().optional(),
-   department:z.string().trim().max(160).nullable().optional(),
-   programme:z.string().trim().max(180).nullable().optional(),
-   qualification:z.string().trim().max(180).nullable().optional(),
+   faculty:z.string().trim().min(2).max(160).optional(),
+   department:z.string().trim().min(2).max(160).optional(),
+   programme:z.string().trim().min(2).max(180).optional(),
+   qualification:z.string().trim().min(2).max(180).optional(),
    classification:z.string().trim().max(100).nullable().optional(),
-   awardDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
+   awardDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   }).strict()
  }).parse(q.body);
  const {data:certificate,error:certificateError}=await q.supabase.from("Certificate")
