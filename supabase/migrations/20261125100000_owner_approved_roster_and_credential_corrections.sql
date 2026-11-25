@@ -22,6 +22,89 @@ AS 'SELECT EXISTS (
 REVOKE ALL ON FUNCTION public.verity_has_approved_credential_issuer(text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.verity_has_approved_credential_issuer(text) TO authenticated;
 
+-- Extend the durable chunk queue to approved employer/organization issuers while
+-- keeping ICT roster permissions institution-only.
+DROP POLICY IF EXISTS verity_student_import_chunk_roster_read ON public."StudentImportChunk";
+CREATE POLICY verity_student_import_chunk_roster_read
+  ON public."StudentImportChunk" FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentImportChunk"."organizationId"
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED'
+        AND public.verity_has_approved_credential_issuer(o.id)
+        AND (
+          o."ownerId"=(SELECT auth.uid())::text
+          OR (o.type='INSTITUTION' AND EXISTS (
+            SELECT 1 FROM public."InstitutionICTStaff" i
+            WHERE i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
+              AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
+          ))
+        )
+    )
+    OR (SELECT private.is_admin())
+  );
+
+DROP POLICY IF EXISTS verity_student_import_chunk_roster_insert ON public."StudentImportChunk";
+CREATE POLICY verity_student_import_chunk_roster_insert
+  ON public."StudentImportChunk" FOR INSERT TO authenticated
+  WITH CHECK (
+    "createdBy"=(SELECT auth.uid())::text
+    AND status='PENDING' AND attempts=0
+    AND "errorMessage" IS NULL AND "processedAt" IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public."StudentRosterImport" b
+      JOIN public."Organization" o ON o.id=b."organizationId"
+      WHERE b.id="StudentImportChunk"."batchId"
+        AND b."organizationId"="StudentImportChunk"."organizationId"
+        AND b."uploadedBy"=(SELECT auth.uid())::text
+        AND b.status='UPLOADING'
+        AND "StudentImportChunk"."chunkIndex"<b."totalChunks"
+        AND jsonb_array_length("StudentImportChunk".rows)
+          =least(100,b."totalRows"-b."rejectedRows"-("StudentImportChunk"."chunkIndex"*100))
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED'
+        AND public.verity_has_approved_credential_issuer(o.id)
+        AND (
+          o."ownerId"=(SELECT auth.uid())::text
+          OR (o.type='INSTITUTION' AND EXISTS (
+            SELECT 1 FROM public."InstitutionICTStaff" i
+            WHERE i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
+              AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
+          ))
+        )
+    )
+  );
+
+-- New batches must always begin UPLOADING; remove the old legacy direct-COMPLETED
+-- insert path so no client can bypass owner approval.
+DROP POLICY IF EXISTS "Institution owners and ICT create roster import audit" ON public."StudentRosterImport";
+CREATE POLICY "Institution owners and ICT create roster import audit"
+  ON public."StudentRosterImport" FOR INSERT TO authenticated
+  WITH CHECK (
+    "uploadedBy"=(SELECT auth.uid())::text
+    AND status='UPLOADING'
+    AND "insertedRows"=0 AND "duplicateRows"=0
+    AND "processedChunks"=0 AND "failedChunks"=0
+    AND "completedAt" IS NULL
+    AND "approvedBy" IS NULL AND "approvedAt" IS NULL
+    AND "rejectedBy" IS NULL AND "rejectedAt" IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public."Organization" o
+      WHERE o.id="StudentRosterImport"."organizationId"
+        AND o.type IN ('INSTITUTION','EMPLOYER') AND o.status='APPROVED'
+        AND public.verity_has_approved_credential_issuer(o.id)
+        AND (
+          o."ownerId"=(SELECT auth.uid())::text
+          OR (o.type='INSTITUTION' AND EXISTS (
+            SELECT 1 FROM public."InstitutionICTStaff" i
+            WHERE i."organizationId"=o.id AND i."userId"=(SELECT auth.uid())::text
+              AND i.status='ACTIVE' AND 'roster:manage'=ANY(i.permissions)
+          ))
+        )
+    )
+  );
+
 ALTER TABLE public."StudentRosterImport"
   DROP CONSTRAINT IF EXISTS "StudentRosterImport_status_check";
 ALTER TABLE public."StudentRosterImport"
