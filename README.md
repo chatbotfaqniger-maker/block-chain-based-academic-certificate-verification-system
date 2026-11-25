@@ -232,3 +232,7 @@ This section is the locked implementation and release decision record. Any futur
 ## Institutional record integrity
 
 The mandatory CSV/native XLSX owner-approval workflow, Student Directory correction policy, immutable issued-certificate rules and 15-clip User Guide storyboard are documented in [VERITY Record Integrity & Approval Policy](docs/VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md).
+
+### Production migration audit — 25 November 2026
+
+The latest read-only production migration and schema inventory is recorded in [VERITY Production Migration Audit — 25 November 2026](docs/PRODUCTION-MIGRATION-AUDIT-2026-11-25.md). The live ledger reports 67 applied versions (latest `20261124175741`). The two PR #20 migrations remain unapplied. Historical SQL recovery is incomplete; do not run migration repair, replay missing versions, reset, or push migrations to production. See [Production Migration-History Reconciliation](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) for the current findings and release gates.
