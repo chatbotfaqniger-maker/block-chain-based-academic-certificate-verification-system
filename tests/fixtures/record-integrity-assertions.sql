@@ -16,7 +16,7 @@ INSERT INTO public."StudentImportChunk"(id,"batchId","organizationId","chunkInde
 VALUES ('chunk-integrity','batch-integrity','org-integrity',0,
  '[{"studentNumber":"CS/001","fullName":"Ada Example","faculty":"Science","department":"Computer Science","programme":"Computer Science","qualification":"BSc Computer Science","classification":"First Class","awardDate":"2026-10-15","academicSession":"2025/2026"}]'::jsonb,
  repeat('a',64),'10000000-0000-4000-8000-000000000001');
-DO $ BEGIN
+DO $$ BEGIN
  BEGIN
    UPDATE public."StudentRosterImport" SET status='QUEUED' WHERE id='batch-integrity';
  EXCEPTION WHEN OTHERS THEN
@@ -25,7 +25,7 @@ DO $ BEGIN
  IF (SELECT status FROM public."StudentRosterImport" WHERE id='batch-integrity') <> 'UPLOADING' THEN
    RAISE EXCEPTION 'ICT must not be able to queue an import without owner approval';
  END IF;
-END $;
+END $$;
 UPDATE public."StudentRosterImport" SET status='AWAITING_APPROVAL',"submittedAt"=now()
 WHERE id='batch-integrity' AND status='UPLOADING';
 RESET ROLE;
