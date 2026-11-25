@@ -127,14 +127,14 @@ RESET ROLE;
 SET request.jwt.claim.sub='20000000-0000-4000-8000-000000000002';
 SET request.jwt.claim.role='authenticated';
 SET ROLE authenticated;
-DO $ BEGIN
+DO $block$ BEGIN
   BEGIN
     PERFORM public.verity_link_credential_replacement('credential-correction','cert-wrong');
     RAISE EXCEPTION 'An unrelated certificate must not be linked as the replacement';
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='An unrelated certificate must not be linked as the replacement' THEN RAISE; END IF;
   END;
-END $;
+END $block$;
 SELECT public.verity_link_credential_replacement('credential-correction','cert-replacement');
 RESET ROLE;
 
