@@ -23,7 +23,7 @@ function run(args) {
 }
 
 export async function createVerityMarketingMp4({ stats = {}, certificate = null, auditEvents = [], chain = {}, verification = null } = {}) {
-  const duration = 120;
+  const duration = 75;
   const institution = clean(certificate?.institution, "Approved academic institution");
   const qualification = clean(certificate?.qualification, "Academic qualification");
   const certificateId = mask(certificate?.certificateId);
@@ -48,7 +48,7 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
     ["14 / NEW ISSUANCE","Approval authorizes a new certificate.","The issuer owner approves a separate reissuance. The original certificate is revoked with a documented reason and its contents remain unchanged.","OWNER AUTHORIZATION · SEPARATE REISSUANCE","REISSUE CREDENTIAL",["Original content  Locked","Revocation reason  Recorded","New certificate  Issued separately","New ID and fingerprint"]],
     ["15 / VERIFICATION + AUDIT","Verify both records with confidence.","The replacement is linked only after its corrected values are checked. The original remains in the audit history with its revoked status.","ORIGINAL PRESERVED · REPLACEMENT VERIFIED","FINAL VERIFICATION",["Original  "+clean(verification?.status,"REVOKED / HISTORICAL"),"Replacement  New certificate ID","Ledger  "+audit,"Verification  "+status]]
   ];
-  if (scenes.length !== 15 || duration / scenes.length !== 8) throw new Error("VERITY guide export must contain exactly 15 eight-second clips.");
+  if (scenes.length !== 15 || duration / scenes.length !== 5) throw new Error("VERITY guide export must contain exactly 15 five-second clips.");
 
   const dir = await mkdtemp(path.join(os.tmpdir(), "verity-marketing-"));
   try {
@@ -98,7 +98,7 @@ export async function createVerityMarketingMp4({ stats = {}, certificate = null,
       "[4:a]volume=0.055,lowpass=f=1100[highpad];" +
       "[5:a]volume=0.028,lowpass=f=1800[shimmer];" +
       "[6:a]volume=0.018,highpass=f=1800,lowpass=f=6500[air];" +
-      "[bass][lowpad][midpad][highpad][shimmer][air]amix=inputs=6:duration=longest:normalize=0,afade=t=in:st=0:d=4,afade=t=out:st=114:d=6,alimiter=limit=0.88[aout]",
+      "[bass][lowpad][midpad][highpad][shimmer][air]amix=inputs=6:duration=longest:normalize=0,afade=t=in:st=0:d=4,afade=t=out:st=69:d=6,alimiter=limit=0.88[aout]",
       "-map", "0:v", "-map", "[aout]", "-vf", filters.join(","), "-t", String(duration), "-r", "30",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-movflags", "+faststart", output
