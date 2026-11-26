@@ -98,7 +98,7 @@ VERITY does **not** perform antivirus or malware scanning. Certificate and organ
 
 Access remains restricted by authenticated role, institution ownership, staff permissions, organization approval and graduate consent. Employer access to an original certificate requires an approved, unexpired graduate grant. Employer downloads are generated as watermarked PDF copies. Signed preview links are short-lived.
 
-**Required database update:** apply `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` in the Supabase SQL Editor before testing document previews and downloads. It removes the obsolete `CLEAN` scan-status predicates from the two certificate read policies while retaining private-bucket, tenant, staff and graduate-consent checks. The migration updates the two certificate Storage read policies while preserving their private-bucket, tenant, staff and graduate-consent checks; do not make the buckets public.
+**Required database update:** after reconciling the migration history, apply `supabase/migrations/20261126130000_restore_authorized_document_access_before_scanner.sql` following the newer quarantine migration. It restores authenticated, role-scoped certificate document reads without requiring a malware-scanner `CLEAN` verdict. Private-bucket, tenant, institution-owner, graduate and active-staff checks remain in force; SHA-256 verification remains required. VERITY does not claim unscanned files are malware-free, and the buckets must never be made public.
 
 ## Security notes
 
