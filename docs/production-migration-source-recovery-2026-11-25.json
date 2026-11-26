@@ -1,0 +1,1359 @@
+{
+  "audit_date": "2026-11-25",
+  "project_id": "fnsnhasnjmvodkwmdqkc",
+  "repository": "chatbotfaqniger-maker/block-chain-based-academic-certificate-verification-system",
+  "branch_scope": [
+    "main",
+    "feat/immutable-credentials-and-owner-approved-roster",
+    "feature/bulk-certificate-issuance",
+    "feature/verity-durable-bulk-certificate-issuance",
+    "feature/verity-ledger-security-hardening",
+    "feat/certificate-pdf-rendering-engine"
+  ],
+  "branch_scope_note": "Six branches were selected to cover the distinct migration-source variants found during the 20-branch inventory. The other listed branches were inspected and contained subsets of these filenames. This is a branch-source inventory, not proof that a repository file's SQL bytes equal the SQL executed in production.",
+  "counts": {
+    "applied_ledger_entries": 67,
+    "unique_sql_source_files": 39,
+    "exact_version_source_matches": 15,
+    "normalized_name_source_matches_with_version_drift": 16,
+    "applied_entries_without_source_name_match": 36,
+    "source_files_without_ledger_name": 8
+  },
+  "pull_request_evidence": [
+    {
+      "pr": 3,
+      "source_file": "20261122130000_institutional_student_roster_and_bulk_import.sql",
+      "status": "added",
+      "blob_sha": "a20bc68e44ce3db239614d88f674875528d8572f"
+    },
+    {
+      "pr": 4,
+      "source_file": "20261122140000_durable_bulk_certificate_issuance_queue.sql",
+      "status": "added",
+      "blob_sha": "909a39bbe7a4b1514cd1e05ecb6bd567f5a269e8"
+    },
+    {
+      "pr": 5,
+      "source_file": "20261123182712_complete_graduate_consent_revocation.sql",
+      "status": "added",
+      "blob_sha": "f37ea3cfaf8d1d826a789f693b986cbc223ca2e5"
+    },
+    {
+      "pr": 6,
+      "source_file": "20261123221423_restrict_sensitive_rpc_execution.sql",
+      "status": "added",
+      "blob_sha": "1633d7ace684699326da667c6b8c14cfeb2a51c9"
+    },
+    {
+      "pr": 7,
+      "source_file": "20261123223013_add_durable_roster_import_queue.sql",
+      "status": "added",
+      "blob_sha": "f3631c5a1fab07b2988a71aeaddb6184908d9b8d"
+    },
+    {
+      "pr": 8,
+      "source_file": "20261123224500_durable_bulk_certificate_issuance_queue.sql",
+      "status": "added",
+      "blob_sha": "182b0ea6eecde22a0c075250cc05ba1f80114d42"
+    },
+    {
+      "pr": 9,
+      "source_file": "20261123231500_certificate_ledger_integrity_hardening.sql",
+      "status": "added",
+      "blob_sha": "81593c814108ae1b865c2e0d317c055490c458f8"
+    },
+    {
+      "pr": 11,
+      "source_file": "20261124110000_institution_certificate_design_and_digitization.sql",
+      "status": "added",
+      "blob_sha": "12c142cd59e60ee5ca20a9364354753c62a1405a"
+    },
+    {
+      "pr": 13,
+      "source_file": "20261124133000_atomic_historical_certificate_conversion.sql",
+      "status": "added",
+      "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2"
+    },
+    {
+      "pr": 14,
+      "source_file": "20261124133000_atomic_historical_certificate_conversion.sql",
+      "status": "added",
+      "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2"
+    },
+    {
+      "pr": 15,
+      "source_file": "20261124133000_atomic_historical_certificate_conversion.sql",
+      "status": "removed",
+      "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2",
+      "reason": "PR #15 removed the migration and its CI assertions because prerequisite schema and workflow were incomplete; do not restore or replay it blindly."
+    },
+    {
+      "pr": 17,
+      "source_files": [
+        "20261124150000_organization_capabilities_and_school_levels.sql",
+        "20261124153000_enable_capability_based_issuer_workflows.sql"
+      ],
+      "status": "added",
+      "blob_shas": [
+        "ae0fd59071dc27d4d293e90c9f7bd550802d8423",
+        "475ad686d20ae301672fd29dc2a2b272d8cc2e5b"
+      ]
+    },
+    {
+      "pr": 18,
+      "source_file": "20261124180000_large_certificate_issuance_campaigns.sql",
+      "status": "added",
+      "blob_sha": "1b30dce31a1bbc49dc3581cb5ecf67efe535696a"
+    },
+    {
+      "pr": 19,
+      "source_file": "20261124190000_institution_monthly_certificate_issuance_limit.sql",
+      "status": "added",
+      "blob_sha": "65aa12177e57474ea52f1163efb4dc011486ad67"
+    }
+  ],
+  "repository_files": [
+    {
+      "filename": "20261116112343_staff_tenant_isolation_document_quarantine.sql",
+      "normalized_name": "staff_tenant_isolation_document_quarantine",
+      "blob_sha": "18ba97d07c4305065bbaa69b04d771e59ab6b298",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/bulk-certificate-issuance",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261117121000_harden_staff_assignments.sql",
+      "normalized_name": "harden_staff_assignments",
+      "blob_sha": "b5c6a97905881cb3c53b9e4a889344f09a65f0a3",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/bulk-certificate-issuance",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261117121208_harden_staff_tenant_type_and_document_binding.sql",
+      "normalized_name": "harden_staff_tenant_type_and_document_binding",
+      "blob_sha": "2dee23efa3c9957c3a1e909289dfd261bcb62e00",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/bulk-certificate-issuance",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261118113732_enforce_staff_permissions_and_document_tenant_isolation.sql",
+      "normalized_name": "enforce_staff_permissions_and_document_tenant_isolation",
+      "blob_sha": "33312ece9ae4cd45333a7de8bec43f27dd512925",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/bulk-certificate-issuance",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261121120000_remove_antivirus_scan_gates.sql",
+      "normalized_name": "remove_antivirus_scan_gates",
+      "blob_sha": "5bbfe97fc75c71eeb9e2d7370c52ca791b269b97",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/bulk-certificate-issuance",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122100000_student_identity_registration_foundation.sql",
+      "normalized_name": "student_identity_registration_foundation",
+      "blob_sha": "8ed13184caff2f56c1d8b7d35c27c2c315c2e441",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122110000_enforce_institution_invitation_code_expiry_setting.sql",
+      "normalized_name": "enforce_institution_invitation_code_expiry_setting",
+      "blob_sha": "4a6bdeb259987cd110d472c1ee05795eaaa26824",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122120000_student_activation_tokens_and_atomic_roster_claim.sql",
+      "normalized_name": "student_activation_tokens_and_atomic_roster_claim",
+      "blob_sha": "d56512689c1fab151fd9ca88f9701b03775c24db",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122130000_institution_student_recovery_two_person_workflow.sql",
+      "normalized_name": "institution_student_recovery_two_person_workflow",
+      "blob_sha": "a5267f636d01904fb856a612bba5ca24d5971e9c",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122130000_institutional_student_roster_and_bulk_import.sql",
+      "normalized_name": "institutional_student_roster_and_bulk_import",
+      "blob_sha": "a20bc68e44ce3db239614d88f674875528d8572f",
+      "branches": [
+        "feature/bulk-certificate-issuance"
+      ]
+    },
+    {
+      "filename": "20261122132644_add_organization_directory_location.sql",
+      "normalized_name": "add_organization_directory_location",
+      "blob_sha": "b0e04dd1d16fd368fdc3216f1c4152fa533402f6",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122132915_harden_organization_directory_function_search_path.sql",
+      "normalized_name": "harden_organization_directory_function_search_path",
+      "blob_sha": "133d23182b247e55847f4a50ab0aed87ad443fdb",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122133617_separate_staff_document_metadata_and_download_permissions.sql",
+      "normalized_name": "separate_staff_document_metadata_and_download_permissions",
+      "blob_sha": "e94a064052c3f33f9024af89252058f41489b769",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122133647_20261122134000_separate_staff_document_metadata_and_download_permissions.sql",
+      "normalized_name": "separate_staff_document_metadata_and_download_permissions",
+      "blob_sha": "e94a064052c3f33f9024af89252058f41489b769",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122134522_harden_public_security_definer_functions.sql",
+      "normalized_name": "harden_public_security_definer_functions",
+      "blob_sha": "bd065a9eaee96b517705a82fb1cca3adae84319d",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122134554_optimize_organization_staff_and_document_rls.sql",
+      "normalized_name": "optimize_organization_staff_and_document_rls",
+      "blob_sha": "caad7437ee8cdaa6b91fe848ee38816087b04220",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122134629_optimize_document_read_policy_and_lock_trigger_functions.sql",
+      "normalized_name": "optimize_document_read_policy_and_lock_trigger_functions",
+      "blob_sha": "9ad372de07d5e78e471583276b25fc92a86e07ec",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122140000_durable_bulk_certificate_issuance_queue.sql",
+      "normalized_name": "durable_bulk_certificate_issuance_queue",
+      "blob_sha": "909a39bbe7a4b1514cd1e05ecb6bd567f5a269e8",
+      "branches": [
+        "feature/bulk-certificate-issuance"
+      ]
+    },
+    {
+      "filename": "20261122195500_allow_ict_recovery_token_reissue.sql",
+      "normalized_name": "allow_ict_recovery_token_reissue",
+      "blob_sha": "4dc93208277ccc70756cb19165f7aef5bcfc6932",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122200500_secure_ict_recovery_case_claimant_lookup.sql",
+      "normalized_name": "secure_ict_recovery_case_claimant_lookup",
+      "blob_sha": "57140dfccfe620824cfcafa3d63fcfa27f7a36a5",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122202000_secure_ict_roster_claimant_lookup.sql",
+      "normalized_name": "secure_ict_roster_claimant_lookup",
+      "blob_sha": "f2c09ff8e4bda7f5a8df110074fbbfb385d80e9e",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261122202500_drop_ambiguous_student_roster_lookup.sql",
+      "normalized_name": "drop_ambiguous_student_roster_lookup",
+      "blob_sha": "65ca777aff8d9e64c784d376742a7d0ea73faa8e",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261123130000_enforce_staff_permission_boundary.sql",
+      "normalized_name": "enforce_staff_permission_boundary",
+      "blob_sha": "2910252ad3cd8240e123b34f4e0e9e77538d4f45",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261123182712_complete_graduate_consent_revocation.sql",
+      "normalized_name": "complete_graduate_consent_revocation",
+      "blob_sha": "f37ea3cfaf8d1d826a789f693b986cbc223ca2e5",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261123221423_restrict_sensitive_rpc_execution.sql",
+      "normalized_name": "restrict_sensitive_rpc_execution",
+      "blob_sha": "1633d7ace684699326da667c6b8c14cfeb2a51c9",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261123223013_add_durable_roster_import_queue.sql",
+      "normalized_name": "add_durable_roster_import_queue",
+      "blob_sha": "f3631c5a1fab07b2988a71aeaddb6184908d9b8d",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261123224500_durable_bulk_certificate_issuance_queue.sql",
+      "normalized_name": "durable_bulk_certificate_issuance_queue",
+      "blob_sha": "182b0ea6eecde22a0c075250cc05ba1f80114d42",
+      "branches": [
+        "feature/verity-durable-bulk-certificate-issuance",
+        "feature/verity-ledger-security-hardening"
+      ]
+    },
+    {
+      "filename": "20261123231500_certificate_ledger_integrity_hardening.sql",
+      "normalized_name": "certificate_ledger_integrity_hardening",
+      "blob_sha": "81593c814108ae1b865c2e0d317c055490c458f8",
+      "branches": [
+        "feature/verity-ledger-security-hardening"
+      ]
+    },
+    {
+      "filename": "20261124071328_durable_bulk_certificate_issuance_queue.sql",
+      "normalized_name": "durable_bulk_certificate_issuance_queue",
+      "blob_sha": "8e22659143e6622aaef0fee72d2ae7e530f61aa9",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261124074628_certificate_ledger_integrity_hardening.sql",
+      "normalized_name": "certificate_ledger_integrity_hardening",
+      "blob_sha": "bb92461e65368d886ab5b0d2c9c1fc467f81c51a",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261124110000_institution_certificate_design_and_digitization.sql",
+      "normalized_name": "institution_certificate_design_and_digitization",
+      "blob_sha": "12c142cd59e60ee5ca20a9364354753c62a1405a",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster",
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261124123000_enforce_staff_document_download_permission.sql",
+      "normalized_name": "enforce_staff_document_download_permission",
+      "blob_sha": "4526234bd59b47c8ec204824f57469a857e34b2c",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    },
+    {
+      "filename": "20261124133000_atomic_historical_certificate_conversion.sql",
+      "normalized_name": "atomic_historical_certificate_conversion",
+      "blob_sha": "1b8f5e9a54705b3667ff371dd41d4de80c2dc4d2",
+      "branches": [
+        "feat/certificate-pdf-rendering-engine"
+      ]
+    },
+    {
+      "filename": "20261124150000_organization_capabilities_and_school_levels.sql",
+      "normalized_name": "organization_capabilities_and_school_levels",
+      "blob_sha": "ae0fd59071dc27d4d293e90c9f7bd550802d8423",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    },
+    {
+      "filename": "20261124153000_enable_capability_based_issuer_workflows.sql",
+      "normalized_name": "enable_capability_based_issuer_workflows",
+      "blob_sha": "475ad686d20ae301672fd29dc2a2b272d8cc2e5b",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    },
+    {
+      "filename": "20261124180000_large_certificate_issuance_campaigns.sql",
+      "normalized_name": "large_certificate_issuance_campaigns",
+      "blob_sha": "1b30dce31a1bbc49dc3581cb5ecf67efe535696a",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    },
+    {
+      "filename": "20261124190000_institution_monthly_certificate_issuance_limit.sql",
+      "normalized_name": "institution_monthly_certificate_issuance_limit",
+      "blob_sha": "65aa12177e57474ea52f1163efb4dc011486ad67",
+      "branches": [
+        "main",
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    },
+    {
+      "filename": "20261125100000_owner_approved_roster_and_credential_corrections.sql",
+      "normalized_name": "owner_approved_roster_and_credential_corrections",
+      "blob_sha": "a9ca93514a4dd7d0a13bd0b26bd515834a998acb",
+      "branches": [
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    },
+    {
+      "filename": "20261125120000_persistent_roster_import_drafts.sql",
+      "normalized_name": "persistent_roster_import_drafts",
+      "blob_sha": "a53d4d779db74aae2153f44b5f88d170e19409cb",
+      "branches": [
+        "feat/immutable-credentials-and-owner-approved-roster"
+      ]
+    }
+  ],
+  "ledger_comparison": [
+    {
+      "version": "20261114211414",
+      "ledger_name": "create_verity_academic_credentials_schema",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261114212532",
+      "ledger_name": "switch_verity_to_supabase_auth_and_publishable_api",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261114212545",
+      "ledger_name": "support_verity_employer_signup_roles",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261114212711",
+      "ledger_name": "grant_verity_admin_only_after_email_confirmation",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261114212803",
+      "ledger_name": "tighten_verity_trigger_permissions_and_index_relations",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261114212820",
+      "ledger_name": "restrict_public_certificate_lookup_to_anonymous_verification",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115083914",
+      "ledger_name": "organization_accounts_and_student_memberships",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115084052",
+      "ledger_name": "student_membership_rpc_and_immutability",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115084138",
+      "ledger_name": "restrict_membership_rpc_to_authenticated",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115093725",
+      "ledger_name": "add_verity_verification_keys",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115093918",
+      "ledger_name": "add_authenticated_verification_organization_lookup",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115094118",
+      "ledger_name": "add_student_controlled_certificate_sharing",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115094205",
+      "ledger_name": "protect_certificate_access_grant_transitions",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261115094240",
+      "ledger_name": "scope_granted_certificate_and_verification_reads",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261116112343",
+      "ledger_name": "staff_tenant_isolation_document_quarantine",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261116112343_staff_tenant_isolation_document_quarantine.sql",
+          "blob_sha": "18ba97d07c4305065bbaa69b04d771e59ab6b298",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/bulk-certificate-issuance",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261117112421",
+      "ledger_name": "harden_staff_assignments",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261117121000_harden_staff_assignments.sql",
+          "blob_sha": "b5c6a97905881cb3c53b9e4a889344f09a65f0a3",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/bulk-certificate-issuance",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261117121208",
+      "ledger_name": "harden_staff_tenant_type_and_document_binding",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261117121208_harden_staff_tenant_type_and_document_binding.sql",
+          "blob_sha": "2dee23efa3c9957c3a1e909289dfd261bcb62e00",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/bulk-certificate-issuance",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261118113732",
+      "ledger_name": "enforce_staff_permissions_and_document_tenant_isolation",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261118113732_enforce_staff_permissions_and_document_tenant_isolation.sql",
+          "blob_sha": "33312ece9ae4cd45333a7de8bec43f27dd512925",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/bulk-certificate-issuance",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261121104051",
+      "ledger_name": "remove_antivirus_scan_gates",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261121120000_remove_antivirus_scan_gates.sql",
+          "blob_sha": "5bbfe97fc75c71eeb9e2d7370c52ca791b269b97",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/bulk-certificate-issuance",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261121112824",
+      "ledger_name": "public_verity_organization_identity_functions",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261121113747",
+      "ledger_name": "add_supabase_hash_chained_certificate_ledger",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261121113845",
+      "ledger_name": "correct_ledger_identifier_and_backfill_existing_certificates",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261121113920",
+      "ledger_name": "fix_ledger_hash_function_search_path",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122121434",
+      "ledger_name": "organization_directory_visibility",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122132644",
+      "ledger_name": "add_organization_directory_location",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122132644_add_organization_directory_location.sql",
+          "blob_sha": "b0e04dd1d16fd368fdc3216f1c4152fa533402f6",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122132915",
+      "ledger_name": "harden_organization_directory_function_search_path",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122132915_harden_organization_directory_function_search_path.sql",
+          "blob_sha": "133d23182b247e55847f4a50ab0aed87ad443fdb",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122133617",
+      "ledger_name": "separate_staff_document_metadata_and_download_permissions",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122133617_separate_staff_document_metadata_and_download_permissions.sql",
+          "blob_sha": "e94a064052c3f33f9024af89252058f41489b769",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122133647",
+      "ledger_name": "20261122134000_separate_staff_document_metadata_and_download_permissions",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122133647_20261122134000_separate_staff_document_metadata_and_download_permissions.sql",
+          "blob_sha": "e94a064052c3f33f9024af89252058f41489b769",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122134522",
+      "ledger_name": "harden_public_security_definer_functions",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122134522_harden_public_security_definer_functions.sql",
+          "blob_sha": "bd065a9eaee96b517705a82fb1cca3adae84319d",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122134554",
+      "ledger_name": "optimize_organization_staff_and_document_rls",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122134554_optimize_organization_staff_and_document_rls.sql",
+          "blob_sha": "caad7437ee8cdaa6b91fe848ee38816087b04220",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122134629",
+      "ledger_name": "optimize_document_read_policy_and_lock_trigger_functions",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261122134629_optimize_document_read_policy_and_lock_trigger_functions.sql",
+          "blob_sha": "9ad372de07d5e78e471583276b25fc92a86e07ec",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122143103",
+      "ledger_name": "add_verity_issue_resolution_centre",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122143339",
+      "ledger_name": "restrict_issue_report_update_columns",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122143504",
+      "ledger_name": "enforce_new_issue_report_defaults",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122143950",
+      "ledger_name": "add_secure_verity_support_conversations",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122144217",
+      "ledger_name": "snapshot_support_chat_author_display",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122154058",
+      "ledger_name": "verity_support_chat_file_attachments",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122154734",
+      "ledger_name": "verity_support_assignment_unread_and_push_subscriptions",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122192524",
+      "ledger_name": "student_identity_registration_foundation",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261122100000_student_identity_registration_foundation.sql",
+          "blob_sha": "8ed13184caff2f56c1d8b7d35c27c2c315c2e441",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122193345",
+      "ledger_name": "enforce_institution_invitation_code_expiry_setting",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261122110000_enforce_institution_invitation_code_expiry_setting.sql",
+          "blob_sha": "4a6bdeb259987cd110d472c1ee05795eaaa26824",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122194202",
+      "ledger_name": "student_activation_tokens_and_atomic_roster_claim",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261122120000_student_activation_tokens_and_atomic_roster_claim.sql",
+          "blob_sha": "d56512689c1fab151fd9ca88f9701b03775c24db",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122194353",
+      "ledger_name": "student_signup_precheck_and_authoritative_roster_identity",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122194416",
+      "ledger_name": "public_student_signup_institution_options",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122194847",
+      "ledger_name": "normalize_student_matriculation_whitespace",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122194929",
+      "ledger_name": "student_recovery_two_person_approval",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122195012",
+      "ledger_name": "institution_student_recovery_two_person_workflow",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261122130000_institution_student_recovery_two_person_workflow.sql",
+          "blob_sha": "a5267f636d01904fb856a612bba5ca24d5971e9c",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122195038",
+      "ledger_name": "allow_first_reviewer_to_open_and_approve_recovery",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122195101",
+      "ledger_name": "simplify_two_person_student_recovery_approval",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122195410",
+      "ledger_name": "allow_recovery_officers_to_issue_replacement_activation_tokens",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122195704",
+      "ledger_name": "secure_ict_recovery_case_claimant_lookup",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261122200500_secure_ict_recovery_case_claimant_lookup.sql",
+          "blob_sha": "57140dfccfe620824cfcafa3d63fcfa27f7a36a5",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261122195752",
+      "ledger_name": "secure_ict_roster_claimant_identity_lookup",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122195805",
+      "ledger_name": "scope_student_roster_lookup_to_exact_institution",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261122195847",
+      "ledger_name": "remove_ambiguous_student_roster_lookup_overload",
+      "classification": "no_source_name_match",
+      "source_files": []
+    },
+    {
+      "version": "20261123114847",
+      "ledger_name": "enforce_staff_permission_boundary",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261123130000_enforce_staff_permission_boundary.sql",
+          "blob_sha": "2910252ad3cd8240e123b34f4e0e9e77538d4f45",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261123182712",
+      "ledger_name": "complete_graduate_consent_revocation",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261123182712_complete_graduate_consent_revocation.sql",
+          "blob_sha": "f37ea3cfaf8d1d826a789f693b986cbc223ca2e5",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261123221423",
+      "ledger_name": "restrict_sensitive_rpc_execution",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261123221423_restrict_sensitive_rpc_execution.sql",
+          "blob_sha": "1633d7ace684699326da667c6b8c14cfeb2a51c9",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261123223013",
+      "ledger_name": "add_durable_roster_import_queue",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261123223013_add_durable_roster_import_queue.sql",
+          "blob_sha": "f3631c5a1fab07b2988a71aeaddb6184908d9b8d",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124071328",
+      "ledger_name": "durable_bulk_certificate_issuance_queue",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261124071328_durable_bulk_certificate_issuance_queue.sql",
+          "blob_sha": "8e22659143e6622aaef0fee72d2ae7e530f61aa9",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124074628",
+      "ledger_name": "certificate_ledger_integrity_hardening",
+      "classification": "exact_version_file",
+      "source_files": [
+        {
+          "filename": "20261124074628_certificate_ledger_integrity_hardening.sql",
+          "blob_sha": "bb92461e65368d886ab5b0d2c9c1fc467f81c51a",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124112527",
+      "ledger_name": "enforce_staff_document_download_permission",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261124123000_enforce_staff_document_download_permission.sql",
+          "blob_sha": "4526234bd59b47c8ec204824f57469a857e34b2c",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124134929",
+      "ledger_name": "20261123223013_add_durable_roster_import_queue",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261123223013_add_durable_roster_import_queue.sql",
+          "blob_sha": "f3631c5a1fab07b2988a71aeaddb6184908d9b8d",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124134932",
+      "ledger_name": "20261124071328_durable_bulk_certificate_issuance_queue",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261122140000_durable_bulk_certificate_issuance_queue.sql",
+          "blob_sha": "909a39bbe7a4b1514cd1e05ecb6bd567f5a269e8",
+          "branches": [
+            "feature/bulk-certificate-issuance"
+          ]
+        },
+        {
+          "filename": "20261123224500_durable_bulk_certificate_issuance_queue.sql",
+          "blob_sha": "182b0ea6eecde22a0c075250cc05ba1f80114d42",
+          "branches": [
+            "feature/verity-durable-bulk-certificate-issuance",
+            "feature/verity-ledger-security-hardening"
+          ]
+        },
+        {
+          "filename": "20261124071328_durable_bulk_certificate_issuance_queue.sql",
+          "blob_sha": "8e22659143e6622aaef0fee72d2ae7e530f61aa9",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124134935",
+      "ledger_name": "20261124074628_certificate_ledger_integrity_hardening",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261123231500_certificate_ledger_integrity_hardening.sql",
+          "blob_sha": "81593c814108ae1b865c2e0d317c055490c458f8",
+          "branches": [
+            "feature/verity-ledger-security-hardening"
+          ]
+        },
+        {
+          "filename": "20261124074628_certificate_ledger_integrity_hardening.sql",
+          "blob_sha": "bb92461e65368d886ab5b0d2c9c1fc467f81c51a",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster",
+            "feat/certificate-pdf-rendering-engine"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124171347",
+      "ledger_name": "organization_capabilities_and_school_levels",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261124150000_organization_capabilities_and_school_levels.sql",
+          "blob_sha": "ae0fd59071dc27d4d293e90c9f7bd550802d8423",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124171356",
+      "ledger_name": "enable_capability_based_issuer_workflows",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261124153000_enable_capability_based_issuer_workflows.sql",
+          "blob_sha": "475ad686d20ae301672fd29dc2a2b272d8cc2e5b",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124174155",
+      "ledger_name": "large_certificate_issuance_campaigns",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261124180000_large_certificate_issuance_campaigns.sql",
+          "blob_sha": "1b30dce31a1bbc49dc3581cb5ecf67efe535696a",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "20261124175741",
+      "ledger_name": "institution_monthly_certificate_issuance_limit",
+      "classification": "normalized_name_match",
+      "source_files": [
+        {
+          "filename": "20261124190000_institution_monthly_certificate_issuance_limit.sql",
+          "blob_sha": "65aa12177e57474ea52f1163efb4dc011486ad67",
+          "branches": [
+            "main",
+            "feat/immutable-credentials-and-owner-approved-roster"
+          ]
+        }
+      ]
+    }
+  ],
+  "safety_conclusion": "The 39-file branch union does not recover 36 ledger entry names. Some normalized-name matches are only candidate source matches; several ledger entries have no source filename anywhere in the inspected branches. Do not rename, replay, repair, or synthesize migrations from this inventory.",
+  "pull_requests_without_migration_changes": [
+    1,
+    2,
+    10,
+    12,
+    16
+  ],
+  "all_repository_branches_reviewed": [
+    "feat/certificate-pdf-rendering-engine",
+    "feat/complete-certificate-lifecycle",
+    "feat/graduate-consent-revocation",
+    "feat/immutable-credentials-and-owner-approved-roster",
+    "feat/institution-certificate-design-system",
+    "feature/bulk-certificate-issuance",
+    "feature/institution-expansion-backward-compatible",
+    "feature/institutional-bulk-student-management",
+    "feature/issuer-capability-expansion",
+    "feature/large-issuance-campaigns",
+    "feature/verity-cinematic-showcase-guides",
+    "feature/verity-documentary-120-seconds",
+    "feature/verity-durable-bulk-certificate-issuance",
+    "feature/verity-durable-student-roster-import",
+    "feature/verity-ledger-security-hardening",
+    "feature/verity-monthly-issuance-quota",
+    "fix/defer-incomplete-historical-digitization-migration",
+    "fix/verity-ledger-and-document-guidance",
+    "main",
+    "security/verity-rpc-and-verification-rate-limits"
+  ],
+  "source_integrity_check": {
+    "selected_source_bearing_branches": 6,
+    "unique_filenames": 39,
+    "same_filename_distinct_blob_sha_count": 0,
+    "result": "Every repeated filename among the six source-bearing branches had the same Git blob SHA. Distinct filenames with the same normalized migration name remain separate alternatives and have different blob SHAs; do not treat them as interchangeable."
+  },
+  "recovery_conclusion": "All 20 repository branches were enumerated and their migration directories inspected. Six branches covered the distinct source-bearing variants; the remaining branches contained subsets. The 39-file union still does not include source filenames for 36 of the 67 applied ledger entries. Historical PRs 1–19 were cross-checked for migration file changes. No original SQL was found for the missing foundational, certificate-ledger and support/recovery migrations."
+}

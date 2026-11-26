@@ -116,9 +116,9 @@ Institution registration codes do not expire by default. An institution may expl
 
 Students should not have to visit ICT for routine onboarding. A physical visit is only an institution's fallback when its approved remote identity-checking and token-distribution channels cannot establish the student's identity.
 
-For the current importer, prepare the roster in Excel or another spreadsheet application and save/export it as **CSV UTF-8** before uploading. Required headers are `student_number` and `full_name`; optional headers are `institutional_email`, `faculty`, `department`, `programme`, and `academic_session`. A sample, non-real-data template is available at [VERITY Student Roster Template](VERITY-STUDENT-ROSTER-TEMPLATE.csv). Direct .xlsx workbook upload is not yet supported.
+Prepare the roster with the official VERITY CSV or XLSX template. CSV files must be UTF-8. Native `.xlsx` workbooks must contain exactly one visible, non-empty worksheet; legacy `.xls`, macro-enabled `.xlsm` and encrypted workbooks are not accepted. Student-number cells in Excel must be formatted as Text so leading zeroes are preserved. Required headers include `student_number` and `full_name`; use the supplied template for the complete supported field list. A sample CSV template is available at [VERITY Student Roster Template](VERITY-STUDENT-ROSTER-TEMPLATE.csv).
 
-Implementation status (22 November 2026): The first roster-backed signup and single-use activation workflow is deployed with CSV roster import, public approved-institution selection, student matriculation-first signup, one-time hashed activation tokens, atomic roster claiming, ACTIVE membership creation, per-student token replacement for eligible unclaimed records, scoped ICT assignment, and audited registration disputes. Two-person recovery is implemented: a first authorized officer records the review, a different authorized officer must approve completion, and release is blocked when the claimant has certificate records for that student identity so VERITY Admin can review credential ownership. The previous account is not deleted. Direct .xlsx import and full real-account end-to-end testing remain outstanding.
+Implementation status (25 November 2026): The feature branch adds native XLSX parsing alongside CSV, issuer-owner approval before roster worker processing, organization issuer support subject to approved `ISSUE_CREDENTIALS` capability, and the existing roster-backed signup and single-use activation workflow. The existing two-person recovery safeguards remain in place. These changes are not production-active until the feature branch is reviewed, merged and deployed, its additive migration is applied, and real-account end-to-end testing passes.
 
 
 ### 2.4 In-app student onboarding walkthrough
@@ -455,9 +455,9 @@ Use **Account Settings** to update the administrator display name where availabl
 
 ### 7.7 Marketing showcase export
 
-The in-app VERITY film is a 120-second (two-minute), nine-scene product showcase. The extended runtime gives the film room to explain student identity registration and ICT recovery, roster import and reviewed bulk issuance, organization registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger. The administrator-only MP4 export endpoint renders a video using available platform statistics, a recent credential reference and audit/verification status. Sensitive certificate references are masked in the exported video.
+The VERITY User Guide documentary contains 15 individually navigable clips of five seconds each (75 seconds total). It explains student identity registration and ICT recovery, roster import and reviewed bulk issuance, organization registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger. The administrator-only MP4 export endpoint renders a video using available platform statistics, a recent credential reference and audit/verification status. Sensitive certificate references are masked in the exported video.
 
-The showcase is a cinematic data-driven presentation, not a screen recording of every live user interaction. Do not publish an export containing confidential information without reviewing the output and obtaining the appropriate authorization. The interactive in-app film and administrator MP4 export are both designed for a 120-second runtime. MP4 generation, exact duration and playback should be verified in the target deployment before the feature is described as operational.
+The showcase is a cinematic data-driven presentation, not a screen recording of every live user interaction. Do not publish an export containing confidential information without reviewing the output and obtaining the appropriate authorization. The interactive in-app film and administrator-only MP4 export are both designed for the same 75-second runtime, with 15 clips of five seconds each. MP4 generation, exact duration and playback should be verified in the target deployment before the feature is described as operational.
 
 ---
 
@@ -527,7 +527,7 @@ Certificate documents and organization identity evidence are stored in private S
 
 This integrity check detects a file changing after its fingerprint was recorded; it is not a malware detector and does not prove that an uploaded file is safe. Users should upload documents only from trusted sources and keep their own devices protected. Private storage, authenticated roles, institution scoping, staff permissions and graduate-controlled access grants continue to govern who can retrieve a document.
 
-**Production database step:** ensure the migration `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` has been applied in the Supabase SQL Editor before relying on the current document-access policies. It removes obsolete antivirus-verdict predicates while preserving private-bucket enforcement, certificate-to-institution relationships, storage-path tenant checks, administrator and institution ownership checks, active staff permission checks, and approved, unexpired employer grants. This is a one-time policy migration, not an antivirus setup step. Never make either bucket public.
+**Production database step:** after reviewing and reconciling the complete migration history, apply `supabase/migrations/20261126130000_restore_authorized_document_access_before_scanner.sql` after the later quarantine migration. This restores private certificate-document reads for authorized administrators, approved institution owners, linked graduates and active staff without requiring a scanner verdict. Existing tenant/path checks and graduate-consent controls for employer sharing remain in place. This is not an antivirus setup step: VERITY does not scan files or label them malware-free. Never make either bucket public.
 
 ### 9.3 Blockchain and the database ledger
 
@@ -602,7 +602,7 @@ Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY` and `CONTRACT_ADDRESS` only when 
 
 ### 11.3 Document security configuration
 
-VERITY has no antivirus scanner and requires no ClamAV host, antivirus service or scanner credentials. Confirm the two storage buckets remain private, the server's Supabase URL and publishable key are configured, and the `20261121120000_remove_antivirus_scan_gates.sql` policy migration has been applied. The `/api/health` endpoint reports private-storage and SHA-256 controls. File-signature validation and SHA-256 integrity checks are not malware detection. Do not set public bucket access to work around a policy issue.
+VERITY's malware scanner is a planned future feature and is not required for initial customer use. Confirm the two storage buckets remain private, the server's Supabase URL and publishable key are configured, and the migration `20261126130000_restore_authorized_document_access_before_scanner.sql` has been reviewed and applied in the correct order after migration-history reconciliation. The `/api/health` endpoint reports private-storage and SHA-256 controls. File-signature validation and SHA-256 integrity checks are not malware detection; do not represent an unscanned file as CLEAN. Do not set public bucket access to work around a policy issue.
 
 ### 11.4 Local development
 
@@ -716,18 +716,20 @@ Open Notifications in the main workspace navigation to review recent account and
 
 ## Bulk student roster import
 
-Approved institution owners and active ICT staff with the `roster:manage` permission can open **Bulk student import** from the institution workspace.
+Approved institution owners and active ICT staff with the `roster:manage` permission can stage institution rosters from **Bulk student import**. Approved organization owners with the separately approved `ISSUE_CREDENTIALS` capability can stage organization rosters from their organization workspace.
 
-1. Download the VERITY student CSV template.
-2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional.
-3. Select the CSV and review the local preview and rejected-row messages.
-4. Import the valid records. VERITY stages them in 100-row chunks and shows the upload progress.
-5. Review Import history for queued, processing, completed or partial outcomes. The batch shows inserted, duplicate, rejected and failed counts.
-6. Open Institution ICT Centre to review the student roster and use the existing activation-token workflow.
+1. Download the official CSV or XLSX template.
+2. Complete the required columns: student number, full name, faculty, department, programme and qualification. Email, classification, award date and academic session are optional where supported by the selected issuer workflow.
+3. Select the CSV or native XLSX file. VERITY parses it and opens the in-app **Spreadsheet editor** before staging.
+4. Edit cells, add/duplicate/remove rows, search the draft, and use Undo/Redo as needed. Required fields, duplicate student numbers, email addresses and award dates are revalidated after edits. Invalid rows are highlighted and excluded from staging.
+5. Export the corrected draft to CSV or Excel if you need a separate copy. VERITY automatically saves the draft privately to Supabase in 100-row chunks. You can leave the page and resume it later from **Saved spreadsheet drafts** using the same account. Drafts expire 30 days after the last save. The original file on your device is not modified.
+6. Submit the valid rows for owner approval. VERITY stages them in durable 100-row chunks; staging does not yet add or link any roster records. The batch becomes **Awaiting approval**.
+7. The issuer owner reviews the manifest and explicitly approves or rejects the batch. Institution ICT cannot approve its own upload.
+8. Only after approval does the batch enter the worker queue. Review Import history for queued, processing, completed or partial outcomes.
 
-Bulk import adds eligible records to the existing student identity registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
+After owner approval and successful worker processing, bulk import adds eligible records to the issuer's existing roster registry. It does not create login accounts, issue certificates, or grant access to private documents. Existing institution/matriculation records are never overwritten; duplicate normalized student numbers are skipped. If an upload is interrupted while the same page remains open, use **Resume interrupted upload** to retry the missing chunks. The server-side worker runs within the existing Render web service and requires a server-only Supabase service key plus `ENABLE_STUDENT_IMPORT_WORKER=true`. Without that configuration, submitted batches remain safely queued.
 
-ICT staff can use Bulk student import only when their active institution assignment includes `roster:manage`. Staff with only `registration:recover` can use the recovery workflow but cannot import or browse the full roster. The institution owner remains responsible for assigning and reviewing ICT permissions.
+Institution ICT staff can stage imports only when their active institution assignment includes `roster:manage`. Staff with only `registration:recover` can use the recovery workflow but cannot import or browse the full roster. Organization imports are staged by the organization owner; there is no organization ICT import-approval bypass. The issuer owner remains responsible for approval and the audit trail.
 
 
 ## Certificate design and existing-certificate digitisation
@@ -767,3 +769,57 @@ Scanning a QR code resolves the credential reference. VERITY then checks the iss
 
 ### PDF certificate preview (development rollout)
 Approved institution owners can generate a private PDF preview from a saved design in the Certificate Design Studio. The preview uses sample or entered graduate details and includes a visible **PREVIEW — NOT A VALID CREDENTIAL** marking and a non-verifying preview QR. It is for layout inspection only: it does not create a certificate ID, verification key, ledger event or public verification result. The original artwork remains private and its stored SHA-256 fingerprint is checked before rendering. Do not distribute preview PDFs as issued certificates.
+
+
+## Institutional record approval and immutable certificate protection
+
+### CSV / Excel roster import approval
+
+1. Authorized ICT or the Institution/Organization Owner downloads the CSV or XLSX template, or uploads a supported native `.xlsx` workbook with one visible worksheet.
+2. VERITY validates required columns, student numbers, dates and duplicate rows. For `.xlsx`, formula cells are rejected and student-number cells must be formatted as Text to preserve leading zeroes.
+3. Before staging, the in-app Spreadsheet editor allows the uploader to edit cells, add/duplicate/remove rows, search, undo/redo and export the corrected CSV/XLSX. Validation reruns after edits; invalid rows are highlighted and excluded from the staged payload. Draft changes autosave to a private Supabase draft owned by the uploader, in 100-row chunks. The uploader can resume the draft from the Saved spreadsheet drafts list for 30 days after the last save. Successful submission deletes the draft chunks after the import batch has been staged.
+4. The uploader submits the valid rows for Institution Owner approval. The batch status becomes **Awaiting approval**.
+5. **No student records are inserted or linked to accounts before approval.** Uploading or submitting is not approval.
+6. The Institution Owner reviews the batch details and selects **Approve import**. ICT officers cannot approve their own upload.
+7. Only after owner approval does VERITY queue the batch for background processing. Existing institution/student-number matches are skipped; existing student records are never silently overwritten.
+8. The import history records the uploader, approver, approval time, processing state and row-level outcomes.
+
+### Student Directory correction
+
+1. ICT finds the student's record and selects **Request correction**.
+2. ICT enters the proposed values and a reason supported by official institutional evidence.
+3. The current directory record remains unchanged while the request is pending.
+4. The Institution Owner compares the original and proposed values and approves or rejects the request.
+5. If approved, VERITY updates the Student Directory record only. The action and decision are audited.
+6. If the source record changed after the request was created, VERITY marks the request as a conflict; ICT must review the current data and submit a fresh request.
+7. A claimed student's number cannot be changed through a normal profile correction. Use the existing identity dispute and recovery workflow.
+
+### Issued certificate correction — no editing
+
+**An issued certificate is permanently immutable.** No role, including the Institution Owner or VERITY System Administrator, can edit its academic contents, certificate ID, verification key, original document or SHA-256 fingerprint. A Student Directory correction never changes a previously issued certificate.
+
+If an issued credential contains an error:
+
+1. Submit a separate credential-correction request linked to the original certificate ID and digest.
+2. Provide the proposed corrected values and a clear reason.
+3. The Institution Owner approves or rejects the request.
+4. Approval authorizes a **new certificate issuance** through the normal issuance workflow. The new credential receives a new certificate ID, verification key, issuance timestamp and fingerprint.
+5. The original certificate remains unchanged. Revoke it separately with a meaningful reason before linking the replacement. Its historical record and verification outcome remain auditable.
+
+Approval does not automatically edit, revoke or replace the original credential.
+
+#### Using the Student Directory
+
+1. Open **Issued certificate correction** and locate the active certificate.
+2. Select **Request credential correction**, change only the incorrect fields and provide the reason plus official supporting evidence.
+3. Submit the request. The original certificate remains active and unchanged while the request is pending.
+4. The Institution/Organization Owner reviews the proposed values and approves or rejects the request.
+5. If approved, issue a new certificate through the normal issuance workflow. Do not edit or duplicate the original record.
+6. Revoke the original certificate separately with a documented reason. Once it is revoked, select the new active certificate under the approved request and choose **Link replacement**.
+7. VERITY checks that the replacement belongs to the same issuer and matches the approved correction values. The original and replacement remain separately traceable in the audit history.
+
+ICT can submit the request but cannot approve it or link the replacement. The Institution/Organization Owner performs those decisions.
+
+### Fifteen-clip video guide
+
+The User Guide video sequence contains 15 separately navigable clips, each five seconds long (75 seconds total). The Admin-only MP4 download renders those same 15 clips into one video file. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.

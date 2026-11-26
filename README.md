@@ -32,13 +32,13 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Supabase email/password authentication
 - Role-aware access (System Admin, Organization Admin, Student / Graduate)
 - Role-filtered User Guidelines with dedicated module walkthroughs, action references, permissions, warnings and troubleshooting
-- 90-second cinematic in-app VERITY product film using live dashboard totals and an interactive credential verification action
+- 75-second, 15-clip VERITY User Guide film (five seconds per clip) using live dashboard totals and an interactive credential verification action
 - Institution staff access scoped to their own approved institution, with only `certificates:read` and `documents:download` implemented; document downloads require both permissions and never grant issuance or revocation authority
 - Organization registration with System Admin approval
 - Organization-reported city, state / region and country captured at signup or updated in the organization identity workspace
 - Public Global Institutions & Organizations directory with organization-type, name and location filters; only approved organizations that opt into public listing appear
 - Organization-specific student / employee membership and registration codes
-- Institution student identity console: private CSV roster import (up to 50,000 rows), duplicate-safe matriculation matching, roster status, scoped ICT officer assignment, registration-dispute intake and one-time activation-token issuance
+- Institution and approved organization student identity console: private CSV and native XLSX roster import (up to 50,000 rows), duplicate-safe matriculation matching, roster status, scoped ICT officer assignment, registration-dispute intake and one-time activation-token issuance
 - Student signup begins with matriculation number and approved institution selection; account creation is followed by single-use activation-token verification against the institution roster
 - Atomic roster claim prevents duplicate student ownership, marks the token used, activates institution membership and applies the official roster name to the student profile
 - ICT can export per-student activation tokens once, reissue an unused token for an eligible unclaimed record, and open an audited dispute for suspected account misclaims; active-account release requires two different authorized officers, is blocked when the claimant has certificate records for that student identity, and preserves the old account and audit trail
@@ -98,7 +98,7 @@ VERITY does **not** perform antivirus or malware scanning. Certificate and organ
 
 Access remains restricted by authenticated role, institution ownership, staff permissions, organization approval and graduate consent. Employer access to an original certificate requires an approved, unexpired graduate grant. Employer downloads are generated as watermarked PDF copies. Signed preview links are short-lived.
 
-**Required database update:** apply `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` in the Supabase SQL Editor before testing document previews and downloads. It removes the obsolete `CLEAN` scan-status predicates from the two certificate read policies while retaining private-bucket, tenant, staff and graduate-consent checks. The migration updates the two certificate Storage read policies while preserving their private-bucket, tenant, staff and graduate-consent checks; do not make the buckets public.
+**Required database update:** after reconciling the migration history, apply `supabase/migrations/20261126130000_restore_authorized_document_access_before_scanner.sql` following the newer quarantine migration. It restores authenticated, role-scoped certificate document reads without requiring a malware-scanner `CLEAN` verdict. Private-bucket, tenant, institution-owner, graduate and active-staff checks remain in force; SHA-256 verification remains required. VERITY does not claim unscanned files are malware-free, and the buckets must never be made public.
 
 ## Security notes
 
@@ -116,7 +116,7 @@ VERITY will use a roster-backed student identity workflow for institution onboar
 ### Approved registration policy
 - Students should normally self-register remotely; routine physical visits to institution ICT are not required.
 - The matriculation number is an identifier, not proof of identity. A matching number alone must never activate or transfer a student account.
-- Only an approved academic institution can import and manage its private student roster. The roster is matched by institution and normalized matriculation number, with duplicate detection and import audit history.
+- Only an approved academic institution or organization with separately approved `ISSUE_CREDENTIALS` capability can import and manage its private roster. Every CSV/XLSX batch is staged and explicitly approved by the issuer owner before the worker commits records. Matching uses issuer and normalized student number, with duplicate detection and import audit history.
 - The student enters the matriculation number first, then selects the institution. VERITY must not disclose another student's private details when a lookup fails or a record is already claimed.
 - Account activation requires a private, high-entropy, single-use token generated for the exact roster record by an authorized institution owner or ICT officer. The token is delivered to the matching student through an institution-approved channel; the student cannot replace the destination with an arbitrary contact to claim another person's record.
 - After account creation, the student submits the token. A database transaction locks the roster record, consumes the token, links the Graduate account, activates membership and applies the institution's official roster name. Shared/default passwords and institution codes as passwords are prohibited.
@@ -134,7 +134,7 @@ The institution's registration/invitation code does not expire by default. Expir
 - Student roster information, institutional contact details and claim history are private and available only to authorized institution owner/ICT staff and the relevant student through purpose-limited flows.
 
 ### Implementation status
-The database foundation, roster-first student signup, one-time hashed activation tokens, atomic student claim, token export/reissue, scoped ICT permissions, claimant visibility and two-person recovery review are implemented and deployed. CSV import supports up to 10,000 records. Direct .xlsx import and VERITY Admin review for disputed claims with certificate history remain outstanding. Full real-account end-to-end testing is still required.
+The database foundation, roster-first student signup, one-time hashed activation tokens, atomic student claim, token export/reissue, scoped ICT permissions, claimant visibility and two-person recovery review are implemented. On this feature branch, CSV and native XLSX roster imports support up to 50,000 rows, with issuer-owner approval before worker processing. VERITY Admin review for disputed claims with certificate history remains outstanding. Full real-account end-to-end testing is still required.
 
 ## Organization and student onboarding
 
@@ -179,11 +179,13 @@ Default function privileges for the migration owner (`postgres` in the productio
 
 The production database's applied migration history must match the repository before using automated Supabase CLI migration pushes or resets. See [Production Migration-History Reconciliation](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) for the current audit and release safety rules. Do not run `supabase db push` or replay missing historical migrations against production until the reconciliation is complete.
 
+The persistent spreadsheet-draft migration (`20261125120000_persistent_roster_import_drafts.sql`) is part of PR #20's isolated feature branch only. It has been exercised in CI against a disposable PostgreSQL fixture; it has **not** been applied to the production Supabase project. Apply it only after the production migration-history reconciliation, schema review, and explicit release approval.
+
 ## Durable institutional student roster import
 
-Approved credential issuers can import up to 50,000 student rows per batch from the VERITY CSV template. The application validates the file in the browser, stages it in 100-row chunks, and processes those chunks through a durable PostgreSQL queue. Imports extend the existing `StudentRoster` identity registry; they do not create graduate login accounts or issue certificates. New rows enter the existing `ELIGIBLE` state and continue through the established single-use activation-token workflow.
+Approved credential issuers can import up to 50,000 student rows per batch from the VERITY CSV or native XLSX template. Before staging, the in-app spreadsheet editor supports cell editing, row add/duplicate/remove, search, undo/redo, validation and corrected CSV/XLSX export. The editor autosaves a private, uploader-owned draft to Supabase in 100-row chunks. Authorized uploaders can resume drafts across sessions for 30 days after the last save; the original file on the user's device is not modified. Draft rows are kept separate from import batches and are deleted after successful submission. Valid rows are staged in 100-row chunks and processed through a durable PostgreSQL queue only after issuer-owner approval. Imports extend the existing `StudentRoster` identity registry; they do not create graduate login accounts or issue certificates. New rows enter the existing `ELIGIBLE` state and continue through the established single-use activation-token workflow.
 
-The import worker runs inside the existing Node/Express web service, so it does not require a separate paid Render worker service. To process queued batches, configure the server-only `SUPABASE_SERVICE_ROLE_KEY` (or supported Supabase secret key) and set `ENABLE_STUDENT_IMPORT_WORKER=true` in Render. Keep the worker disabled until the matching database migration is applied. If the worker is disabled, batches remain safely queued and the interface displays that status. The worker uses a transaction-scoped `FOR UPDATE SKIP LOCKED` queue, retry-safe chunk staging, and the existing institution/matriculation uniqueness constraint; it never overwrites existing student records. Institution owners and active ICT staff with `roster:manage` can import and view the batch history.
+The import worker runs inside the existing Node/Express web service, so it does not require a separate paid Render worker service. To process queued batches, configure the server-only `SUPABASE_SERVICE_ROLE_KEY` (or supported Supabase secret key) and set `ENABLE_STUDENT_IMPORT_WORKER=true` in Render. Keep the worker disabled until the matching database migration is applied. If the worker is disabled, batches remain safely queued and the interface displays that status. The worker uses a transaction-scoped `FOR UPDATE SKIP LOCKED` queue, retry-safe chunk staging, and the existing institution/matriculation uniqueness constraint; it never overwrites existing student records. Institution owners and active ICT staff with `roster:manage` can stage institution imports; approved organization owners can stage organization imports. In both cases, only the issuer owner can approve or reject the batch, and the worker cannot commit unapproved rows.
 
 ## Durable bulk certificate issuance
 
@@ -222,6 +224,26 @@ The approved release sequence for the durable bulk certificate issuance and cert
 This section is the locked implementation and release decision record. Any future change to these decisions must be documented here before implementation.
 
 ### Documentary runtime and content
-- The VERITY User Guide product documentary is designed for a 120-second (two-minute), nine-scene experience in both the interactive showcase and administrator MP4 export.
+- The VERITY User Guide documentary contains 15 individually navigable clips of five seconds each (75 seconds total) in both the interactive showcase and administrator-only MP4 export.
 - The extended edition explains student identity registration and institution ICT recovery, roster import and reviewed bulk certificate issuance, organization legal registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger.
 - The MP4 generator and in-app showcase must remain duration-aligned. Verify the generated file's actual duration and playback after deployment; a source-code change alone is not proof of a successfully rendered MP4.
+
+
+## Institutional record integrity
+
+The mandatory CSV/native XLSX owner-approval workflow, Student Directory correction policy, immutable issued-certificate rules and 15-clip User Guide storyboard are documented in [VERITY Record Integrity & Approval Policy](docs/VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md).
+
+### Production migration audit — 25 November 2026
+
+The latest read-only production migration and schema inventory is recorded in [VERITY Production Migration Audit — 25 November 2026](docs/PRODUCTION-MIGRATION-AUDIT-2026-11-25.md). The live ledger reports 67 applied versions (latest `20261124175741`). The two PR #20 migrations remain unapplied. Historical SQL recovery is incomplete; do not run migration repair, replay missing versions, reset, or push migrations to production. See [Production Migration-History Reconciliation](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) for the current findings and release gates.
+
+
+### Exact production migration ledger inventory
+
+The 25 November read-only comparison of live Supabase migration versions against repository SQL filenames is preserved in [`docs/production-migration-ledger-2026-11-25.json`](docs/production-migration-ledger-2026-11-25.json). It distinguishes exact version matches, name matches with version drift, ledger entries without source-name matches and branch-only SQL files. It is an inventory, not a clean-bootstrap baseline or permission to replay migrations. See the [migration reconciliation procedure](docs/PRODUCTION-MIGRATION-RECONCILIATION.md) before any schema release.
+
+The read-only production catalog baseline (metadata only; not a restore or bootstrap script) is [`docs/production-schema-catalog-2026-11-25.json`](docs/production-schema-catalog-2026-11-25.json). A clean bootstrap is still blocked until historical source SQL or a complete, reviewed baseline export is recovered.
+
+Historical migration-source provenance across earlier feature branches is recorded in [`docs/production-migration-source-recovery-2026-11-25.json`](docs/production-migration-source-recovery-2026-11-25.json). It identifies available source variants and their Git blob hashes; it does not establish that missing production migrations have been recovered or authorize migration replay.
+
+The clean-database recovery gate and required evidence are documented in [`docs/VERITY-CLEAN-BOOTSTRAP-RECOVERY-RUNBOOK.md`](docs/VERITY-CLEAN-BOOTSTRAP-RECOVERY-RUNBOOK.md). The current decision is **NOT READY**: the historical migration source set is incomplete, and no production migration, merge or deployment is authorized by the runbook.

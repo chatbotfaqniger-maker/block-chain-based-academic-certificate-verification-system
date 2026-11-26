@@ -89,3 +89,87 @@ Certificate ledger hardening is delivered by PR #9. Its migration `2026112407462
 - Generate a schema snapshot covering tables, constraints, indexes, RLS policies, functions, triggers, grants and storage policies.
 - Compare the snapshot with repository migrations and document any intentional differences.
 - Validate a clean database bootstrap in CI before re-enabling automated migration deployment.
+
+
+## 25 November 2026 follow-up — live ledger and historical source recovery
+
+A fresh read-only check of the connected production project (`fnsnhasnjmvodkwmdqkc`) on 25 November reports:
+
+- Project status: `ACTIVE_HEALTHY`
+- Applied migration versions: **67**
+- Latest applied version: `20261124175741`
+- Public catalog inventory: 27 base tables, 64 RLS policies, 28 public-schema functions, 9 non-internal public-table triggers, 185 constraints and 103 indexes.
+
+These are inventory counts, not proof that every live object is semantically identical to a source migration. The previous 24 November figure of 59 applied versions is now historical and must not be used as the current ledger count.
+
+### Recovery investigation result
+
+The repository commit search did not locate source commits for the oldest missing migration filenames. The historical PR review also confirms that `20261124133000_atomic_historical_certificate_conversion.sql` was deliberately removed in PR #15 because its prerequisite schema was incomplete. It must not be restored or replayed as a production migration merely because a later historical ledger or old documentation mentions the feature.
+
+The investigation has therefore **not** recovered the 43 older SQL sources. No SQL has been reconstructed from current catalog definitions, and no migration ledger rows have been inserted, deleted or rewritten.
+
+### Current PR #20 release additions
+
+The two new PR #20 migration versions are still absent from the production ledger:
+
+- `20261125100000_owner_approved_roster_and_credential_corrections`
+- `20261125120000_persistent_roster_import_drafts`
+
+They remain feature-branch-only. Production migration execution remains blocked pending verified baseline recovery, a full schema diff, isolated bootstrap and explicit release authorization.
+
+### Next safe action
+
+Obtain the original migration files from the Supabase project history/export or the original source backups/branches. If the exact SQL cannot be recovered, establish and document a verified baseline snapshot through a controlled, reviewed process; do not invent historical migration files or use migration repair to silence discrepancies. Then validate clean bootstrap in CI against that baseline.
+
+
+## 25 November 2026 — exact ledger-to-file reconciliation (supersedes earlier derived counts)
+
+A second read-only comparison was performed against the live Supabase CLI migration list and every SQL file in `supabase/migrations` on `feat/immutable-credentials-and-owner-approved-roster`. The complete machine-readable comparison, including every applied version, source filename, source blob SHA and classification, is recorded in [production-migration-ledger-2026-11-25.json](production-migration-ledger-2026-11-25.json).
+
+The current comparison is:
+
+- **67** applied Supabase CLI migration ledger entries.
+- **34** SQL files in the reviewed feature branch.
+- **15** ledger entries have exact 14-digit filename-version matches.
+- **16** ledger entries have a normalized migration-name match but a different version prefix. These are version-drift/alias records, not proof that the source SQL is identical to what was executed.
+- **36** applied ledger entries have no normalized source filename match in this branch.
+- **6** repository SQL files have no corresponding applied ledger name: `20261122195500_allow_ict_recovery_token_reissue.sql`, `20261122202000_secure_ict_roster_claimant_lookup.sql`, `20261122202500_drop_ambiguous_student_roster_lookup.sql`, `20261124110000_institution_certificate_design_and_digitization.sql`, and the two PR #20 files dated 25 November.
+
+The earlier **43 unmatched** figure was derived from the 24 November ledger count of 59 and a simple version-prefix comparison. It is historical, not the current exact comparison. The new 36/16/15 breakdown distinguishes missing source names from version drift. Several migration names are duplicated/aliased in the live ledger, including staff-document metadata, roster import, bulk issuance and certificate-ledger hardening. These must be reconciled against original SQL and hashes before any bootstrap ordering is approved.
+
+The Supabase Storage internal `storage.migrations` table is a separate service ledger (81 rows in the catalog response) and is not the 67-entry Supabase CLI migration list. Do not mix those counts.
+
+### Consequences
+
+1. Do not rename existing migration files to match the live ledger based on name similarity alone.
+2. Do not copy one SQL file into multiple timestamped migration versions or infer that an alias is a harmless no-op.
+3. Do not apply the six repository-only migrations to production or to an isolated baseline until each is classified against the live schema and release intent.
+4. Continue source recovery and schema export. The JSON manifest is an inventory, not a bootstrap snapshot and not authorization to replay any migration.
+5. The two PR #20 migrations remain unapplied in production. No production DDL, migration repair, merge or deployment was performed during this comparison.
+
+
+## 25 November 2026 — read-only schema catalog baseline
+
+A read-only PostgreSQL catalog snapshot has now been captured at [production-schema-catalog-2026-11-25.json](production-schema-catalog-2026-11-25.json). It records public table/column definitions and RLS flags, constraints, indexes, policies, function signatures and security metadata, triggers, enums, views, sequences, installed extensions, table/routine grants, Storage bucket metadata and Storage policies. It contains no application row data and omits function source bodies.
+
+Captured inventory: **27** public base tables, **185** constraints, **103** indexes, **64** public RLS policies, **28** public functions/procedures, **9** non-internal public triggers, **2** public enums, **5** extensions, **452** table-grant rows, **69** routine-grant rows, **3** Storage buckets and **7** Storage policies. There were no public views or materialized views and one public sequence in this catalog query.
+
+This is a catalog review baseline, **not** a complete `pg_dump`, not a source-migration recovery, and not a database bootstrap script. It omits Auth internals, managed Storage internals, function source bodies and data. A clean bootstrap remains blocked until original migration sources are recovered or a separately reviewed baseline package is created from an approved complete export. No development Supabase branch was created because that can incur additional charges; no production DDL or data was changed.
+
+
+## 25 November 2026 — historical branch source-recovery inventory
+
+The investigation was extended beyond the PR #20 branch. Six source-bearing branches were compared against the live 67-entry Supabase CLI ledger, exposing **39 unique migration SQL files** across those branch histories. The complete machine-readable inventory records each source filename, Git blob SHA, branch provenance and ledger-name comparison: [production-migration-source-recovery-2026-11-25.json](production-migration-source-recovery-2026-11-25.json).
+
+The expanded inventory does **not** improve the source-name reconciliation counts: 15 exact version-prefix matches, 16 normalized-name matches with version drift, and 36 applied ledger entries without a matching source filename. Eight repository SQL files have no matching ledger name. The added historical branches contain alternative versions of durable bulk-issuance and certificate-ledger migrations; these are not interchangeable merely because their normalized names match. The JSON manifest records their distinct Git blob SHAs and branch provenance.
+
+Pull-request history provides additional provenance: PR #7 added the durable roster import migration; PR #9 added an earlier certificate-ledger hardening migration; PR #11 added the institution certificate design/digitization migration; PR #13 added atomic historical-certificate conversion; PR #15 explicitly removed that conversion migration and its assertions because its prerequisite schema/workflow was incomplete. Do not restore or replay that removed migration without a complete, separately tested prerequisite implementation.
+
+This recovery search has located some additional historical source variants, but it has **not** recovered the missing 36 source names or established byte identity with production-executed SQL. The original 14–15 November foundational migrations and several 21–22 November ledger/support/recovery migrations remain absent from the inspected branch files. A clean bootstrap is still blocked. No migration ledger repair, production DDL, data change, merge or deployment was performed.
+
+
+### Pull-request history cross-check (PRs #1–#19)
+
+The migration-file changes were checked directly in the historical pull-request file lists. PRs #3–#9 introduced earlier roster-import, bulk-issuance, graduate-consent, RPC privilege and certificate-ledger migration variants. PR #11 introduced certificate design/digitization; PRs #13 and #14 introduced the historical-conversion RPC; PR #15 removed that RPC and its tests. PR #17 introduced issuer capability migrations; PR #18 introduced large issuance campaigns; PR #19 introduced the monthly issuance limit. PRs #1, #2, #10, #12 and #16 contained no migration-file changes. Exact filenames and blob SHAs are captured in the source-recovery JSON inventory.
+
+This confirms that some source variants are available through PR history even when they are not the current main-branch filename. It does not recover the 36 unmatched ledger entry names, and PR #15's removal remains an intentional release gate.

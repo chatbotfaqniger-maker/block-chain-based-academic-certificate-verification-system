@@ -24,7 +24,8 @@
     "zod": "^3.24.1",
     "pdf-lib": "^1.17.1",
     "web-push": "^3.6.7",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^6.10.1",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
