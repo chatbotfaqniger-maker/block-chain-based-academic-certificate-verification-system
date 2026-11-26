@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main, feature/verity-durable-bulk-certificate-issuance, feat/institution-certificate-design-system, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
   push:
-    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feature/large-issuance-campaigns, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
+    branches: [main, feature/verity-cinematic-showcase-guides, feature/verity-durable-bulk-certificate-issuance, feature/verity-ledger-security-hardening, feature/large-issuance-campaigns, feat/immutable-credentials-and-owner-approved-roster, feat/certificate-pdf-rendering-engine, feat/complete-certificate-lifecycle]
 
 permissions:
   contents: read
@@ -328,3 +328,37 @@ jobs:
         env:
           PGPASSWORD: verity-ci-only
         run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/record-integrity-assertions.sql
+
+  document-access-policy-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: verity
+          POSTGRES_PASSWORD: verity-ci-only
+          POSTGRES_DB: verity_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U verity -d verity_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap private storage policy fixtures
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/document-access-bootstrap.sql
+      - name: Restore authorized document access for scanner-deferred launch
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f supabase/migrations/20261126130000_restore_authorized_document_access_before_scanner.sql
+      - name: Assert private storage, tenant isolation and graduate-consent access
+        env:
+          PGPASSWORD: verity-ci-only
+        run: psql -h localhost -U verity -d verity_ci -v ON_ERROR_STOP=1 -f tests/fixtures/document-access-assertions.sql
