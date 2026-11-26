@@ -35,7 +35,7 @@ export default function VerityShowcase({data, certificates=[], auditEvents=null,
   const [verifyResult,setVerifyResult] = useState(null);
   const [downloading,setDownloading] = useState(false);
   const [reference,setReference] = useState(certificates?.[0]?.verificationKey || certificates?.[0]?.certificateId || "");
-  const duration = 120000;
+  const duration = 75000;
   const current = scenes[scene];
   const progress = Math.min(100, elapsed / duration * 100);
   const sample = certificates?.[0];
@@ -71,7 +71,7 @@ export default function VerityShowcase({data, certificates=[], auditEvents=null,
   }
 
   return <section className="verity-film-page">
-    <div className="film-topline"><div className="film-brand"><ShieldCheck/><b>VERITY</b><span>.</span></div><span>15-CLIP USER GUIDE · 02:00</span>{canDownload&&<button className="film-download" disabled={downloading} onClick={async()=>{setDownloading(true);try{const token=localStorage.getItem("verity_token");const response=await fetch("/api/admin/showcase-video",{headers:token?{Authorization:"Bearer "+token}:{}});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||"Unable to generate the MP4.");}const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="VERITY-Marketing-Showcase.mp4";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}catch(error){window.alert(error.message);}finally{setDownloading(false);}}}>{downloading?"Preparing MP4…":"Download MP4"}</button>}</div>
+    <div className="film-topline"><div className="film-brand"><ShieldCheck/><b>VERITY</b><span>.</span></div><span>15-CLIP USER GUIDE · 01:15</span>{canDownload&&<button className="film-download" disabled={downloading} onClick={async()=>{setDownloading(true);try{const token=localStorage.getItem("verity_token");const response=await fetch("/api/admin/showcase-video",{headers:token?{Authorization:"Bearer "+token}:{}});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||"Unable to generate the MP4.");}const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="VERITY-Marketing-Showcase.mp4";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}catch(error){window.alert(error.message);}finally{setDownloading(false);}}}>{downloading?"Preparing MP4…":"Download MP4"}</button>}</div>
     <div className="film-stage" key={scene}>
       <div className="film-light film-light-one"/><div className="film-light film-light-two"/>
       <div className="film-stage-copy"><small>{current.kicker}</small><h1>{current.title}</h1><p>{current.copy}</p><span className="film-scene-label">{current.label}</span></div>
@@ -89,7 +89,7 @@ export default function VerityShowcase({data, certificates=[], auditEvents=null,
     </div>
     <div className="film-controls">
       <div className="film-progress"><div style={{width:progress+"%"}}/><i style={{left:progress+"%"}}/></div>
-      <div className="film-control-row"><div className="film-buttons"><button onClick={()=>playing?setPlaying(false):elapsed>=duration?replay():setPlaying(true)}>{playing?<Pause/>:<Play/>}{playing?"Pause":elapsed>=duration?"Replay":"Play film"}</button><button className="film-icon-button" onClick={replay} aria-label="Replay"><RotateCcw/></button><button className="film-icon-button" onClick={skip} aria-label="Skip scene"><SkipForward/></button></div><div className="film-timing"><b>{String(Math.floor(elapsed/60000)).padStart(2,"0")}:{String(Math.floor((elapsed%60000)/1000)).padStart(2,"0")}</b><span> / 02:00</span></div></div>
+      <div className="film-control-row"><div className="film-buttons"><button onClick={()=>playing?setPlaying(false):elapsed>=duration?replay():setPlaying(true)}>{playing?<Pause/>:<Play/>}{playing?"Pause":elapsed>=duration?"Replay":"Play film"}</button><button className="film-icon-button" onClick={replay} aria-label="Replay"><RotateCcw/></button><button className="film-icon-button" onClick={skip} aria-label="Skip scene"><SkipForward/></button></div><div className="film-timing"><b>{String(Math.floor(elapsed/60000)).padStart(2,"0")}:{String(Math.floor((elapsed%60000)/1000)).padStart(2,"0")}</b><span> / 01:15</span></div></div>
       <div className="film-scene-dots">{scenes.map((item,i)=><button key={item.kicker} className={scene===i?"active":""} onClick={()=>{setScene(i);setElapsed(i*(duration/scenes.length));setPlaying(false);}} aria-label={"Go to scene "+(i+1)} title={item.label}/>)}</div>
     </div>
     <p className="film-footnote">The 15-clip in-app User Guide uses live dashboard totals and available credential records. The Admin MP4 export performs a live registry lookup before rendering; student identifiers are masked. Supabase is the source of truth and blockchain is shown only when a configured network confirms it.</p>
