@@ -527,7 +527,7 @@ Certificate documents and organization identity evidence are stored in private S
 
 This integrity check detects a file changing after its fingerprint was recorded; it is not a malware detector and does not prove that an uploaded file is safe. Users should upload documents only from trusted sources and keep their own devices protected. Private storage, authenticated roles, institution scoping, staff permissions and graduate-controlled access grants continue to govern who can retrieve a document.
 
-**Production database step:** ensure the migration `supabase/migrations/20261121120000_remove_antivirus_scan_gates.sql` has been applied in the Supabase SQL Editor before relying on the current document-access policies. It removes obsolete antivirus-verdict predicates while preserving private-bucket enforcement, certificate-to-institution relationships, storage-path tenant checks, administrator and institution ownership checks, active staff permission checks, and approved, unexpired employer grants. This is a one-time policy migration, not an antivirus setup step. Never make either bucket public.
+**Production database step:** after reviewing and reconciling the complete migration history, apply `supabase/migrations/20261126130000_restore_authorized_document_access_before_scanner.sql` after the later quarantine migration. This restores private certificate-document reads for authorized administrators, approved institution owners, linked graduates and active staff without requiring a scanner verdict. Existing tenant/path checks and graduate-consent controls for employer sharing remain in place. This is not an antivirus setup step: VERITY does not scan files or label them malware-free. Never make either bucket public.
 
 ### 9.3 Blockchain and the database ledger
 
@@ -602,7 +602,7 @@ Configure `CHAIN_RPC_URL`, `CHAIN_PRIVATE_KEY` and `CONTRACT_ADDRESS` only when 
 
 ### 11.3 Document security configuration
 
-VERITY has no antivirus scanner and requires no ClamAV host, antivirus service or scanner credentials. Confirm the two storage buckets remain private, the server's Supabase URL and publishable key are configured, and the `20261121120000_remove_antivirus_scan_gates.sql` policy migration has been applied. The `/api/health` endpoint reports private-storage and SHA-256 controls. File-signature validation and SHA-256 integrity checks are not malware detection. Do not set public bucket access to work around a policy issue.
+VERITY's malware scanner is a planned future feature and is not required for initial customer use. Confirm the two storage buckets remain private, the server's Supabase URL and publishable key are configured, and the migration `20261126130000_restore_authorized_document_access_before_scanner.sql` has been reviewed and applied in the correct order after migration-history reconciliation. The `/api/health` endpoint reports private-storage and SHA-256 controls. File-signature validation and SHA-256 integrity checks are not malware detection; do not represent an unscanned file as CLEAN. Do not set public bucket access to work around a policy issue.
 
 ### 11.4 Local development
 
