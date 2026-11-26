@@ -26,7 +26,6 @@ using (
           where o.id = d."organizationId"
             and o."ownerId" = auth.uid()::text
             and o.status = 'APPROVED'
-            and o.type = 'INSTITUTION'
         )
         or c."graduateId" = auth.uid()::text
         or private.is_active_org_staff(d."organizationId", 'documents:download')
