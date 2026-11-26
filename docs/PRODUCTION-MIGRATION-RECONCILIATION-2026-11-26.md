@@ -1,64 +1,84 @@
-# VERITY migration reconciliation delta — 26 November 2026
+# VERITY migration reconciliation — 26 November 2026
 
-**Scope:** Read-only production ledger inspection and feature-branch source review.  
+**Scope:** Read-only production migration ledger and schema inspection, feature-branch source comparison, and PostgreSQL CI verification.  
 **Supabase project:** `fnsnhasnjmvodkwmdqkc`  
 **Feature branch:** `feat/immutable-credentials-and-owner-approved-roster`
 
-## Current production ledger
+## Verified CI result
 
-The connected production project reports **68 applied Supabase CLI migration versions**. The latest is:
+GitHub Actions workflow **#695** completed successfully: **10 jobs passed, 0 failed**. This includes the main build/test and Docker image build, bulk issuance, certificate ledger security, roster import, organization capability, certificate design, RPC privileges, owner-approved record integrity, issuer workflow, and the new document-access policy regression job.
 
-- Version: `20261126112216`
-- Name: `quarantine_certificate_storage_until_clean_scan`
+This validates the tested branch fixtures and build. It does not prove production migration history is reconciled or authorize a production migration.
 
-The feature branch currently contains **35 SQL migration files**. This count is not a complete historical source recovery and must not be compared as though every source file corresponds one-to-one with a production ledger entry.
+## Production migration ledger and source comparison
 
-## New migration identity mismatch
+The connected production project reports **68 applied migration ledger entries**. The feature branch contains **35 SQL migration files**; `main` contains 33.
 
-The latest `main` branch contains:
+A raw version comparison is misleading. After normalizing migration names:
 
-- Source filename: `20261126112500_quarantine_certificate_storage_until_clean_scan.sql`
-- Production ledger entry: `20261126112216_quarantine_certificate_storage_until_clean_scan`
+- **28 of 35** feature-branch migration files have a matching logical name in the production ledger.
+- **17 of those 28** have a different 14-digit source filename version from the production ledger version.
+- **7 files** have no normalized-name match in the production ledger. These require individual schema/effect review, not automatic replay.
 
-The normalized migration name matches, but the 14-digit version does not. The production Storage policy currently contains the `scanStatus = 'CLEAN'` condition described by that migration. The live catalog therefore confirms the quarantine policy is active, but the migration ledger does not store a source checksum proving byte-for-byte identity.
+This is evidence of historical timestamp/source drift. A matching name is not proof that the SQL bytes are identical; a different timestamp is not proof that the migration's effect is absent.
 
-**Do not run `supabase db push` or rename/copy this source file to a different timestamp based only on the name match.** That could make the CLI treat an already-applied change as pending and replay it.
+### Seven unmatched feature-branch files — disposition
 
-## PR #20 migration status
+| Feature migration | Read-only production evidence | Disposition |
+|---|---|---|
+| `20261122195500_allow_ict_recovery_token_reissue.sql` | The current activation-token RLS policy already permits the approved recovery permission, but also enforces the approved `ISSUE_CREDENTIALS` capability. The feature file's replacement policy omits that capability check. | **Do not replay.** It could weaken current production authorization. |
+| `20261122202000_secure_ict_roster_claimant_lookup.sql` | The production `list_verity_student_roster(text,text)` function already exists, scopes results to the requested organization, enforces `ISSUE_CREDENTIALS`, and returns claimant details. | **Do not replay without a deliberate reviewed diff.** The feature file imposes an institution-only type restriction that may exclude other approved credential issuers. |
+| `20261122202500_drop_ambiguous_student_roster_lookup.sql` | Production exposes the two-argument roster function; the ambiguous one-argument overload is absent. | **Effect already present.** Do not replay. |
+| `20261124110000_institution_certificate_design_and_digitization.sql` | Read-only schema inspection found neither `InstitutionCertificateTemplate` nor `CertificateDigitizationCase`. | **Not applied.** Needs controlled migration planning and test review. |
+| `20261125100000_owner_approved_roster_and_credential_corrections.sql` | Production lacks the correction-request tables and owner-approval columns inspected in this audit. | **Not applied.** This is a genuine release migration candidate. |
+| `20261125120000_persistent_roster_import_drafts.sql` | Production lacks `StudentRosterImportDraft` and `StudentRosterImportDraftChunk`. | **Not applied.** This is a genuine release migration candidate. |
+| `20261126130000_restore_authorized_document_access_before_scanner.sql` | Production private certificate read policy still requires `scanStatus = 'CLEAN'`. | **Not applied.** This is the scanner-deferred launch access migration candidate. |
 
-The following feature-branch migrations are not present in the production ledger:
+## Quarantine migration version mismatch
 
-- `20261125100000_owner_approved_roster_and_credential_corrections`
-- `20261125120000_persistent_roster_import_drafts`
-- `20261126130000_restore_authorized_document_access_before_scanner`
+The source on `main` is:
 
-They remain un-applied. The last migration is intended to restore authorized access while malware scanning is deferred; it does not label unscanned documents as clean.
+- `20261126112500_quarantine_certificate_storage_until_clean_scan.sql`
 
-## Storage-policy review
+The production ledger records:
 
-A read-only query of production `storage.objects` policies found:
+- Version `20261126112216`
+- Name `quarantine_certificate_storage_until_clean_scan`
+
+The normalized name matches, but the versions differ. The live private Storage policy currently includes the `CLEAN` gate. The ledger does not provide a source checksum proving byte-for-byte identity.
+
+**Do not run `supabase db push`, rename the source file, or use migration repair based only on the name match.** The exact historical source and applied SQL must be recovered or independently verified first.
+
+## Storage-policy review and scanner decision
+
+Read-only production inspection confirmed:
 
 - `verity_private_certificate_read` currently requires a `CLEAN` scan status.
-- `verity_storage_granted_verifier_read` is a separate policy and remains tied to an approved, unexpired certificate-access grant and approved `VERIFY_CREDENTIALS` capability.
-- Organization-evidence reads remain limited to the owning organization and VERITY administrators; no scan-status predicate was present in that read policy.
+- `verity_storage_granted_verifier_read` is a separate policy tied to an approved, unexpired certificate-access grant and approved `VERIFY_CREDENTIALS` capability.
+- `verity_org_evidence_storage_read` remains a separate policy.
+- The launch migration changes only `verity_private_certificate_read`; it does not drop or replace the graduate-consent verifier policy.
+- The launch policy allows an approved EMPLOYER issuer owner to access its own documents, as well as authorized institution owners, linked graduates, active staff with `documents:download`, and VERITY administrators.
 
-The launch migration changes only `verity_private_certificate_read`. It does not drop or replace the separate graduate-consent verifier policy.
+Malware scanning remains a planned future feature, not a launch prerequisite. The application must not label unscanned documents as clean. Private storage, role checks, file validation and SHA-256 integrity checks remain required.
 
-## Changes made on the feature branch
+## Feature-branch changes and test results
 
-- Removed an institution-only type restriction from the private certificate read policy. Approved EMPLOYER issuers must also be able to read their own documents.
-- Added a PostgreSQL 16 CI fixture and regression assertions for private bucket isolation, issuer ownership, graduate access, active staff download permission, administrator access, approved/unexpired verifier grants, and expired-grant denial.
-- Added a dedicated `document-access-policy-postgres` GitHub Actions job.
-- Kept malware scanning deferred. No fake `CLEAN` status or scanner result is created.
+- Updated the scanner-deferred private document read migration.
+- Added PostgreSQL 16 fixtures and assertions for anonymous denial, issuer ownership and tenant isolation, graduate access, active staff download permission, admin access, approved/unexpired verifier grants, and expired-grant denial.
+- Added the `document-access-policy-postgres` CI job.
+- Preserved owner approval for roster imports and correction workflows; issued credentials remain immutable.
 
-The new document-access CI job has completed all of its test steps successfully in workflow run **#693**. The remaining workflow jobs were still running at the time of this addendum.
+**Workflow #695:** 10/10 jobs passed.  
+**Production:** no DDL/DML or migration history repair performed.
 
-## Remaining release blockers
+## Release blockers and safe next steps
 
-1. Re-run the full exact ledger-to-source comparison across all source-bearing branches using the current 68-entry production ledger.
-2. Resolve the version mismatch for the quarantine migration without replaying it or fabricating historical SQL.
-3. Reconcile the two commits on `main` with PR #20. One adds API-level 423 quarantine guards; those guards conflict with the approved scanner-deferred launch policy and must not be carried into the launch implementation.
-4. Complete the full CI run and review every job result.
-5. Continue using local PostgreSQL CI for isolated tests. No paid Supabase branch is required.
+1. Recover and verify the exact SQL source corresponding to all production ledger versions whose repository timestamps differ.
+2. Resolve the quarantine migration's timestamp mismatch without replaying or fabricating historical SQL.
+3. Decide whether the certificate design/digitization migration is part of this release; it is not currently present in the production schema.
+4. Prepare a controlled migration plan for the three genuine PR candidates: owner-approved roster/corrections, persistent drafts, and scanner-deferred document access. Test against a production-shaped local PostgreSQL fixture before any production action.
+5. Keep the three already-present or potentially weakening migrations out of any blind replay.
+6. Reconcile the two commits on `main` with PR #20. In particular, do not reintroduce API-level HTTP 423 scanner gates while scanning is deferred.
+7. Complete final review and request explicit approval before any production migration, merge to `main`, or deployment.
 
-No production DDL/DML, migration repair, merge, or deployment was performed.
+No paid Supabase branch is required. No production DDL/DML, migration repair, merge, or deployment was performed.
