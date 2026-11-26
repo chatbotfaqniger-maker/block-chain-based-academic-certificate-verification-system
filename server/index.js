@@ -732,6 +732,7 @@ app.get("/api/admin/certificates/:id/document-preview",auth,roles("ADMIN"),run(a
   const {data:doc,error:de}=await q.supabase.from("CertificateDocument").select("id,storagePath,originalName,mimeType,sha256,scanStatus").eq("certificateId",cert.id).order("createdAt",{ascending:false}).limit(1).maybeSingle();
   if(de)throw de;
   if(!doc)return res.status(404).json({error:"The institution has not uploaded a certificate file for this record yet."});
+  if(doc.scanStatus!=="CLEAN") return res.status(423).json({error:"This certificate document remains quarantined until a real malware scanner records a CLEAN result."});
   const {data:stored,error:storageError}=await q.supabase.storage.from("verity-certificates").download(doc.storagePath);
   if(storageError)throw storageError;
   const storedBytes=Buffer.from(await stored.arrayBuffer());
@@ -1413,6 +1414,7 @@ app.get("/api/certificate-documents/:id/download",auth,roles("ADMIN","GRADUATE")
       staffDownload=true;
     }
   }
+  if(doc.scanStatus!=="CLEAN")return s.status(423).json({error:"This certificate document remains quarantined until a real malware scanner records a CLEAN result."});
   if(!doc.sha256)return s.status(409).json({error:"Document has no registered SHA-256 fingerprint and cannot be released."});
   const {data:file,error:fileError}=await q.supabase.storage.from("verity-certificates").download(doc.storagePath);
   if(fileError)throw fileError;
