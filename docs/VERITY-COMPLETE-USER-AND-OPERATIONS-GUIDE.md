@@ -455,9 +455,9 @@ Use **Account Settings** to update the administrator display name where availabl
 
 ### 7.7 Marketing showcase export
 
-The in-app VERITY film is a 120-second (two-minute), nine-scene product showcase. The extended runtime gives the film room to explain student identity registration and ICT recovery, roster import and reviewed bulk issuance, organization registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger. The administrator-only MP4 export endpoint renders a video using available platform statistics, a recent credential reference and audit/verification status. Sensitive certificate references are masked in the exported video.
+The VERITY User Guide documentary contains 15 individually navigable clips of five seconds each (75 seconds total). It explains student identity registration and ICT recovery, roster import and reviewed bulk issuance, organization registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger. The administrator-only MP4 export endpoint renders a video using available platform statistics, a recent credential reference and audit/verification status. Sensitive certificate references are masked in the exported video.
 
-The showcase is a cinematic data-driven presentation, not a screen recording of every live user interaction. Do not publish an export containing confidential information without reviewing the output and obtaining the appropriate authorization. The interactive in-app film and administrator MP4 export are both designed for a 120-second runtime. MP4 generation, exact duration and playback should be verified in the target deployment before the feature is described as operational.
+The showcase is a cinematic data-driven presentation, not a screen recording of every live user interaction. Do not publish an export containing confidential information without reviewing the output and obtaining the appropriate authorization. The interactive in-app film and administrator-only MP4 export are both designed for the same 75-second runtime, with 15 clips of five seconds each. MP4 generation, exact duration and playback should be verified in the target deployment before the feature is described as operational.
 
 ---
 
@@ -822,4 +822,4 @@ ICT can submit the request but cannot approve it or link the replacement. The In
 
 ### Fifteen-clip video guide
 
-The User Guide video sequence contains 15 separately navigable clips, each eight seconds long (two minutes total). The Admin-only MP4 download renders those same 15 clips into one video file. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.
+The User Guide video sequence contains 15 separately navigable clips, each five seconds long (75 seconds total). The Admin-only MP4 download renders those same 15 clips into one video file. The clip-by-clip storyboard, screen actions and narration are maintained in [VERITY Record Integrity & Approval Policy](VERITY-RECORD-INTEGRITY-AND-APPROVAL-POLICY.md). Clips must show the real application states and must never depict a certificate Edit action.
