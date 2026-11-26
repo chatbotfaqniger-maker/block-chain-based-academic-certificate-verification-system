@@ -32,7 +32,7 @@ For local development without Docker, run `npm install` and `npm run dev`.
 - Supabase email/password authentication
 - Role-aware access (System Admin, Organization Admin, Student / Graduate)
 - Role-filtered User Guidelines with dedicated module walkthroughs, action references, permissions, warnings and troubleshooting
-- 90-second cinematic in-app VERITY product film using live dashboard totals and an interactive credential verification action
+- 75-second, 15-clip VERITY User Guide film (five seconds per clip) using live dashboard totals and an interactive credential verification action
 - Institution staff access scoped to their own approved institution, with only `certificates:read` and `documents:download` implemented; document downloads require both permissions and never grant issuance or revocation authority
 - Organization registration with System Admin approval
 - Organization-reported city, state / region and country captured at signup or updated in the organization identity workspace
@@ -224,7 +224,7 @@ The approved release sequence for the durable bulk certificate issuance and cert
 This section is the locked implementation and release decision record. Any future change to these decisions must be documented here before implementation.
 
 ### Documentary runtime and content
-- The VERITY User Guide product documentary is designed for a 120-second (two-minute), nine-scene experience in both the interactive showcase and administrator MP4 export.
+- The VERITY User Guide documentary contains 15 individually navigable clips of five seconds each (75 seconds total) in both the interactive showcase and administrator-only MP4 export.
 - The extended edition explains student identity registration and institution ICT recovery, roster import and reviewed bulk certificate issuance, organization legal registration and directory discovery, and the Supabase append-only SHA-256 certificate ledger.
 - The MP4 generator and in-app showcase must remain duration-aligned. Verify the generated file's actual duration and playback after deployment; a source-code change alone is not proof of a successfully rendered MP4.
 
